@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#161416" />
+    <title>Baozi</title>
+    <link rel="icon" href="icons/mochi-192.png" />
+    <link rel="preload" href="assets/fonts/press-start-2p-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="assets/fonts/pixelify-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/glifos.css" />
+    <!-- Instalable: evita que iOS borre el progreso tras ~7 dias sin uso,
+         abre sin barra de URL (la ilusion del aparato) y anda sin señal. -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Baozi" />
+    <link rel="apple-touch-icon" href="icons/mochi-192.png" />
+  </head>
+  <body>
+    <div id="aviso-rotar">
+      <img class="icono-rotar" src="assets/menu/menu_play.png" alt="" />
+      <div class="texto-rotar">Turn your phone sideways — Baozi lives in landscape.</div>
+    </div>
+    <div class="marco-manito">
+      <!-- Fondo pixel art de rom (pendiente). Vacio a proposito. -->
+      <div class="fondo-personalizado" aria-hidden="true"></div>
+      <div id="app">
+        <div class="bisel">
+          <main id="screen"></main>
+        </div>
+        <nav id="tabbar" class="oculto" aria-hidden="true"></nav>
+        <div class="velo-transicion" id="velo-transicion" aria-hidden="true"></div>
+      </div>
+      <!-- La mano de rom sosteniendo el aparato (pendiente). Vacio a proposito. -->
+      <div class="capa-manito" aria-hidden="true"></div>
+    </div>
+    <!-- Red de seguridad para despues de un deploy: si el navegador mezclo
+         un modulo viejo (de su cache HTTP) con uno nuevo, el juego no
+         arranca. Aca se detecta, se piden de nuevo al servidor los .js/.css
+         de esta pagina y se recarga (maximo 2 veces). No borra nada: sin
+         señal no hace ningun daño. -->
+    <script>
+      (function () {
+        var CLAVE = "mochi_rescate";
+        function leer() { try { return Number(sessionStorage.getItem(CLAVE) || 0); } catch (e) { return 9; } }
+        function rescatar() {
+          var n = leer();
+          if (n >= 2 || window.__mochi) return;
+          try { sessionStorage.setItem(CLAVE, String(n + 1)); } catch (e) { return; }
+          var urls = performance.getEntriesByType("resource").map(function (e) { return e.name; }).filter(function (u) { return /\.(js|css)(\?|$)/.test(u); });
+          urls.push(location.href);
+          Promise.all(urls.map(function (u) { return fetch(u, { cache: "reload" }).catch(function () {}); })).then(function () { location.reload(); });
+        }
+        window.addEventListener("error", function (e) {
+          var m = String((e && e.message) || "");
+          if (/does not provide an export|import|module/i.test(m)) rescatar();
+        });
+        window.addEventListener("load", function () {
+          setTimeout(function () { if (!window.__mochi) rescatar(); else { try { sessionStorage.removeItem(CLAVE); } catch (e) {} } }, 5000);
+        });
+      })();
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

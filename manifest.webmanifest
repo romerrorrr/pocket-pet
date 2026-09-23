@@ -1,0 +1,32 @@
+{
+  "name": "Baozi",
+  "short_name": "Baozi",
+  "description": "Baozi, a pocket friend.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#161416",
+  "theme_color": "#161416",
+  "icons": [
+    {
+      "src": "icons/mochi-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/mochi-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/mochi-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "lang": "en"
+}
