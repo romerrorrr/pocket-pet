@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-a4fb9bad9f"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-139f8cc2b1"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -50,6 +50,9 @@ const SHELL = [
   "./js/director.js",
   "./js/despierto.js",
   "./js/recortes.js",
+  "./js/personaje.js",
+  "./js/personajes_datos.js",
+  "./js/juego.js",
   "./icons/mochi-192.png",
   "./icons/mochi-512.png",
   "./assets/fondo_caminar.png",
@@ -70,7 +73,16 @@ const ARTE = [
     "cuerpo", "cuerpo_sentado", "cuerpo_dormido"].map((n) => `caras/${n}.png`),
   ...["aburrido", "asqueado", "asustado", "curioso", "decepcionado", "enamorado", "euforico", "hambriento", "sorprendido"]
     .flatMap((n) => [`caras/ojo_especial_${n}.png`, `caras/boca_especial_${n}.png`]),
-  ...["manzana", "naranja", "grillo1", "grillo2", "grillo3"].map((n) => `comida/comida_${n}.png`),
+  ...["manzana", "naranja", "grillo1", "grillo2", "grillo3", "bao", "onigiri", "dumpling"].map((n) => `comida/comida_${n}.png`),
+  "comida/bebida_te.png",
+  "comida/bebida_agua.png",
+  "comida/juego_chile.png",
+  "comida/juego_bao_dorado.png",
+  "mantou/cuerpo.png",
+  "mantou/cuerpo_sentado.png",
+  "mantou/cara_neutral.png",
+  "mantou/cara_dormida.png",
+  "final/huevo_blanco.png",
   ...["westlake", "longjing", "lingyin"].map((n) => `lugares/lugar_${n}.png`),
   ...["chagee", "mimi", "ruchong", "usagi"].flatMap((n) => [`npcs/npc_${n}.png`, `npcs/npc_${n}_saludo.png`]),
   ...["feed", "water", "clean", "sleep", "medicine", "play", "walk", "lens", "stats", "traits", "npcs", "diary", "progress", "sound", "backup"].map((n) => `menu/menu_${n}.png`),
