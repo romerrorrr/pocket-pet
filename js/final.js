@@ -1056,6 +1056,13 @@ export async function chequeos({ sonidoHabilitado }) {
         : `Video: camera ${txt(permisos.camara)}, mic ${txt(permisos.microfono)}` +
           (video === "granted" ? "" : video === "denied" ? " — allow them in the phone settings" : " — tap 'Allow camera + mic' and 'Test video (5 s)'"),
     ],
+    (() => {
+      // v21.2: la prueba del microfono (boton "Allow microphone")
+      const p = Grabacion.ultimaPruebaMic();
+      if (!p) return [false, "Mic not tested yet — tap 'Allow microphone' and talk"];
+      const cuando = claveDelDia(new Date(p.t)) === claveDelDia(new Date()) ? "today" : "on another day — test again today";
+      return [p.ok && cuando === "today", p.ok ? `Mic test: sound OK (${cuando})` : "Mic test FAILED — tap 'Allow microphone'"];
+    })(),
     [standalone(), standalone() ? "Installed on the home screen" : "Not installed — add to home screen"],
     [persistente, persistente ? "Storage is protected" : "Storage not protected yet"],
     [true, sonidoHabilitado ? "Sound on" : "Sound off (the ending plays music anyway)"],

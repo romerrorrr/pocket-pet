@@ -35,11 +35,44 @@ try {
  * el switch de silencio. Durante el final despierto.js la pasa a
  * "playback" para que la musica suene aunque el telefono este en silencio.
  */
-export function modoDeAudio(tipo) {
+// v21.2 (rom: "todo sirve menos el mic"). La causa: con la sesion en
+// "ambient" o "playback", Safari TERMINA las pistas del microfono (spec
+// Audio Session: solo "play-and-record" o "auto" dejan grabar). Por eso,
+// mientras el microfono este abierto, la sesion va en "play-and-record".
+// Durante el final no se vuelve a "playback" al cortar el video (cambiar
+// la sesion con la musica sonando la puede cortar): queda asi hasta que
+// el final suelta la pantalla y todo vuelve a "ambient".
+let modoBase = "ambient";
+let capturando = false;
+let pegadoAlFinal = false;
+
+function aplicarModo() {
+  const tipo = capturando || pegadoAlFinal ? "play-and-record" : modoBase;
   try {
-    if (navigator.audioSession) navigator.audioSession.type = tipo;
+    if (navigator.audioSession && navigator.audioSession.type !== tipo) navigator.audioSession.type = tipo;
   } catch (e) {
     /* no soportado: no pasa nada */
+  }
+}
+
+export function modoDeAudio(tipo) {
+  modoBase = tipo;
+  if (tipo !== "playback") pegadoAlFinal = false;
+  aplicarModo();
+}
+
+/** Llamar con true ANTES de abrir el microfono, y con false al cerrarlo. */
+export function capturaDeAudio(si) {
+  capturando = !!si;
+  if (capturando && modoBase === "playback") pegadoAlFinal = true;
+  aplicarModo();
+}
+
+export function tipoDeSesion() {
+  try {
+    return navigator.audioSession ? navigator.audioSession.type : "sin-api";
+  } catch (e) {
+    return "sin-api";
   }
 }
 modoDeAudio("ambient");
