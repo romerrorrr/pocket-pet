@@ -45,7 +45,8 @@ import { vibrar } from "./actuadores.js";
 import { camaraEnVivoPosible } from "./lente.js";
 import * as Despierto from "./despierto.js";
 import { crearEscena } from "./escena.js";
-import { arteDeLugar } from "./render.js";
+import { arteDeLugar, spriteCara } from "./render.js";
+import * as Personaje from "./personaje.js";
 
 const CLAVE = "mochi_final";
 
@@ -199,12 +200,7 @@ const CARAS = {
 
 function cara(nombre) {
   const [ojo, boca] = CARAS[nombre] || CARAS.feliz;
-  return `
-    <div class="sprite-cara">
-      <img class="capa-cuerpo" src="${arte("caras/cuerpo.png")}" alt="" draggable="false" />
-      <img class="capa-ojos" src="${arte("caras/" + ojo)}" alt="" draggable="false" />
-      <img class="capa-boca" src="${arte("caras/" + boca)}" alt="" draggable="false" />
-    </div>`;
+  return spriteCara(ojo, boca);
 }
 
 // ------------------------------------------------------------------
@@ -226,11 +222,11 @@ export function abrirPedido({ ensayo = false } = {}) {
   let escritor = null;
 
   ctx.pantalla.innerHTML = `
-    <div class="escena-dialogo" id="escena-pedido">
+    <div class="escena-dialogo escena-lago" id="escena-pedido">
       ${ensayo ? `<div class="sello-ensayo">REHEARSAL</div>` : ""}
       <div class="dialogo-cara rebote">${cara("euforico")}</div>
       <div class="caja-dialogo">
-        <div class="caja-dialogo-nombre">BAOZI</div>
+        <div class="caja-dialogo-nombre">${Personaje.nombre().toUpperCase()}</div>
         <div class="caja-dialogo-texto" id="pedido-texto"></div>
         <div class="caja-dialogo-siguiente" id="pedido-siguiente"><i class="glifo g-der"></i></div>
         <div class="caja-dialogo-acciones oculto" id="pedido-acciones">

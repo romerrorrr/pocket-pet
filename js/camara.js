@@ -174,6 +174,7 @@ function normalizar(fila) {
     tipo: fila.tipo || "diario",
     dataUrl: fila.dataUrl,
     t: fila.t || fila.guardadoEn || 0,
+    filtro: fila.filtro || "pixel",
   };
 }
 
@@ -234,9 +235,9 @@ export function cantidadDeFotos() {
  * Guarda una foto. Queda en memoria al instante (el diario la ve ya) y
  * se escribe en IndexedDB en segundo plano. Devuelve la foto guardada.
  */
-export async function guardarFoto({ dataUrl, dia, lugar = null, tipo = "diario" }) {
+export async function guardarFoto({ dataUrl, dia, lugar = null, tipo = "diario", filtro = "pixel" }) {
   const t = Date.now();
-  const foto = { clave: `foto_${t}_${Math.random().toString(36).slice(2, 7)}`, dia, lugar, tipo, dataUrl, t };
+  const foto = { clave: `foto_${t}_${Math.random().toString(36).slice(2, 7)}`, dia, lugar, tipo, dataUrl, t, filtro };
   fotos.push(foto);
   const db = await Promise.race([abrirDB(), new Promise((r) => setTimeout(() => r(null), 1500))]);
   if (db) {

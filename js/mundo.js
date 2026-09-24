@@ -153,8 +153,10 @@ export class RegistroNPCs {
 }
 
 // -----------------------------------------------------------------
-// Lugares — lat/lon/radioMetros reales (mismos valores que mundo.py).
-// El sitio de la propuesta se agrega aparte en la fase 6.
+// Lugares — lat/lon en WGS84 (el sistema del GPS del telefono; los mapas
+// chinos usan GCJ-02, corrido ~500 m). v19: 34 lugares de Hangzhou; los
+// verificados (Wikipedia) tienen radio 260 m, los estimados 380 m. Por las
+// dudas, lugarEnRango() acepta la posicion en cualquiera de los dos sistemas.
 // -----------------------------------------------------------------
 
 // sello: el dibujo del sello de tinta (assets/pieza/sello_<sello>.png)
@@ -164,25 +166,26 @@ const LUGARES_BASE = [
   {
     id: "westlake",
     nombre: "West Lake",
+    categoria: "lake",
     rasgo: "explorador",
-    lat: 30.259,
-    lon: 120.149,
-    radioMetros: 150,
-    efectos: { felicidad: 15, energia: 10 },
+    lat: 30.2565,
+    lon: 120.1444,
+    radioMetros: 260,
+    efectos: {felicidad: 15, energia: 10},
     sello: "pabellon",
     color: "rgb(70,100,160)",
     frase: "Water everywhere!! Is this the famous lake?",
-    dialogo:
-      "The pavilion sits right over the water. You could watch the lake for hours here.",
+    dialogo: "The pavilion sits right over the water. You could watch the lake for hours here.",
   },
   {
     id: "longjing",
     nombre: "Longjing Village",
+    categoria: "tea",
     rasgo: "gourmet",
-    lat: 30.228,
-    lon: 120.13,
-    radioMetros: 150,
-    efectos: { felicidad: 15, hambre: 12 },
+    lat: 30.22218,
+    lon: 120.09803,
+    radioMetros: 260,
+    efectos: {felicidad: 15, hambre: 12},
     sello: "hoja",
     color: "rgb(72,128,82)",
     frase: "Sniff sniff… it smells like tea here!",
@@ -191,11 +194,12 @@ const LUGARES_BASE = [
   {
     id: "lingyin",
     nombre: "Lingyin Temple",
+    categoria: "temple",
     rasgo: "sociable",
-    lat: 30.2405,
-    lon: 120.1,
-    radioMetros: 150,
-    efectos: { felicidad: 15, vinculo: 10 },
+    lat: 30.24278,
+    lon: 120.09667,
+    radioMetros: 260,
+    efectos: {felicidad: 15, vinculo: 10},
     sello: "templo",
     color: "rgb(196,58,66)",
     frase: "Shhh… this place feels very old. And very calm.",
@@ -204,17 +208,450 @@ const LUGARES_BASE = [
   {
     id: "leifeng",
     nombre: "Leifeng Pagoda",
+    categoria: "lake",
     rasgo: "explorador",
-    lat: 30.231,
-    lon: 120.1487,
-    radioMetros: 150,
-    efectos: { felicidad: 15, energia: 8 },
+    lat: 30.23389,
+    lon: 120.145,
+    radioMetros: 260,
+    efectos: {felicidad: 15, energia: 8},
     sello: "pagoda",
     color: "rgb(214,120,60)",
     frase: "Look how tall it is! I can see the whole lake from here.",
     dialogo: "The old pagoda on the south shore. At sunset it glows like a lantern.",
   },
+  {
+    id: "baidi",
+    nombre: "Bai Causeway",
+    categoria: "lake",
+    rasgo: "explorador",
+    lat: 30.2551,
+    lon: 120.1403,
+    radioMetros: 380,
+    efectos: {felicidad: 12, energia: 6},
+    sello: "pabellon",
+    color: "rgb(96,140,190)",
+    frase: "A path right through the water!",
+    dialogo: "Willows on one side, lotus on the other. Walk slow here.",
+  },
+  {
+    id: "sudi",
+    nombre: "Su Causeway",
+    categoria: "lake",
+    rasgo: "explorador",
+    lat: 30.24,
+    lon: 120.127,
+    radioMetros: 380,
+    efectos: {felicidad: 12, energia: 10},
+    sello: "hoja",
+    color: "rgb(110,170,120)",
+    frase: "So many bridges… let's count them!",
+    dialogo: "Six little bridges and a long line of trees. Spring mornings here are famous.",
+  },
+  {
+    id: "santan",
+    nombre: "Three Pools Mirroring the Moon",
+    categoria: "lake",
+    rasgo: "explorador",
+    lat: 30.23944,
+    lon: 120.13972,
+    radioMetros: 260,
+    efectos: {felicidad: 14, vinculo: 6},
+    sello: "estrella",
+    color: "rgb(120,120,200)",
+    frase: "Are those little towers standing in the water?",
+    dialogo: "On the Mid-Autumn night they light candles inside the stone towers. Five moons at once.",
+  },
+  {
+    id: "huxinting",
+    nombre: "Mid-Lake Pavilion",
+    categoria: "lake",
+    rasgo: "explorador",
+    lat: 30.2495,
+    lon: 120.143,
+    radioMetros: 380,
+    efectos: {felicidad: 12},
+    sello: "pabellon",
+    color: "rgb(90,120,170)",
+    frase: "We're in the middle of the lake!!",
+    dialogo: "A tiny island with a tiny pavilion. The whole lake around you.",
+  },
+  {
+    id: "gushan",
+    nombre: "Solitary Hill",
+    categoria: "museum",
+    rasgo: "sociable",
+    lat: 30.25306,
+    lon: 120.13528,
+    radioMetros: 260,
+    efectos: {felicidad: 12, vinculo: 6},
+    sello: "estrella",
+    color: "rgb(150,110,170)",
+    frase: "A little hill with secret gardens!",
+    dialogo: "The seal carvers' society lives up here. Stone stamps, old trees, quiet paths.",
+  },
+  {
+    id: "yuefei",
+    nombre: "Yue Fei Temple",
+    categoria: "temple",
+    rasgo: "sociable",
+    lat: 30.2586,
+    lon: 120.1296,
+    radioMetros: 380,
+    efectos: {felicidad: 10, vinculo: 8},
+    sello: "templo",
+    color: "rgb(170,60,60)",
+    frase: "Someone very brave is remembered here.",
+    dialogo: "A general everyone in China knows. People bow here, very seriously.",
+  },
+  {
+    id: "baochu",
+    nombre: "Baochu Pagoda",
+    categoria: "lake",
+    rasgo: "explorador",
+    lat: 30.2578,
+    lon: 120.1441,
+    radioMetros: 380,
+    efectos: {felicidad: 12, energia: 8},
+    sello: "pagoda",
+    color: "rgb(200,140,90)",
+    frase: "A skinny pagoda on top of the hill!",
+    dialogo: "Climb Baoshi Hill for the view. The rocks up here glow red at sunset.",
+  },
+  {
+    id: "jingci",
+    nombre: "Jingci Temple",
+    categoria: "temple",
+    rasgo: "sociable",
+    lat: 30.2295,
+    lon: 120.149,
+    radioMetros: 260,
+    efectos: {felicidad: 12, vinculo: 8},
+    sello: "templo",
+    color: "rgb(200,150,60)",
+    frase: "Did you hear that? A big bell!",
+    dialogo: "The evening bell of Jingci. You can hear it across the lake.",
+  },
+  {
+    id: "faxi",
+    nombre: "Faxi Temple",
+    categoria: "temple",
+    rasgo: "sociable",
+    lat: 30.202,
+    lon: 120.085,
+    radioMetros: 380,
+    efectos: {felicidad: 14, vinculo: 10},
+    sello: "templo",
+    color: "rgb(210,170,70)",
+    frase: "Yellow walls and old trees… so pretty.",
+    dialogo: "High in the hills, the temple with the yellow walls. People come to make wishes.",
+  },
+  {
+    id: "meijiawu",
+    nombre: "Meijiawu Tea Village",
+    categoria: "tea",
+    rasgo: "gourmet",
+    lat: 30.2103,
+    lon: 120.1105,
+    radioMetros: 380,
+    efectos: {felicidad: 12, hambre: 10},
+    sello: "hoja",
+    color: "rgb(90,150,90)",
+    frase: "More tea!! We should try some.",
+    dialogo: "A whole village of tea houses in the hills. Order a pot and stay a while.",
+  },
+  {
+    id: "teamuseum",
+    nombre: "China National Tea Museum",
+    categoria: "tea",
+    rasgo: "gourmet",
+    lat: 30.2347,
+    lon: 120.1156,
+    radioMetros: 260,
+    efectos: {felicidad: 10, hambre: 6},
+    sello: "hoja",
+    color: "rgb(100,140,100)",
+    frase: "A museum made of tea? I'm in.",
+    dialogo: "Tea fields around a museum about tea. You can taste some at the end.",
+  },
+  {
+    id: "jiuxi",
+    nombre: "Nine Creeks in Misty Forest",
+    categoria: "nature",
+    rasgo: "explorador",
+    lat: 30.206,
+    lon: 120.102,
+    radioMetros: 380,
+    efectos: {felicidad: 14, energia: 12},
+    sello: "hoja",
+    color: "rgb(80,140,130)",
+    frase: "So many little streams! My feet are wet.",
+    dialogo: "A path that crosses the creek again and again. Fog in the mornings.",
+  },
+  {
+    id: "hupao",
+    nombre: "Tiger Spring",
+    categoria: "nature",
+    rasgo: "explorador",
+    lat: 30.2103,
+    lon: 120.129,
+    radioMetros: 380,
+    efectos: {felicidad: 10, energia: 8},
+    sello: "estrella",
+    color: "rgb(120,150,170)",
+    frase: "The water here is supposed to be magic!",
+    dialogo: "Legend says two tigers dug this spring. The tea made with it is famous.",
+  },
+  {
+    id: "liuhe",
+    nombre: "Six Harmonies Pagoda",
+    categoria: "nature",
+    rasgo: "explorador",
+    lat: 30.19825,
+    lon: 120.12658,
+    radioMetros: 260,
+    efectos: {felicidad: 14, energia: 10},
+    sello: "pagoda",
+    color: "rgb(190,110,70)",
+    frase: "Look, a giant river!",
+    dialogo: "The big pagoda above the Qiantang River. The tide here is famous.",
+  },
+  {
+    id: "zoo",
+    nombre: "Hangzhou Zoo",
+    categoria: "nature",
+    rasgo: "sociable",
+    lat: 30.2137,
+    lon: 120.1337,
+    radioMetros: 260,
+    efectos: {felicidad: 16},
+    sello: "estrella",
+    color: "rgb(220,160,80)",
+    frase: "ANIMALS!! Can I be friends with them?",
+    dialogo: "Pandas, tigers, and a lot of very judgy birds.",
+  },
+  {
+    id: "botanico",
+    nombre: "Botanical Garden",
+    categoria: "nature",
+    rasgo: "explorador",
+    lat: 30.25524,
+    lon: 120.12313,
+    radioMetros: 260,
+    efectos: {felicidad: 12, energia: 8},
+    sello: "hoja",
+    color: "rgb(100,160,90)",
+    frase: "Every plant in the world is here!",
+    dialogo: "Bamboo, plum trees and a big lawn for lying down.",
+  },
+  {
+    id: "huanglong",
+    nombre: "Yellow Dragon Cave",
+    categoria: "nature",
+    rasgo: "sociable",
+    lat: 30.2677,
+    lon: 120.1359,
+    radioMetros: 380,
+    efectos: {felicidad: 12, vinculo: 6},
+    sello: "estrella",
+    color: "rgb(220,180,70)",
+    frase: "A dragon?? Where?!",
+    dialogo: "A little garden with a dragon fountain. Sometimes there's live music.",
+  },
+  {
+    id: "huagang",
+    nombre: "Flower Harbour",
+    categoria: "lake",
+    rasgo: "sociable",
+    lat: 30.2296,
+    lon: 120.1264,
+    radioMetros: 380,
+    efectos: {felicidad: 14, vinculo: 6},
+    sello: "corazon",
+    color: "rgb(230,130,150)",
+    frase: "FISH. So many fish!",
+    dialogo: "Viewing fish at Flower Harbour. The koi come right up to you.",
+  },
+  {
+    id: "liulang",
+    nombre: "Orioles in the Willows",
+    categoria: "lake",
+    rasgo: "explorador",
+    lat: 30.2334,
+    lon: 120.1518,
+    radioMetros: 380,
+    efectos: {felicidad: 12},
+    sello: "hoja",
+    color: "rgb(150,190,110)",
+    frase: "Tweet tweet! Listen!",
+    dialogo: "Willows on the lakeshore where the birds sing. Good spot for a picnic.",
+  },
+  {
+    id: "hefang",
+    nombre: "Hefang Street",
+    categoria: "city",
+    rasgo: "gourmet",
+    lat: 30.2402,
+    lon: 120.1656,
+    radioMetros: 380,
+    efectos: {felicidad: 14, hambre: 14},
+    sello: "casa",
+    color: "rgb(190,120,80)",
+    frase: "SNACKS. Everywhere. Hold my hand.",
+    dialogo: "The old street with lanterns, sweets and little shops. Try everything.",
+  },
+  {
+    id: "wushan",
+    nombre: "Wushan Square",
+    categoria: "city",
+    rasgo: "explorador",
+    lat: 30.2422,
+    lon: 120.1599,
+    radioMetros: 380,
+    efectos: {felicidad: 10, energia: 6},
+    sello: "pagoda",
+    color: "rgb(170,110,90)",
+    frase: "There's a tower on top of the hill!",
+    dialogo: "Climb up to the Town God's Pavilion. The city on one side, the lake on the other.",
+  },
+  {
+    id: "yujie",
+    nombre: "Southern Song Imperial Street",
+    categoria: "city",
+    rasgo: "gourmet",
+    lat: 30.2438,
+    lon: 120.167,
+    radioMetros: 380,
+    efectos: {felicidad: 12, hambre: 10},
+    sello: "casa",
+    color: "rgb(160,110,80)",
+    frase: "An emperor walked here once!",
+    dialogo: "The old imperial road, with water running beside the stones.",
+  },
+  {
+    id: "hubin",
+    nombre: "Hubin",
+    categoria: "city",
+    rasgo: "sociable",
+    lat: 30.2503,
+    lon: 120.1596,
+    radioMetros: 380,
+    efectos: {felicidad: 12, vinculo: 6},
+    sello: "cafe",
+    color: "rgb(120,100,160)",
+    frase: "Shops and lights and the lake!",
+    dialogo: "The lakeside by the city. Fountains at night, cafés all day.",
+  },
+  {
+    id: "wulin",
+    nombre: "Wulin Square",
+    categoria: "city",
+    rasgo: "sociable",
+    lat: 30.27333,
+    lon: 120.15861,
+    radioMetros: 260,
+    efectos: {felicidad: 10, vinculo: 6},
+    sello: "estrella",
+    color: "rgb(110,110,160)",
+    frase: "So many people! Stay close.",
+    dialogo: "The busy center of the city. Big stores, big fountain.",
+  },
+  {
+    id: "gongchen",
+    nombre: "Gongchen Bridge",
+    categoria: "city",
+    rasgo: "explorador",
+    lat: 30.320472,
+    lon: 120.13472,
+    radioMetros: 260,
+    efectos: {felicidad: 12, energia: 8},
+    sello: "pabellon",
+    color: "rgb(130,120,100)",
+    frase: "An old stone bridge on a looong canal.",
+    dialogo: "The Grand Canal goes all the way to Beijing. This bridge has seen boats for 400 years.",
+  },
+  {
+    id: "xixi",
+    nombre: "Xixi Wetland",
+    categoria: "nature",
+    rasgo: "explorador",
+    lat: 30.27056,
+    lon: 120.0625,
+    radioMetros: 260,
+    efectos: {felicidad: 16, energia: 10},
+    sello: "hoja",
+    color: "rgb(90,140,110)",
+    frase: "Boats and reeds and birds everywhere!",
+    dialogo: "Wetlands and little canals. Take a boat, it's quiet out there.",
+  },
+  {
+    id: "teatro",
+    nombre: "Hangzhou Grand Theater",
+    categoria: "city",
+    rasgo: "sociable",
+    lat: 30.2443,
+    lon: 120.2145,
+    radioMetros: 380,
+    efectos: {felicidad: 12, vinculo: 6},
+    sello: "estrella",
+    color: "rgb(210,190,110)",
+    frase: "The giant golden moon building!",
+    dialogo: "The sun and moon by the river. At night the whole skyline lights up.",
+  },
+  {
+    id: "museozj",
+    nombre: "Zhejiang Provincial Museum",
+    categoria: "museum",
+    rasgo: "sociable",
+    lat: 30.25333,
+    lon: 120.13889,
+    radioMetros: 260,
+    efectos: {felicidad: 10, vinculo: 6},
+    sello: "estrella",
+    color: "rgb(140,120,160)",
+    frase: "Old old old things. I love it.",
+    dialogo: "Jade, pottery and ancient boats at the foot of Solitary Hill.",
+  },
+  {
+    id: "museohz",
+    nombre: "Hangzhou Museum",
+    categoria: "museum",
+    rasgo: "sociable",
+    lat: 30.2389,
+    lon: 120.1661,
+    radioMetros: 260,
+    efectos: {felicidad: 10, vinculo: 6},
+    sello: "estrella",
+    color: "rgb(140,130,110)",
+    frase: "Let's learn about Hangzhou!",
+    dialogo: "The story of the city, room by room, at the foot of Wu Hill.",
+  },
+  {
+    id: "xianghu",
+    nombre: "Xiang Lake",
+    categoria: "nature",
+    rasgo: "explorador",
+    lat: 30.17017,
+    lon: 120.23004,
+    radioMetros: 380,
+    efectos: {felicidad: 14, energia: 10},
+    sello: "pabellon",
+    color: "rgb(90,130,170)",
+    frase: "Another lake! Quieter than the famous one.",
+    dialogo: "West Lake's little sister across the river. Fewer people, wide skies.",
+  },
 ];
+
+// Las colecciones de sellos (el mapa muestra cuantos van de cada una).
+export const CATEGORIAS = {
+  lake: "Around the lake",
+  temple: "Temples",
+  tea: "Tea trail",
+  nature: "Hills & water",
+  city: "City",
+  museum: "Museums",
+  propio: "Ours",
+};
+
 
 // Los lugares de ustedes dos (config.js -> LUGARES_PROPIOS) se suman aca.
 export const LUGARES = [
@@ -226,6 +663,7 @@ export const LUGARES = [
       radioMetros: 120,
       efectos: { felicidad: 20, vinculo: 10 },
       sello: "corazon",
+      categoria: "propio",
       color: "rgb(206,86,128)",
       frase: "Wait… I know this place. It feels special.",
       dialogo: "",
@@ -252,6 +690,48 @@ export function distanciaMetros(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+// WGS84 -> GCJ-02 (el "corrimiento chino"). Si algun telefono entrega la
+// posicion ya corrida, igual cae dentro del lugar.
+function fueraDeChina(lat, lon) {
+  return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271;
+}
+function transformarLat(x, y) {
+  let r = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  r += ((20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2) / 3;
+  r += ((20 * Math.sin(y * Math.PI) + 40 * Math.sin((y / 3) * Math.PI)) * 2) / 3;
+  r += ((160 * Math.sin((y / 12) * Math.PI) + 320 * Math.sin((y * Math.PI) / 30)) * 2) / 3;
+  return r;
+}
+function transformarLon(x, y) {
+  let r = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  r += ((20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2) / 3;
+  r += ((20 * Math.sin(x * Math.PI) + 40 * Math.sin((x / 3) * Math.PI)) * 2) / 3;
+  r += ((150 * Math.sin((x / 12) * Math.PI) + 300 * Math.sin((x / 30) * Math.PI)) * 2) / 3;
+  return r;
+}
+export function wgsAGcj(lat, lon) {
+  if (fueraDeChina(lat, lon)) return [lat, lon];
+  const a = 6378245.0;
+  const ee = 0.00669342162296594323;
+  let dLat = transformarLat(lon - 105.0, lat - 35.0);
+  let dLon = transformarLon(lon - 105.0, lat - 35.0);
+  const radLat = (lat / 180.0) * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / (((a * (1 - ee)) / (magic * sqrtMagic)) * Math.PI);
+  dLon = (dLon * 180.0) / ((a / sqrtMagic) * Math.cos(radLat) * Math.PI);
+  return [lat + dLat, lon + dLon];
+}
+
+/** Distancia de una posicion a un lugar, en WGS84 o en GCJ-02 (la menor). */
+export function distanciaLugar(lat, lon, lugar) {
+  const d1 = distanciaMetros(lat, lon, lugar.lat, lugar.lon);
+  if (lugar.propio) return d1; // los de ustedes se cargan tal cual
+  const [glat, glon] = wgsAGcj(lugar.lat, lugar.lon);
+  return Math.min(d1, distanciaMetros(lat, lon, glat, glon));
+}
+
 export class RegistroLugares {
   constructor() {
     this.desbloqueados = new Set();
@@ -270,13 +750,19 @@ export class RegistroLugares {
    */
   lugarEnRango(lat, lon, ahoraMs = null) {
     const ahora = ahoraMs ?? Date.now();
+    let mejor = null;
+    let mejorD = Infinity;
     for (const lugar of this.pendientes()) {
       const msDesdeOferta = ahora - (this.ultimaOfertaMs[lugar.id] || 0);
       if (msDesdeOferta < COOLDOWN_OFERTA_MS) continue;
-      const d = distanciaMetros(lat, lon, lugar.lat, lugar.lon);
-      if (d <= lugar.radioMetros) return lugar;
+      const d = distanciaLugar(lat, lon, lugar);
+      // el mas cercano gana (hay varios lugares pegados alrededor del lago)
+      if (d <= lugar.radioMetros && d < mejorD) {
+        mejor = lugar;
+        mejorD = d;
+      }
     }
-    return null;
+    return mejor;
   }
 
   /** El usuario dijo "Not now" a un lugar que el GPS detecto cerca. */

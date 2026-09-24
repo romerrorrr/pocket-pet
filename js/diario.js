@@ -49,8 +49,67 @@ function entradaVacia(clave) {
     hitos: [],
     cartas: [],
     fotos: 0,
+    // v19: lo que ella escribe al final del dia
+    animo: null, // "genial" | "bien" | "normal" | "cansada" | "triste"
+    texto: "",
+    pregunta: "",
+    escritoEn: 0,
   };
 }
+
+// Los animos del dia, con la cara que pone el personaje para cada uno.
+export const ANIMOS = [
+  { id: "genial", nombre: "Amazing", ojo: "ojo_especial_euforico.png", boca: "boca_especial_euforico.png" },
+  { id: "bien", nombre: "Good", ojo: "ojo_base_energia_alta.png", boca: "boca_base_feliz.png" },
+  { id: "normal", nombre: "Okay", ojo: "ojo_base_energia_neutral.png", boca: "boca_base_neutral.png" },
+  { id: "cansada", nombre: "Tired", ojo: "ojo_base_energia_baja.png", boca: "boca_base_neutral.png" },
+  { id: "triste", nombre: "Sad", ojo: "ojo_especial_decepcionado.png", boca: "boca_especial_decepcionado.png" },
+];
+
+// Una pregunta por dia (la misma todo el dia, cambia a la medianoche).
+export const PREGUNTAS = [
+  "What made you smile today?",
+  "What did you eat that was really good?",
+  "Who did you talk to today?",
+  "What's one small thing you're proud of?",
+  "What was the best moment of the day?",
+  "What would you do again tomorrow?",
+  "Anything funny happen?",
+  "What did you learn today?",
+  "Where would you go right now if you could?",
+  "What song was stuck in your head?",
+  "What are you looking forward to?",
+  "What was hard today?",
+  "What do you want to remember from today?",
+  "Did you see anything beautiful?",
+  "What made you laugh?",
+  "What's something kind someone did?",
+  "What would make tomorrow great?",
+  "How did you take care of yourself today?",
+  "What's on your mind right now?",
+  "If today had a color, what would it be?",
+  "What did you do that felt like 'you'?",
+  "Any little adventure today?",
+  "What surprised you today?",
+  "What are you grateful for tonight?",
+  "What did the sky look like today?",
+  "Best thing you drank today?",
+  "What's one thing you'd tell tomorrow-you?",
+  "Who do you miss today?",
+];
+
+export function preguntaDelDia(clave = claveDelDia()) {
+  let h = 0;
+  for (const c of clave) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return PREGUNTAS[h % PREGUNTAS.length];
+}
+
+function sumarDias(clave, n) {
+  const [y, m, d] = clave.split("-").map(Number);
+  return claveDelDia(new Date(y, m - 1, d + n));
+}
+
+const escrita = (e) => !!e && (!!e.animo || !!(e.texto && e.texto.trim()));
 
 export class Diario {
   constructor(entradas = []) {
@@ -107,6 +166,57 @@ export class Diario {
   anotarCarta(idCarta, fecha = new Date()) {
     const e = this.hoy(fecha);
     if (!e.cartas.includes(idCarta)) e.cartas.push(idCarta);
+  }
+
+  /** Ella escribe (o reescribe) la pagina de hoy. */
+  escribirHoy({ animo = null, texto = "", pregunta = "" } = {}, fecha = new Date()) {
+    const e = this.hoy(fecha);
+    e.animo = animo;
+    e.texto = String(texto || "").slice(0, 400);
+    e.pregunta = pregunta;
+    e.escritoEn = fecha.getTime();
+    return e;
+  }
+
+  entrada(clave) {
+    return this.entradas.find((e) => e.fecha === clave) || null;
+  }
+
+  hoyEscrito(fecha = new Date()) {
+    return escrita(this.entrada(claveDelDia(fecha)));
+  }
+
+  /** Dias seguidos escribiendo (cuenta hasta hoy, o hasta ayer si hoy todavia no). */
+  racha(fecha = new Date()) {
+    let clave = claveDelDia(fecha);
+    if (!escrita(this.entrada(clave))) clave = sumarDias(clave, -1);
+    let n = 0;
+    while (escrita(this.entrada(clave))) {
+      n += 1;
+      clave = sumarDias(clave, -1);
+    }
+    return n;
+  }
+
+  /** Los ultimos 7 dias (mas viejo primero), con su animo si lo hay. */
+  semana(fecha = new Date()) {
+    const hoy = claveDelDia(fecha);
+    return Array.from({ length: 7 }, (_, i) => {
+      const clave = sumarDias(hoy, i - 6);
+      const e = this.entrada(clave);
+      return { clave, animo: e ? e.animo : null, escrita: escrita(e) };
+    });
+  }
+
+  /** Una pagina escrita de hace un mes o hace un año (la de hace un año gana). */
+  recuerdo(fecha = new Date()) {
+    const anio = new Date(fecha.getFullYear() - 1, fecha.getMonth(), fecha.getDate());
+    const mes = new Date(fecha.getFullYear(), fecha.getMonth() - 1, fecha.getDate());
+    for (const [cuando, f] of [["One year ago today", anio], ["One month ago today", mes]]) {
+      const e = this.entrada(claveDelDia(f));
+      if (escrita(e)) return { cuando, entrada: e };
+    }
+    return null;
   }
 
   /** Mas reciente primero — asi se lee el album. */

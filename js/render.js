@@ -26,10 +26,11 @@
  */
 
 import { arte } from "./arte.js";
+import * as Personaje from "./personaje.js";
 import { buscarCategoria } from "./gameController.js";
 import { TRAITS, TRAIT_NOMBRES, PESO_HISTORICO, PESO_RECIENTE, FELICIDAD_A_BOCA } from "./petState.js";
-import { LUGARES, NPCS, VECES_PARA_ENAMORADO } from "./mundo.js";
-import { resumenDelDia, fotoDelDia, fechaLegible } from "./diario.js";
+import { LUGARES, NPCS, VECES_PARA_ENAMORADO, CATEGORIAS } from "./mundo.js";
+import { resumenDelDia, fotoDelDia, fechaLegible, ANIMOS, preguntaDelDia, claveDelDia } from "./diario.js";
 import { buscarCarta } from "./cartas.js";
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
 import { RECORTES_MENU } from "./recortes.js";
@@ -53,24 +54,56 @@ export function glifo(nombre, clase = "") {
   return `<i class="glifo g-${nombre} ${clase}" aria-hidden="true"></i>`;
 }
 
-/** El cuerpo de Baozi que va debajo de ojos y boca (parado; dormido, sentado con la cabeza baja). */
-export function archivoCuerpo(archivoOjo) {
-  return archivoOjo === "ojo_dormida.png" ? "cuerpo_dormido.png" : "cuerpo.png";
-}
-
-export function spriteCara(archivoOjo, archivoBoca, parpadeando = false, clase = "") {
+/**
+ * El personaje (Baozi o Mantou) con una cara: capas apiladas en el mismo
+ * lienzo. Parado en las pantallas; dormido, sentado con los ojos cerrados.
+ * opts.pose fuerza una pose ("parado" | "sentado" | "dormido").
+ */
+export function spriteCara(archivoOjo, archivoBoca, parpadeando = false, clase = "", opts = {}) {
+  const pose = opts.pose || (archivoOjo === "ojo_dormida.png" ? "dormido" : "parado");
+  const quien = opts.quien || Personaje.actual();
+  const capas = Personaje.capas(archivoOjo, archivoBoca, pose, quien);
+  const imgs = capas
+    .map((c) => {
+      const cls = c.tipo === "cuerpo" ? "capa-cuerpo" : c.tipo === "cara" ? "capa-ojos capa-cara" : `capa-${c.tipo}`;
+      return `<img class="${cls}" src="${arte(c.src)}" alt="" draggable="false" />`;
+    })
+    .join("");
   return `
-    <div class="sprite-cara ${parpadeando ? "parpadeando" : ""} ${clase}">
-      <img class="capa-cuerpo" src="${arte("caras/" + archivoCuerpo(archivoOjo))}" alt="" draggable="false" />
-      <img class="capa-ojos" src="${arte("caras/" + archivoOjo)}" alt="" draggable="false" />
-      <img class="capa-boca" src="${arte("caras/" + archivoBoca)}" alt="" draggable="false" />
+    <div class="sprite-cara estilo-${Personaje.estilo(quien)} ${parpadeando ? "parpadeando" : ""} ${clase}" data-ojo="${archivoOjo}" data-boca="${archivoBoca}">
+      ${imgs}
     </div>
   `;
 }
 
-/** Ruta del sprite de una boca (main.js la cambia en vivo en el minijuego). */
-export function rutaBoca(archivoBoca) {
-  return arte("caras/" + archivoBoca);
+/** Cambia ojos y boca de un sprite ya dibujado (con Mantou, la capa de la cara). */
+export function cambiarCara(spriteEl, archivoOjo, archivoBoca) {
+  if (!spriteEl) return;
+  spriteEl.dataset.ojo = archivoOjo;
+  if (Personaje.esMantou()) {
+    const cara = spriteEl.querySelector(".capa-cara");
+    if (cara) cara.src = arte(Personaje.caraMantou(Personaje.estadoDeArchivos(archivoOjo, archivoBoca)));
+    return;
+  }
+  const ojos = spriteEl.querySelector(".capa-ojos");
+  const boca = spriteEl.querySelector(".capa-boca");
+  if (ojos) ojos.src = arte("caras/" + archivoOjo);
+  if (boca) boca.src = arte("caras/" + archivoBoca);
+}
+
+/**
+ * Cambia en vivo la boca de un sprite ya dibujado (el minijuego abre la
+ * boca al atrapar). Con Mantou cambia la capa de la cara entera.
+ */
+export function cambiarBoca(spriteEl, archivoBoca) {
+  if (!spriteEl) return;
+  if (Personaje.esMantou()) {
+    const cara = spriteEl.querySelector(".capa-cara");
+    if (cara) cara.src = arte(Personaje.caraMantou(Personaje.estadoDeArchivos(spriteEl.dataset.ojo, archivoBoca)));
+    return;
+  }
+  const boca = spriteEl.querySelector(".capa-boca");
+  if (boca) boca.src = arte("caras/" + archivoBoca);
 }
 
 function caraSegunEstado(estado, parpadeando = false) {
@@ -112,11 +145,30 @@ function pips(valor) {
 // Primer arranque: el huevo y el nombre
 // ------------------------------------------------------------------
 
+/** Lo primero de todo: con quien va a jugar (Baozi o Mantou). */
+export function renderElegir(container) {
+  const tarjeta = (quien, frase) => `
+    <button class="tarjeta-personaje" data-personaje="${quien}" aria-label="${Personaje.nombre(quien)}">
+      <div class="tarjeta-personaje-figura">${spriteCara("ojo_base_energia_neutral.png", "boca_base_neutral.png", false, "", { quien })}</div>
+      <div class="tarjeta-personaje-nombre">${Personaje.nombre(quien)}</div>
+      <div class="tarjeta-personaje-frase">${frase}</div>
+    </button>`;
+  container.innerHTML = `
+    <div class="pantalla-elegir con-cuarto" id="pantalla-elegir">
+      <div class="rotulo-elegir">Who's coming home with you?</div>
+      <div class="fila-personajes">
+        ${tarjeta("baozi", "Spiky, dramatic, secretly soft.")}
+        ${tarjeta("mantou", "White, calm, a little bit judgy.")}
+      </div>
+      <div class="pista-huevo">you can only pick once</div>
+    </div>`;
+}
+
 export function renderHuevo(container) {
   container.innerHTML = `
-    <div class="pantalla-huevo" id="pantalla-huevo">
+    <div class="pantalla-huevo con-cuarto" id="pantalla-huevo">
       <div class="huevo" id="huevo">
-        <img class="huevo-sprite" src="${arte("final/huevo.png")}" alt="" draggable="false" />
+        <img class="huevo-sprite" src="${arte(Personaje.esMantou() ? "final/huevo_blanco.png" : "final/huevo.png")}" alt="" draggable="false" />
         <img class="huevo-grieta g1" src="${arte("final/grieta.png")}" alt="" draggable="false" />
       </div>
       <div class="sombra-huevo"></div>
@@ -127,11 +179,11 @@ export function renderHuevo(container) {
 
 export function renderNombre(container) {
   container.innerHTML = `
-    <div class="pantalla-nombre">
+    <div class="pantalla-nombre con-cuarto">
       <div class="nombre-cara rebote">${spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png")}</div>
       <div class="nombre-lado">
         <div class="caja-dialogo">
-          <div class="caja-dialogo-nombre">BAOZI</div>
+          <div class="caja-dialogo-nombre">${Personaje.nombre().toUpperCase()}</div>
           <div class="caja-dialogo-texto" id="nombre-saludo"></div>
         </div>
         <div class="fila-nombre">
@@ -259,21 +311,34 @@ export function globoCara(mascota, { fotoPedida = false, saludo = "" } = {}) {
 // La heladera abierta
 // ------------------------------------------------------------------
 
+// Lo que hay en la heladera (coordenadas en px del dibujo de 200x112: donde apoya cada cosa)
+export const HELADERA = [
+  { src: "comida/comida_bao.png", accion: "feed", x: 56, y: 40, nombre: "Bao" },
+  { src: "comida/comida_onigiri.png", accion: "feed", x: 84, y: 40, nombre: "Onigiri" },
+  { src: "comida/comida_dumpling.png", accion: "feed", x: 112, y: 40, nombre: "Dumpling" },
+  { src: "comida/comida_manzana.png", accion: "feed", x: 142, y: 40, nombre: "Cherries" },
+  { src: "comida/bebida_te.png", accion: "water", x: 64, y: 76, nombre: "Milk tea" },
+  { src: "comida/bebida_agua.png", accion: "water", x: 92, y: 76, nombre: "Water" },
+  { src: "comida/comida_naranja.png", accion: "feed", x: 128, y: 76, nombre: "Watermelon" },
+];
+
 export function renderHeladera(container) {
+  const items = HELADERA.map(
+    (it, i) => `
+      <button class="item-heladera" data-comida="${it.accion}" data-item="${it.src}" ${i === 0 ? 'id="btn-heladera-feed"' : it.src.endsWith("agua.png") ? 'id="btn-heladera-water"' : ""}
+        style="left:${(it.x / 200) * 100}%;top:${(it.y / 112) * 100}%" aria-label="${esc(it.nombre)}">
+        <img src="${arte(it.src)}" alt="" draggable="false" />
+        <span class="etiqueta-item">${esc(it.nombre)}</span>
+      </button>`,
+  ).join("");
   container.innerHTML = `
-    <div class="pantalla-heladera">
-      <img class="heladera-fondo" src="${arte("pieza/heladera_adentro.png")}" alt="" draggable="false" />
-      <button class="boton-volver volver-flotante" id="btn-volver-heladera" aria-label="Close the fridge">${glifo("atras")}</button>
-      <div class="estantes-heladera">
-        <button class="comida-heladera" data-comida="feed" id="btn-heladera-feed">
-          ${iconoItemMenu({ id: "feed", nombre: "Food" }, "icono-actual")}
-          <span class="etiqueta-heladera">Snack</span>
-        </button>
-        <button class="comida-heladera" data-comida="water" id="btn-heladera-water">
-          ${iconoItemMenu({ id: "water", nombre: "Water" }, "icono-actual")}
-          <span class="etiqueta-heladera">Water</span>
-        </button>
+    <div class="pantalla-heladera con-cuarto">
+      <div class="heladera-caja">
+        <img class="heladera-fondo" src="${arte("pieza/heladera_adentro.png")}" alt="" draggable="false" />
+        ${items}
       </div>
+      <div class="heladera-espia">${spriteCara("ojo_especial_hambriento.png", "boca_especial_hambriento.png")}</div>
+      <button class="boton-volver volver-flotante" id="btn-volver-heladera" aria-label="Close the fridge">${glifo("atras")}</button>
     </div>`;
 }
 
@@ -355,6 +420,14 @@ export function renderMapa(container, opts) {
       <div class="mapa-cabecera">
         <button class="boton-volver" id="btn-volver-mapa" aria-label="Back">${glifo("atras")}</button>
         <div class="titulo-vista">Hangzhou · ${sellados.size}/${lugares.length}</div>
+        <div class="colecciones">${Object.entries(CATEGORIAS)
+          .map(([id, nombre]) => {
+            const de = lugares.filter((l) => (l.categoria || "propio") === id);
+            if (!de.length) return "";
+            const n = de.filter((l) => sellados.has(l.id)).length;
+            return `<span class="coleccion ${n === de.length ? "completa" : ""}">${esc(nombre)} ${n}/${de.length}</span>`;
+          })
+          .join("")}</div>
       </div>
       <div class="mapa-cuerpo">
         <div class="mapa-papel">
@@ -374,7 +447,7 @@ export function renderSello(container, lugar) {
         <div class="nombre-sello">${esc(lugar.nombre)}</div>
         <div class="huella-sello" id="huella-sello"><img src="${arte("pieza/sello_" + lugar.sello + ".png")}" alt="" draggable="false" /></div>
         <div class="caja-dialogo frase-sello">
-          <div class="caja-dialogo-nombre">BAOZI</div>
+          <div class="caja-dialogo-nombre">${Personaje.nombre().toUpperCase()}</div>
           <div class="caja-dialogo-texto" id="frase-sello"></div>
         </div>
         <div class="fila-botones oculto" id="botones-sello">
@@ -525,63 +598,118 @@ export function renderMenu(container, idCategoria, indice = 0, opts = {}) {
 // Feedback / avisos transitorios
 // ------------------------------------------------------------------
 
-export function renderFeedback(container, titulo, opts = {}) {
-  const { especial = null, icono = "check" } = opts;
-  const arriba =
-    especial && ESPECIALES_CON_ARTE.has(especial)
-      ? `<div class="caja-cara caja-cara-chica">${spriteCara(`ojo_especial_${especial}.png`, `boca_especial_${especial}.png`)}</div>`
-      : `<div class="insignia">${glifo(icono, "x4")}</div>`;
-  container.innerHTML = `
-    <div class="tarjeta-narrativa aparece">
-      ${arriba}
-      <div class="titulo">${esc(titulo)}</div>
-    </div>
-  `;
+// v19: los momentos (comer, tomar, bañarse, remedio, dormir, avisos) son un
+// PRIMER PLANO: la camara se acerca al personaje, grande, con el cuarto
+// desenfocado de fondo y un titulo al costado. Nada de cuerpito chiquito
+// sobre un color liso.
+
+/** El personaje grande (la cabeza cae siempre en el mismo lugar de la pantalla). */
+function figuraPrimerPlano(ojo, boca, { clase = "", extra = "", pose = "parado", capas2 = null } = {}) {
+  const segunda = capas2
+    ? `<div class="pp-segunda">${spriteCara(capas2[0], capas2[1], false, "", { pose })}</div>`
+    : "";
+  return `
+    <div class="pp-figura ${clase}">
+      <div class="pp-primera">${spriteCara(ojo, boca, false, "", { pose })}</div>
+      ${segunda}
+      ${extra}
+    </div>`;
 }
 
-const PUNTOS_LIMPIEZA = [
-  [-85, -50, 7], [60, -72, 5], [-38, 78, 6], [92, 28, 8], [-102, 12, 5], [28, -18, 4],
-];
+function primerPlano({ variante = "", figura, titulo = "", sub = "", fondo = "" }) {
+  return `
+    <div class="primer-plano con-cuarto ${variante}">
+      ${fondo}
+      ${figura}
+      <div class="pp-texto">
+        ${titulo ? `<div class="pp-titulo">${esc(titulo)}</div>` : ""}
+        ${sub ? `<div class="pp-sub">${esc(sub)}</div>` : ""}
+      </div>
+    </div>`;
+}
 
-function destello(x, y, rayos, retraso, colorVar) {
-  let rayosHtml = "";
-  for (let i = 0; i < rayos; i++) rayosHtml += `<span class="rayo" style="--i:${i};--retraso:${retraso}s"></span>`;
-  const colorStyle = colorVar ? `--rayo-color:${colorVar};` : "";
-  return `<div class="destello" style="left:calc(50% + ${x}px);top:calc(50% + ${y}px);${colorStyle}">${rayosHtml}</div>`;
+const NOMBRES_COMIDA = {
+  "comida/comida_bao.png": "A warm bao!",
+  "comida/comida_onigiri.png": "Onigiri time.",
+  "comida/comida_dumpling.png": "Dumpliiing.",
+  "comida/comida_manzana.png": "Cherries!",
+  "comida/comida_naranja.png": "Watermelon!!",
+  "comida/comida_grillo1.png": "…a crunchy snack.",
+  "comida/comida_grillo2.png": "…a crunchy snack.",
+  "comida/comida_grillo3.png": "…a crunchy snack.",
+  "comida/bebida_te.png": "Milk tea with pearls.",
+  "comida/bebida_agua.png": "Fresh water.",
+};
+
+export function renderFeedback(container, titulo, opts = {}) {
+  const { especial = null, icono = "check", sub = "" } = opts;
+  if (especial && ESPECIALES_CON_ARTE.has(especial)) {
+    container.innerHTML = primerPlano({
+      variante: `pp-${especial}`,
+      figura: figuraPrimerPlano(`ojo_especial_${especial}.png`, `boca_especial_${especial}.png`, {
+        extra: especial === "enamorado" ? `<span class="pp-corazon c1"></span><span class="pp-corazon c2"></span><span class="pp-corazon c3"></span>` : "",
+      }),
+      titulo,
+      sub,
+    });
+    return;
+  }
+  container.innerHTML = primerPlano({
+    variante: "pp-simple",
+    figura: figuraPrimerPlano("ojo_especial_euforico.png", "boca_especial_euforico.png", { extra: `<div class="pp-insignia">${glifo(icono, "x4")}</div>` }),
+    titulo,
+    sub,
+  });
 }
 
 export function renderFeedAccion(container, comidaSrc) {
   const boca = HAY_BOCA_ABIERTA ? ARCHIVO_BOCA_ABIERTA : "boca_base_feliz.png";
-  container.innerHTML = `
-    <div class="pantalla-feedback-accion">
-      <div class="caja-cara">
-        ${spriteCara("ojo_base_energia_alta.png", boca, false, HAY_BOCA_ABIERTA ? "" : "masticando")}
-        <img class="comida-feedback" src="${comidaSrc}" alt="" draggable="false" />
-      </div>
-    </div>
-  `;
+  container.innerHTML = primerPlano({
+    variante: "pp-comer",
+    figura: figuraPrimerPlano("ojo_base_energia_alta.png", boca, {
+      capas2: ["ojo_especial_euforico.png", "boca_especial_euforico.png"],
+      extra: `<img class="pp-comida" src="${arte(comidaSrc)}" alt="" draggable="false" /><span class="pp-miga m1"></span><span class="pp-miga m2"></span><span class="pp-miga m3"></span>`,
+    }),
+    titulo: "Yum!",
+    sub: NOMBRES_COMIDA[comidaSrc] || "",
+  });
+}
+
+export function renderBeberAccion(container, bebidaSrc = "comida/bebida_agua.png") {
+  container.innerHTML = primerPlano({
+    variante: "pp-beber",
+    figura: figuraPrimerPlano("ojo_base_energia_alta.png", HAY_BOCA_ABIERTA ? ARCHIVO_BOCA_ABIERTA : "boca_base_feliz.png", {
+      capas2: ["ojo_especial_euforico.png", "boca_especial_euforico.png"],
+      extra: `<img class="pp-comida pp-bebida" src="${arte(bebidaSrc)}" alt="" draggable="false" /><span class="pp-gota g1"></span><span class="pp-gota g2"></span>`,
+    }),
+    titulo: "Gulp gulp!",
+    sub: NOMBRES_COMIDA[bebidaSrc] || "",
+  });
 }
 
 export function renderCleanAccion(container) {
-  const destellos = PUNTOS_LIMPIEZA.map(([x, y, rayos], i) => destello(x, y, rayos, i * 0.08)).join("");
-  container.innerHTML = `
-    <div class="pantalla-feedback-accion">
-      <div class="caja-cara">${spriteCara("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
-      ${destellos}
-    </div>
-  `;
+  const burbujas = Array.from({ length: 9 }, (_, i) => `<span class="pp-burbuja" style="--i:${i}"></span>`).join("");
+  container.innerHTML = primerPlano({
+    variante: "pp-limpiar",
+    figura: figuraPrimerPlano("ojo_base_energia_alta.png", "boca_base_feliz.png", {
+      capas2: ["ojo_especial_euforico.png", "boca_especial_euforico.png"],
+      extra: burbujas + `<span class="pp-brillo b1"></span><span class="pp-brillo b2"></span><span class="pp-brillo b3"></span>`,
+    }),
+    titulo: "Squeaky clean!",
+    sub: "Soap, bubbles, done.",
+  });
 }
 
 export function renderMedicineAccion(container) {
-  container.innerHTML = `
-    <div class="pantalla-feedback-accion">
-      <div class="caja-cara">
-        ${spriteCara("ojo_enferma.png", "boca_enferma.png")}
-        <div class="curita"></div>
-      </div>
-      ${destello(70, -60, 6, 0.15, "var(--verde-ok)")}
-    </div>
-  `;
+  container.innerHTML = primerPlano({
+    variante: "pp-remedio",
+    figura: figuraPrimerPlano("ojo_enferma.png", "boca_enferma.png", {
+      capas2: ["ojo_especial_euforico.png", "boca_especial_euforico.png"],
+      extra: `<span class="pp-pastilla"></span><span class="pp-brillo b1"></span><span class="pp-brillo b2"></span>`,
+    }),
+    titulo: "All better!",
+    sub: "Brave little patient.",
+  });
 }
 
 const ESTRELLAS_DORMIR = [
@@ -590,26 +718,46 @@ const ESTRELLAS_DORMIR = [
 
 export function renderSleepAccion(container) {
   const estrellas = ESTRELLAS_DORMIR.map(([x, y]) => `<span class="estrella-fija" style="left:${x}%;top:${y}%"></span>`).join("");
-  const zzz = [[58, 32, 0], [68, 22, 0.3], [78, 12, 0.6]]
-    .map(([x, y, retraso]) => `<span class="zzz-flotante" style="left:${x}%;top:${y}%;animation-delay:${retraso}s;font-size:${10 + retraso * 8}px">z</span>`)
+  const zzz = [[0, 0], [1, 0.3], [2, 0.6]]
+    .map(([k, retraso]) => `<span class="pp-zzz" style="--k:${k};animation-delay:${retraso}s">z</span>`)
     .join("");
-  container.innerHTML = `
-    <div class="pantalla-durmiendo-feedback">
-      ${estrellas}
-      <div class="caja-cara">${spriteCara("ojo_dormida.png", "boca_dormida.png")}</div>
-      ${zzz}
-    </div>
-  `;
+  container.innerHTML = primerPlano({
+    variante: "pp-dormir",
+    fondo: `<div class="pp-noche">${estrellas}</div>`,
+    figura: figuraPrimerPlano("ojo_dormida.png", "boca_dormida.png", { pose: "dormido", extra: zzz }),
+    titulo: "Good night…",
+    sub: "Lights off. Sweet dreams.",
+  });
+}
+
+export function renderDespertarAccion(container) {
+  container.innerHTML = primerPlano({
+    variante: "pp-despertar",
+    figura: figuraPrimerPlano("ojo_base_energia_baja.png", "boca_base_neutral.png", {
+      capas2: ["ojo_especial_euforico.png", "boca_especial_euforico.png"],
+      extra: `<span class="pp-sol"></span>`,
+    }),
+    titulo: "Good morning!",
+    sub: "*big stretch*",
+  });
 }
 
 export function renderAviso(container, titulo, subtitulo = "") {
-  container.innerHTML = `
-    <div class="tarjeta-narrativa aparece">
-      <div class="insignia tenue">${glifo("cerrar", "x4")}</div>
-      <div class="titulo">${esc(titulo)}</div>
-      ${subtitulo ? `<div class="cuerpo">${esc(subtitulo)}</div>` : ""}
-    </div>
-  `;
+  // la cara depende del motivo: dormido, sano, o un "no" cualquiera
+  const dormido = /asleep/i.test(subtitulo);
+  const sano = /isn't sick/i.test(subtitulo);
+  const [ojo, boca, pose] = dormido
+    ? ["ojo_dormida.png", "boca_dormida.png", "dormido"]
+    : sano
+      ? ["ojo_especial_euforico.png", "boca_especial_euforico.png", "parado"]
+      : ["ojo_especial_aburrido.png", "boca_especial_aburrido.png", "parado"];
+  container.innerHTML = primerPlano({
+    variante: `pp-aviso ${dormido ? "pp-dormir" : ""}`,
+    fondo: dormido ? `<div class="pp-noche"></div>` : "",
+    figura: figuraPrimerPlano(ojo, boca, { pose, extra: dormido ? `<span class="pp-zzz" style="--k:0">z</span><span class="pp-zzz" style="--k:1;animation-delay:.4s">z</span>` : "" }),
+    titulo,
+    sub: subtitulo,
+  });
 }
 
 // ------------------------------------------------------------------
@@ -966,6 +1114,64 @@ function fotoArteDelDia(entrada) {
  * Un dia con fotos reales muestra la mas linda (la del final si la hay,
  * si no la mas reciente) y se puede tocar para pasar a las otras.
  */
+const animoDe = (id) => ANIMOS.find((a) => a.id === id) || null;
+
+function caraAnimo(id, clase = "") {
+  const a = animoDe(id);
+  if (!a) return `<span class="animo-vacio ${clase}"></span>`;
+  return `<span class="animo-cara ${clase}">${spriteCara(a.ojo, a.boca)}</span>`;
+}
+
+/** Arriba del diario: la pagina de hoy (o el boton para escribirla), la semana y un recuerdo. */
+function cabezaDiario(diario) {
+  if (!diario) return "";
+  const hoy = diario.entrada(claveDelDia());
+  const escrita = diario.hoyEscrito();
+  const racha = diario.racha();
+  const semana = diario.semana();
+  const DIAS_1 = ["S", "M", "T", "W", "T", "F", "S"];
+  const tira = semana
+    .map((d) => {
+      const [y, m, dd] = d.clave.split("-").map(Number);
+      const letra = DIAS_1[new Date(y, m - 1, dd).getDay()];
+      return `<div class="dia-semana ${d.escrita ? "escrito" : ""} ${d.clave === claveDelDia() ? "hoy" : ""}">${caraAnimo(d.animo, "mini")}<span>${letra}</span></div>`;
+    })
+    .join("");
+  const rachaTxt = racha > 1 ? `${racha} days in a row` : racha === 1 ? "1 day — keep it going" : "Start a streak tonight";
+  const tarjetaHoy = escrita
+    ? `<button class="tarjeta-hoy escrita" id="btn-escribir-hoy">
+         ${caraAnimo(hoy.animo, "grande")}
+         <div class="tarjeta-hoy-texto">
+           <div class="tarjeta-hoy-titulo">Today</div>
+           <div class="tarjeta-hoy-frase">${hoy.texto ? esc(hoy.texto) : esc(animoDe(hoy.animo)?.nombre || "")}</div>
+           <div class="tarjeta-hoy-pista">tap to edit</div>
+         </div>
+       </button>`
+    : `<button class="tarjeta-hoy" id="btn-escribir-hoy">
+         <span class="tarjeta-hoy-lapiz">${glifo("nota", "x2")}</span>
+         <div class="tarjeta-hoy-texto">
+           <div class="tarjeta-hoy-titulo">Write today's page</div>
+           <div class="tarjeta-hoy-frase">${esc(preguntaDelDia())}</div>
+         </div>
+       </button>`;
+  const recuerdo = diario.recuerdo();
+  const tarjetaRecuerdo = recuerdo
+    ? `<div class="tarjeta-recuerdo">
+         <div class="tarjeta-recuerdo-cuando">${glifo("estrella")} ${esc(recuerdo.cuando)}</div>
+         <div class="tarjeta-recuerdo-texto">${caraAnimo(recuerdo.entrada.animo, "mini")} ${esc(recuerdo.entrada.texto || animoDe(recuerdo.entrada.animo)?.nombre || "")}</div>
+       </div>`
+    : "";
+  return `
+    <div class="cabeza-diario">
+      ${tarjetaHoy}
+      <div class="semana-diario">
+        <div class="semana-dias">${tira}</div>
+        <div class="racha">${esc(rachaTxt)}</div>
+      </div>
+      ${tarjetaRecuerdo}
+    </div>`;
+}
+
 export function renderDiario(container, diario, opts = {}) {
   const { puedeRepetirFinal = false } = opts;
   const entradas = diario ? diario.entradasRecientes(60) : [];
@@ -984,7 +1190,7 @@ export function renderDiario(container, diario, opts = {}) {
             .join("");
           const hitos = e.hitos.slice(-2).map((h) => `<div class="hito-polaroid">${glifo("estrella")} ${esc(h)}</div>`).join("");
           const imagen = ordenadas.length
-            ? `<img class="imagen-polaroid foto-real" src="${ordenadas[0].dataUrl}" alt="" draggable="false" />`
+            ? `<img class="imagen-polaroid foto-real ${ordenadas[0].filtro && ordenadas[0].filtro !== "pixel" ? "lisa" : ""}" src="${ordenadas[0].dataUrl}" alt="" draggable="false" />`
             : fotoArteDelDia(e);
           return `
             <figure class="polaroid ${dorada ? "dorada" : ""}" data-dia="${e.fecha}" data-indice="0" data-total="${ordenadas.length}">
@@ -994,8 +1200,9 @@ export function renderDiario(container, diario, opts = {}) {
                 ${dorada && puedeRepetirFinal ? `<button class="boton chico repetir-final" data-repetir-final="1">${glifo("corazon")} Relive</button>` : ""}
               </div>
               <figcaption>
-                <div class="fecha-polaroid">${esc(fechaPolaroid(e.fecha))}</div>
-                <div class="texto-polaroid">${esc(resumenDelDia(e))}</div>
+                <div class="fecha-polaroid">${esc(fechaPolaroid(e.fecha))} ${e.animo ? caraAnimo(e.animo, "mini") : ""}</div>
+                ${e.texto ? `<div class="escrito-polaroid" data-sin-nombre>${esc(e.texto)}</div>` : ""}
+                <div class="texto-polaroid ${e.texto ? "chico" : ""}">${esc(resumenDelDia(e))}</div>
                 ${hitos}${notas}
               </figcaption>
             </figure>`;
@@ -1005,8 +1212,38 @@ export function renderDiario(container, diario, opts = {}) {
 
   container.innerHTML = `
     ${encabezado("Diary", "btn-volver-consulta")}
+    ${cabezaDiario(diario)}
     ${cuerpo}
   `;
+}
+
+/**
+ * Escribir la pagina de hoy: el personaje a la izquierda (pone la cara del
+ * animo que ella elige) y una hoja a la derecha.
+ */
+export function renderEscribir(container, { entrada = null, foto = null } = {}) {
+  const animo = entrada && entrada.animo ? entrada.animo : null;
+  const a = animoDe(animo) || ANIMOS[1];
+  const pregunta = (entrada && entrada.pregunta) || preguntaDelDia();
+  container.innerHTML = `
+    <div class="pantalla-escribir con-cuarto">
+      <div class="escribir-personaje" id="escribir-personaje">${spriteCara(a.ojo, a.boca)}</div>
+      <div class="hoja-escribir papel">
+        <div class="hoja-fecha">${esc(fechaLegible(claveDelDia()))}</div>
+        <div class="hoja-pregunta">${esc(pregunta)}</div>
+        <div class="fila-animos" role="radiogroup" aria-label="How was today?">
+          ${ANIMOS.map((x) => `<button class="boton-animo ${x.id === animo ? "elegido" : ""}" data-animo="${x.id}" role="radio" aria-checked="${x.id === animo}" aria-label="${x.nombre}">${caraAnimo(x.id, "mini")}<span>${x.nombre}</span></button>`).join("")}
+        </div>
+        <textarea id="texto-hoy" maxlength="400" rows="3" placeholder="A few words about today…" data-sin-nombre>${esc((entrada && entrada.texto) || "")}</textarea>
+        <div class="hoja-pie">
+          ${foto ? `<img class="hoja-foto ${foto.filtro && foto.filtro !== "pixel" ? "lisa" : ""}" src="${foto.dataUrl}" alt="" />` : `<button class="boton boton-fantasma chico" id="btn-foto-hoy">${glifo("camara")} Photo</button>`}
+          <div class="hoja-botones">
+            <button class="boton boton-fantasma" id="btn-cancelar-hoy">Later</button>
+            <button class="boton" id="btn-guardar-hoy">${glifo("check")} Save</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 const DIAS_CORTOS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -1026,7 +1263,10 @@ export function siguienteFotoPolaroid(figura) {
   const i = (Number(figura.dataset.indice) + 1) % ordenadas.length;
   figura.dataset.indice = String(i);
   const img = figura.querySelector(".imagen-polaroid");
-  if (img) img.src = ordenadas[i].dataUrl;
+  if (img) {
+    img.src = ordenadas[i].dataUrl;
+    img.classList.toggle("lisa", !!ordenadas[i].filtro && ordenadas[i].filtro !== "pixel");
+  }
   const c = figura.querySelector(".contador-fotos");
   if (c) c.textContent = `${i + 1}/${ordenadas.length}`;
 }
@@ -1041,7 +1281,7 @@ export function renderCarta(container, carta) {
     <div class="papel carta-papel">
       <div class="sello-carta">${glifo("corazon", "x4")}</div>
       <div class="carta-titulo">${esc(carta.titulo)}</div>
-      <div class="carta-texto">${esc(carta.texto)}</div>
+      <div class="carta-texto" data-sin-nombre>${esc(carta.texto)}</div>
       <button id="btn-continuar-carta" class="boton">Continue</button>
     </div>
   `;

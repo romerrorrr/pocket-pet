@@ -14,6 +14,8 @@
  */
 
 import { PetState, estadoCara, especialPorEstado } from "./petState.js";
+import * as Personaje from "./personaje.js";
+import { iniciarJuego } from "./juego.js";
 import { RegistroNPCs, RegistroLugares, LUGARES, NPCS } from "./mundo.js";
 import * as storage from "./storage.js";
 import { ejecutarItemMenu, ControladorVistas, MOTIVOS_ACCION_FALLIDA } from "./gameController.js";
@@ -22,7 +24,7 @@ import * as Sensores from "./sensores.js";
 import { vibrar } from "./actuadores.js";
 import * as Sonido from "./sonido.js";
 import * as Musica from "./musica.js";
-import { Diario, claveDelDia, fechaLegible } from "./diario.js";
+import { Diario, claveDelDia, fechaLegible, ANIMOS, preguntaDelDia } from "./diario.js";
 import { cartaPendiente } from "./cartas.js";
 import * as Camara from "./camara.js";
 import { abrirLente } from "./lente.js";
@@ -30,23 +32,21 @@ import * as Final from "./final.js";
 import * as Director from "./director.js";
 import { escribir, conNombre } from "./dialogo.js";
 import { arte } from "./arte.js";
-import { FINAL } from "./config.js";
+import { FINAL, FECHAS } from "./config.js";
 import { crearPieza, posicionEnMapa } from "./pieza.js";
 import * as Clima from "./clima.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
-const DURACION_FEEDBACK_MS = 1100;
-const DURACION_MINIJUEGO_MS = 5000;
-const INTERVALO_SPAWN_COMIDA_MS = 600;
+const DURACION_FEEDBACK_MS = 1600;
 const COOLDOWN_ESPECIAL_ESTADO_MS = 30000;
-const COMIDA_SPRITES = [
+const COMIDA_REL = [
   "comida/comida_manzana.png",
   "comida/comida_naranja.png",
   "comida/comida_grillo1.png",
   "comida/comida_grillo2.png",
   "comida/comida_grillo3.png",
-].map((r) => arte(r));
+];
 
 const screenEl = document.getElementById("screen");
 const tabbarEl = document.getElementById("tabbar");
@@ -56,7 +56,7 @@ const marcoEl = document.querySelector(".marco-manito");
 // telefono entero. Todo lo demas vive adentro del aparato.
 const VISTAS_PANTALLA_COMPLETA = new Set(["descubrimiento", "lugarcerca", "encuentro", "carta", "final"]);
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -70,14 +70,15 @@ const VISTAS_EN_VERTICAL = new Set(["final"]);
 
 function actualizarMarco() {
   if (!marcoEl) return;
-  marcoEl.classList.toggle("pantalla-completa", VISTAS_PANTALLA_COMPLETA.has(controller.vista));
+  // v19: todo a pantalla completa (sin el aparato alrededor): el cuarto es el telefono
+  marcoEl.classList.add("pantalla-completa");
   document.body.classList.toggle("permite-vertical", VISTAS_EN_VERTICAL.has(controller.vista));
 }
 
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar() });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual() });
 }
 
 function registrarServiceWorker() {
@@ -184,6 +185,54 @@ let fotoDelDescubrimiento = false;
 // Arranque
 // ------------------------------------------------------------------
 
+/** La proxima de las fechas de ustedes (config FECHAS), con los dias que faltan. */
+function proximaFecha(ahora = new Date()) {
+  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  let mejor = null;
+  for (const f of FECHAS || []) {
+    if (!f || !f.nombre || !f.mes || !f.dia) continue;
+    let d = new Date(hoy.getFullYear(), f.mes - 1, f.dia);
+    if (d < hoy) d = new Date(hoy.getFullYear() + 1, f.mes - 1, f.dia);
+    const dias = Math.round((d - hoy) / 86400000);
+    if (!mejor || dias < mejor.dias) mejor = { nombre: f.nombre, dias };
+  }
+  return mejor;
+}
+
+// De noche, si todavia no escribio la pagina de hoy, el personaje se lo pide (una vez por dia).
+const CLAVE_PEDIDO_DIARIO = "baozi_pedido_diario";
+function esHoraDeEscribir(h = new Date().getHours()) {
+  return h >= 19 || h < 3;
+}
+function talVezPedirDiario() {
+  if (!mascota || !diario || controller.vista !== "cara" || mascota.dormida || !puedeComentar()) return;
+  if (!esHoraDeEscribir() || diario.hoyEscrito()) return;
+  const clave = claveDelDia();
+  try {
+    if (localStorage.getItem(CLAVE_PEDIDO_DIARIO) === clave) return;
+    localStorage.setItem(CLAVE_PEDIDO_DIARIO, clave);
+  } catch (e) {
+    return;
+  }
+  decir(`How was your day, ${mascota.nombre}? Tell me in the notebook ♥`, 6000);
+}
+
+// Si ella juega con Mantou, todo lo que la interfaz dice de "Baozi" pasa a
+// decir "Mantou" (menos las cartas de rom, marcadas con data-sin-nombre).
+function nombrarTextos(raiz) {
+  if (!Personaje.esMantou() || !raiz) return;
+  const recorrido = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT);
+  const cambiar = [];
+  while (recorrido.nextNode()) {
+    const n = recorrido.currentNode;
+    if (/\bBaozi\b/.test(n.nodeValue) && !(n.parentElement && n.parentElement.closest("[data-sin-nombre]"))) cambiar.push(n);
+  }
+  for (const n of cambiar) n.nodeValue = Personaje.conNombre(n.nodeValue);
+}
+if (typeof MutationObserver !== "undefined" && screenEl) {
+  new MutationObserver(() => nombrarTextos(screenEl)).observe(screenEl, { childList: true, subtree: true, characterData: true });
+}
+
 function arrancar() {
   actualizarFondoPorHora();
   Sonido.despertarConPrimerToque();
@@ -210,6 +259,7 @@ function arrancar() {
   if (guardado) {
     ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
     Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final);
+    Personaje.restaurar(guardado.extras && guardado.extras.personaje);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
@@ -223,7 +273,9 @@ function arrancar() {
       return;
     }
     const laExtrano = horasSinVerla >= 18 && !mascota.dormida && !mascota.enferma && !Final.fotoPedida() && !finalOcupado();
-    saludoPendiente = laExtrano ? "You're back… I missed you!" : mascota.nombre ? `Hi, ${mascota.nombre}!` : "";
+    const hora = new Date().getHours();
+    const saludoHora = hora >= 5 && hora < 11 ? `Good morning, ${mascota.nombre}!` : hora >= 22 || hora < 4 ? `Still up, ${mascota.nombre}?` : `Hi, ${mascota.nombre}!`;
+    saludoPendiente = laExtrano ? "You're back… I missed you!" : mascota.nombre ? saludoHora : "";
     setTimeout(() => {
       saludoPendiente = "";
       if (controller.vista === "cara") renderVistaActual();
@@ -241,7 +293,7 @@ function arrancar() {
   } else {
     diario = new Diario();
     cartasEntregadas = [];
-    controller.vista = "huevo";
+    controller.vista = "elegir";
     renderVistaActual();
   }
 }
@@ -276,9 +328,25 @@ function wireHuevo() {
   });
 }
 
+function wireElegir() {
+  for (const b of screenEl.querySelectorAll("[data-personaje]")) {
+    b.addEventListener("click", () => {
+      Personaje.elegir(b.dataset.personaje);
+      Sonido.sonar("tocar");
+      b.classList.add("elegida");
+      setTimeout(() => {
+        conTransicion(() => {
+          controller.vista = "huevo";
+          renderVistaActual();
+        });
+      }, 350);
+    });
+  }
+}
+
 function wireNombre() {
   const saludo = document.getElementById("nombre-saludo");
-  escribir(saludo, "Hi!! I'm Baozi. What's your name?");
+  escribir(saludo, `Hi!! I'm ${Personaje.nombre()}. What's your name?`);
   const input = document.getElementById("input-nombre");
   document.getElementById("btn-confirmar-nombre").addEventListener("click", confirmarNombre);
   input.addEventListener("keydown", (e) => {
@@ -341,6 +409,13 @@ function renderVistaActual() {
   screenEl.classList.toggle("sin-margen", VISTAS_SIN_MARGEN.has(controller.vista));
 
   switch (controller.vista) {
+    case "escribir":
+      abrirEscribir();
+      break;
+    case "elegir":
+      R.renderElegir(screenEl);
+      wireElegir();
+      break;
     case "huevo":
       R.renderHuevo(screenEl);
       wireHuevo();
@@ -441,11 +516,21 @@ function estadoPieza() {
     ojos,
     boca,
     parpadea: !dormido && !especialActiva && !fotoPedida && (estado.tipo === "base" || estado.tipo === "aburrido"),
+    // se queda sentado en su zabuton (no pasea) si esta enfermo o si Baozi pidio la foto del lago
+    quieto: fotoPedida || mascota.enferma || finalOcupado(),
     recuerdos: [...lugaresReg.desbloqueados],
     pines: LUGARES.filter((l) => lugaresReg.desbloqueados.has(l.id)).map((l) => ({ lat: l.lat, lon: l.lon, color: l.color })),
     dia: new Date().getDate(),
     anillo: Final.dijoQueSi(),
-    avisos: dormido || fotoPedida ? [] : [...new Set(R.necesidades(mascota).map((n) => n.objeto).filter(Boolean))],
+    avisos: fotoPedida
+      ? []
+      : [
+          ...new Set([
+            ...(dormido ? [] : R.necesidades(mascota).map((n) => n.objeto).filter(Boolean)),
+            // la pagina de hoy sin escribir: un "!" sobre el cuaderno de la mesita
+            ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() ? ["mesita"] : []),
+          ]),
+        ],
     npc: visita ? visita.npc.id : null,
     clima: Clima.tipo(),
     globo: globo.texto,
@@ -454,7 +539,7 @@ function estadoPieza() {
 }
 
 function decir(texto, ms = 2600) {
-  globoTemporal = texto;
+  globoTemporal = Personaje.conNombre(texto);
   clearTimeout(timeoutGlobo);
   timeoutGlobo = setTimeout(() => {
     globoTemporal = "";
@@ -512,7 +597,17 @@ function tocarObjeto(id) {
     case "calendario": {
       Sonido.sonar("tocar");
       const si = Final.fechaDelSi();
-      decir(Final.dijoQueSi() && si ? `Since ${fechaCorta(si)} ♥` : `Today is ${fechaCorta(Date.now())}.`);
+      const proxima = proximaFecha();
+      decir(
+        Final.dijoQueSi() && si
+          ? `Since ${fechaCorta(si)} ♥`
+          : proxima
+            ? proxima.dias === 0
+              ? `Today is ${proxima.nombre}!! ♥`
+              : `${proxima.dias} ${proxima.dias === 1 ? "day" : "days"} until ${proxima.nombre}.`
+            : `Today is ${fechaCorta(Date.now())}.`,
+        3200,
+      );
       break;
     }
     case "ventana":
@@ -681,7 +776,7 @@ function sonidoDelClima() {
 function wireHeladera() {
   document.getElementById("btn-volver-heladera").addEventListener("click", () => conTransicion(irACasa));
   for (const b of screenEl.querySelectorAll("[data-comida]")) {
-    b.addEventListener("click", () => manejarTapItem(b.dataset.comida));
+    b.addEventListener("click", () => manejarTapItem(b.dataset.comida, { item: b.dataset.item }));
   }
 }
 
@@ -1011,7 +1106,14 @@ function cerrarLente() {
 function abrirLenteEnPantalla(opts = {}) {
   cerrarLente();
   prepararVista("lente");
+  // el personaje de ella, feliz, para pegar en la foto
+  const ojoS = "ojo_especial_euforico.png";
+  const bocaS = "boca_especial_euforico.png";
   lenteAbierto = abrirLente(screenEl, {
+    stickerHtml: R.spriteCara(ojoS, bocaS),
+    stickerMini: R.spriteCara(ojoS, bocaS, false, "mini"),
+    stickerCapas: Personaje.capas(ojoS, bocaS, "parado").map((c) => arte(c.src)),
+    stickerPixel: !Personaje.esMantou(),
     ...opts,
     alSalir: () => {
       lenteAbierto = null;
@@ -1101,13 +1203,13 @@ function wireMenu() {
   if (pista) wireSwipeCarrusel(pista);
 }
 
-function manejarTapItem(itemId) {
+function manejarTapItem(itemId, opts = {}) {
   const resultado = ejecutarItemMenu(itemId, mascota, Date.now());
   if (!resultado) return;
 
   if (resultado.tipo === "accion") {
     if (resultado.ok) {
-      mostrarFeedbackAccion(itemId);
+      mostrarFeedbackAccion(itemId, opts);
     } else {
       const [titulo, subtitulo] = MOTIVOS_ACCION_FALLIDA[itemId] || ["Not now", ""];
       Sonido.sonar("no");
@@ -1144,16 +1246,20 @@ function etiquetaFeedback(itemId) {
   return { feed: "Yum!", water: "Gulp gulp!", clean: "Squeaky clean!", sleep: mascota.dormida ? "Good night…" : "Good morning!", medicine: "All better!" }[itemId] || "Done!";
 }
 
-const DURACION_FEEDBACK_ACCION_MS = 1200;
+const DURACION_FEEDBACK_ACCION_MS = 2400;
 const SONIDO_POR_ACCION = { feed: "comer", water: "beber", clean: "limpiar", medicine: "medicina" };
 
-function mostrarFeedbackAccion(itemId) {
+function mostrarFeedbackAccion(itemId, opts = {}) {
   Sonido.sonar(itemId === "sleep" ? (mascota.dormida ? "dormir" : "despertar") : SONIDO_POR_ACCION[itemId] || "mimo");
   diario.anotarCuidado();
 
   if (itemId === "feed") {
-    const comida = COMIDA_SPRITES[Math.floor(Math.random() * COMIDA_SPRITES.length)];
+    const comida = opts.item || COMIDA_REL[Math.floor(Math.random() * COMIDA_REL.length)];
     conTransicion(() => R.renderFeedAccion(screenEl, comida));
+  } else if (itemId === "water") {
+    conTransicion(() => R.renderBeberAccion(screenEl, opts.item || "comida/bebida_agua.png"));
+  } else if (itemId === "sleep" && !mascota.dormida) {
+    conTransicion(() => R.renderDespertarAccion(screenEl));
   } else if (itemId === "clean") {
     conTransicion(() => R.renderCleanAccion(screenEl));
   } else if (itemId === "medicine") {
@@ -1222,6 +1328,8 @@ function renderConsulta() {
 }
 
 function wireDiario() {
+  const escribirBtn = document.getElementById("btn-escribir-hoy");
+  if (escribirBtn) escribirBtn.addEventListener("click", () => conTransicion(abrirEscribir));
   for (const fig of screenEl.querySelectorAll(".polaroid")) {
     fig.addEventListener("click", (e) => {
       if (e.target.closest("[data-repetir-final]")) {
@@ -1234,6 +1342,92 @@ function wireDiario() {
       }
     });
   }
+}
+
+// ------------------------------------------------------------------
+// v19: la pagina de hoy (ella escribe al final del dia)
+// ------------------------------------------------------------------
+
+let borradorHoy = null; // { animo, texto } mientras no se guarda (sobrevive a ir a sacar una foto)
+
+function abrirEscribir() {
+  controller.vista = "escribir";
+  actualizarTabbar();
+  actualizarMarco();
+  screenEl.classList.add("sin-margen");
+  const guardada = diario.entrada(claveDelDia());
+  const entrada = borradorHoy ? { ...(guardada || {}), ...borradorHoy } : guardada;
+  const fotos = Camara.fotosDelDia(claveDelDia());
+  R.renderEscribir(screenEl, { entrada, foto: fotos.length ? fotos[fotos.length - 1] : null });
+  let animo = entrada && entrada.animo ? entrada.animo : null;
+  const texto = document.getElementById("texto-hoy");
+  const personaje = document.getElementById("escribir-personaje");
+  const recordar = () => {
+    borradorHoy = { animo, texto: texto.value };
+  };
+  for (const b of screenEl.querySelectorAll("[data-animo]")) {
+    b.addEventListener("click", () => {
+      animo = b.dataset.animo;
+      for (const o of screenEl.querySelectorAll("[data-animo]")) {
+        o.classList.toggle("elegido", o === b);
+        o.setAttribute("aria-checked", String(o === b));
+      }
+      const a = ANIMOS.find((x) => x.id === animo);
+      personaje.innerHTML = R.spriteCara(a.ojo, a.boca, false, "rebote");
+      Sonido.sonar("tocar");
+      recordar();
+    });
+  }
+  texto.addEventListener("input", recordar);
+  const foto = document.getElementById("btn-foto-hoy");
+  if (foto) {
+    foto.addEventListener("click", () => {
+      recordar();
+      conTransicion(() =>
+        abrirLenteEnPantalla({
+          modo: "foto",
+          alGuardar: () => {
+            diario.anotarFoto();
+            guardarTodo();
+            conTransicion(abrirEscribir);
+          },
+          alSalir: () => conTransicion(abrirEscribir),
+        }),
+      );
+    });
+  }
+  document.getElementById("btn-cancelar-hoy").addEventListener("click", () => {
+    recordar();
+    conTransicion(irACasa);
+  });
+  document.getElementById("btn-guardar-hoy").addEventListener("click", () => {
+    if (!animo && !texto.value.trim()) {
+      // sin nada no se guarda: el personaje le pide el animo
+      const fila = screenEl.querySelector(".fila-animos");
+      fila.classList.remove("sacude");
+      void fila.offsetWidth;
+      fila.classList.add("sacude");
+      Sonido.sonar("no");
+      return;
+    }
+    diario.escribirHoy({ animo, texto: texto.value.trim(), pregunta: preguntaDelDia() });
+    borradorHoy = null;
+    if (mascota) mascota._marcarInteraccion?.(Date.now());
+    guardarTodo();
+    Sonido.sonar("guardado");
+    const racha = diario.racha();
+    const frases = {
+      genial: "Best kind of day!",
+      bien: "A good one.",
+      normal: "Okay days count too.",
+      cansada: "Rest well tonight.",
+      triste: "Sending you a big hug. I'm here.",
+    };
+    const sub = `${frases[animo] || "Saved."}${racha > 1 ? ` ${racha} days in a row.` : ""}`;
+    controller.vista = "feedback";
+    conTransicion(() => R.renderFeedback(screenEl, "Page saved ♥", { especial: animo === "triste" ? "enamorado" : "euforico", sub }));
+    setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 900);
+  });
 }
 
 function wireBackup() {
@@ -1252,6 +1446,9 @@ function wireBackup() {
       if (!guardado) throw new Error("empty backup");
       ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
       Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final, { forzar: true });
+      Personaje.restaurar(guardado.extras && guardado.extras.personaje);
+      if (pieza) pieza.destruir();
+      pieza = null;
       mascota.actualizarTiempo(Date.now());
       mensajeEl.textContent = "Backup restored. Welcome back, Baozi!";
       mensajeEl.className = "mensaje-backup ok";
@@ -1413,7 +1610,7 @@ function wireDescubrimiento() {
         abrirLenteEnPantalla({
           modo: "foto",
           lugar: lugarDescubierto ? lugarDescubierto.id : null,
-          titulo: lugarDescubierto ? lugarDescubierto.nombre.toUpperCase() : "BAOZI LENS",
+          titulo: lugarDescubierto ? lugarDescubierto.nombre.toUpperCase() : `${Personaje.nombre().toUpperCase()} LENS`,
           alGuardar: () => {
             fotoDelDescubrimiento = true;
             if (mascota) diario.anotarFoto();
@@ -1599,23 +1796,27 @@ function iniciarMinijuego() {
   controller.vista = "minijuego";
   actualizarTabbar();
   actualizarMarco();
-  screenEl.classList.remove("sin-margen");
-  R.renderMinijuegoBase(screenEl, mascota, estadoCara(mascota), {
-    mostrarBannerMotion: permisoMotionEstado === "unknown",
-    sacudidaActiva: permisoMotionEstado === "granted",
+  screenEl.classList.add("sin-margen");
+  const banner =
+    permisoMotionEstado === "unknown" ? `<button class="banner-sensor" id="btn-habilitar-motion">Tap to shake your phone and catch</button>` : "";
+  minijuego = iniciarJuego(screenEl, {
+    arte,
+    sprite: (ojo, boca) => R.spriteCara(ojo, boca),
+    cambiarCara: (el, ojo, boca) => R.cambiarCara(el, ojo, boca),
+    sonar: (n) => Sonido.sonar(n),
+    vibrar,
+    bannerMotion: banner,
+    alTerminar: terminarMinijuego,
   });
   wireMinijuego();
-  minijuego = { atrapadas: 0, hastaMs: Date.now() + DURACION_MINIJUEGO_MS };
-  minijuego.spawnId = setInterval(spawnComida, INTERVALO_SPAWN_COMIDA_MS);
-  minijuego.tickId = setInterval(actualizarHudMinijuego, 100);
-  spawnComida();
   if (permisoMotionEstado === "granted") activarDeteccionSacudida();
 }
 
 function wireMinijuego() {
   const btnMotion = document.getElementById("btn-habilitar-motion");
   if (btnMotion) {
-    btnMotion.addEventListener("click", async () => {
+    btnMotion.addEventListener("click", async (e) => {
+      e.stopPropagation();
       permisoMotionEstado = await Sensores.pedirPermisoMotion();
       btnMotion.remove();
       if (permisoMotionEstado === "granted" && minijuego) activarDeteccionSacudida();
@@ -1628,67 +1829,11 @@ function activarDeteccionSacudida() {
   detectorSacudida = new Sensores.DetectorSacudida();
   detenerMotionMinijuego = Sensores.iniciarEscuchaMotion((x, y, z, ahoraSeg) => {
     if (!minijuego) return;
-    if (detectorSacudida.procesarLectura(x, y, z, ahoraSeg)) catchComida();
+    if (detectorSacudida.procesarLectura(x, y, z, ahoraSeg)) minijuego.atraparPrimera();
   });
 }
 
-function spawnComida() {
-  if (!minijuego) return;
-  const area = document.getElementById("area-minijuego");
-  if (!area) return;
-  const el = document.createElement("img");
-  el.className = "comida-cayendo";
-  el.src = COMIDA_SPRITES[Math.floor(Math.random() * COMIDA_SPRITES.length)];
-  el.alt = "";
-  el.draggable = false;
-  el.style.left = `${5 + Math.random() * 80}%`;
-  el.style.animationDuration = "2.3s";
-  el.addEventListener("pointerdown", catchComida);
-  el.addEventListener("animationend", () => el.remove());
-  area.appendChild(el);
-}
-
-function catchComida() {
-  if (!minijuego) return;
-  const area = document.getElementById("area-minijuego");
-  const primera = area?.querySelector(".comida-cayendo");
-  if (primera) primera.remove();
-  minijuego.atrapadas += 1;
-  const contador = document.getElementById("minijuego-atrapadas");
-  if (contador) contador.textContent = `CAUGHT ${minijuego.atrapadas}`;
-  vibrar(20);
-  Sonido.sonar("atrapar");
-  const cajaCara = document.getElementById("caja-cara-minijuego");
-  if (cajaCara) {
-    cajaCara.classList.remove("atrapando");
-    void cajaCara.offsetWidth;
-    cajaCara.classList.add("atrapando");
-    const bocaEl = cajaCara.querySelector(".capa-boca");
-    if (bocaEl && !bocaEl.dataset.abierta) {
-      const cerrada = cajaCara.dataset.bocaCerrada;
-      bocaEl.dataset.abierta = "1";
-      bocaEl.src = R.rutaBoca("boca_especial_sorprendido.png");
-      setTimeout(() => {
-        bocaEl.src = R.rutaBoca(cerrada);
-        delete bocaEl.dataset.abierta;
-      }, 260);
-    }
-  }
-}
-
-function actualizarHudMinijuego() {
-  if (!minijuego) return;
-  const restanteMs = Math.max(0, minijuego.hastaMs - Date.now());
-  const spanTiempo = document.getElementById("minijuego-tiempo");
-  if (spanTiempo) spanTiempo.textContent = (restanteMs / 1000).toFixed(1);
-  if (restanteMs <= 0) terminarMinijuego();
-}
-
-function terminarMinijuego() {
-  const atrapadas = minijuego.atrapadas;
-  clearInterval(minijuego.spawnId);
-  clearInterval(minijuego.tickId);
-  document.querySelectorAll(".comida-cayendo").forEach((el) => el.remove());
+function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord = false } = {}) {
   minijuego = null;
   if (detenerMotionMinijuego) {
     detenerMotionMinijuego();
@@ -1696,13 +1841,15 @@ function terminarMinijuego() {
   }
   detectorSacudida = null;
   mascota.resultadoMinijuego(atrapadas, Date.now());
-  diario.anotarJuego(atrapadas);
+  diario.anotarJuego(puntos);
   guardarTodo();
-  vibrar(atrapadas > 0 ? [20, 40, 20, 40, 20] : 20);
-  Sonido.sonar(atrapadas > 0 ? "hito" : "mimo");
+  vibrar(puntos > 0 ? [20, 40, 20, 40, 20] : 20);
+  Sonido.sonar(puntos > 0 ? "hito" : "mimo");
   controller.vista = "feedback";
-  conTransicion(() => R.renderFeedback(screenEl, atrapadas ? `Caught ${atrapadas}!` : "So close!", { icono: atrapadas ? "estrella" : "corazon" }));
-  setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 400);
+  const titulo = nuevoRecord && puntos > 0 ? `New record: ${puntos}!` : puntos ? `${puntos} points!` : "So close!";
+  const sub = nuevoRecord && puntos > 0 ? "Best snack catcher in Hangzhou." : `Caught ${atrapadas} · best ${record}`;
+  conTransicion(() => R.renderFeedback(screenEl, titulo, { especial: puntos ? "euforico" : "decepcionado", sub }));
+  setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 1200);
 }
 
 // ------------------------------------------------------------------
@@ -1817,6 +1964,7 @@ function tick() {
     }
   }
   talVezVisita();
+  talVezPedirDiario();
   revisarLugares();
   revisarClima();
   sonidoDelClima();
@@ -1878,6 +2026,14 @@ window.__mochi = {
   },
   mascota: () => mascota,
   especial: () => especialActiva,
+  terminarJuego: () => minijuego && minijuego.terminar(),
+  personaje: (quien) => {
+    Personaje.elegir(quien);
+    guardarTodo();
+    if (pieza) pieza.destruir();
+    pieza = null;
+    renderVistaActual();
+  },
   guardar: () => guardarTodo(),
   clima: (t) => {
     Clima.forzar(t);

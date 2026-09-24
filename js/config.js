@@ -110,3 +110,10 @@ export const MUSICA_CLIPS = [
 // -------------------------------------------------------------------
 export const LUGARES_PROPIOS = [];
 
+
+// ---------------------------------------------------------------------
+// v19: fechas de ustedes. Al tocar el calendario del cuarto, el personaje
+// cuenta cuanto falta para la proxima. Vacio = solo dice la fecha de hoy.
+// Ejemplo: { nombre: "our anniversary", mes: 3, dia: 14 }   (mes 1..12)
+// ---------------------------------------------------------------------
+export const FECHAS = [];

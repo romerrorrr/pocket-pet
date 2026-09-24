@@ -24,6 +24,8 @@
 
 import { arte } from "./arte.js";
 import { PIEZA } from "./pieza_datos.js";
+import * as Personaje from "./personaje.js";
+import { FIGURAS } from "./personajes_datos.js";
 
 const [MW, MH] = PIEZA.mundo;
 const [SX0, SY0, SX1, SY1] = PIEZA.segura;
@@ -290,6 +292,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   cajas.ventana = [vx0, vy0, vx1, vy1];
   const [bcx, bcy] = PIEZA.baozi;
   cajas.baozi = [bcx - 26, bcy - 38, bcx + 24, bcy + 22];
+  const PIE = bcy + 21; // la fila donde apoya (sentado en el zabuton o parado en el piso)
   const botones = {};
   for (const [id, caja] of Object.entries(cajas)) {
     const b = document.createElement("button");
@@ -305,6 +308,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     botones[id] = { el: b, caja };
   }
 
+  let ultimoDibujo = 0;
+  let personajeAlta = null;
   let vw = 1;
   let vh = 1;
   let dpr = 1;
@@ -346,9 +351,141 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   }
 
   function ubicarGlobo() {
-    globo.style.left = `${T.ox + bcx * T.s}px`;
-    globo.style.top = `${T.oy + (bcy - 38) * T.s}px`;
+    const f = Personaje.figura(actor.pose);
+    const arriba = PIE - (f.pies - Math.max(f.arriba, 8));
+    globo.style.left = `${T.ox + actor.x * T.s}px`;
+    globo.style.top = `${T.oy + arriba * T.s}px`;
   }
+
+  // ------------------------------------------------------------------
+  // El personaje vive: de vez en cuando se para, va a mirar por la
+  // ventana o la tele, se estira, y vuelve a su zabuton.
+  // ------------------------------------------------------------------
+  const actor = { x: bcx, pose: "sentado", dir: 1, paso: null, plan: [], prox: performance.now() + 14000 + Math.random() * 12000, mira: [0, 0], salto: 0, estira: 0, t0: 0 };
+  const VELOCIDAD = 24; // px de mundo por segundo
+  const PLANES = {
+    ventana: () => [{ tipo: "pararse" }, { tipo: "caminar", a: 156 }, { tipo: "mirar", ms: 6500, ojo: [-1, -1] }, { tipo: "caminar", a: bcx }, { tipo: "sentarse" }],
+    tele: () => [{ tipo: "pararse" }, { tipo: "caminar", a: 236 }, { tipo: "mirar", ms: 5500, ojo: [1, 0] }, { tipo: "caminar", a: bcx }, { tipo: "sentarse" }],
+    estirarse: () => [{ tipo: "pararse" }, { tipo: "estirarse", ms: 1700 }, { tipo: "mirar", ms: 900, ojo: [0, 0] }, { tipo: "sentarse" }],
+    pasear: () => [{ tipo: "pararse" }, { tipo: "caminar", a: bcx + 26 }, { tipo: "mirar", ms: 1500, ojo: [1, 0] }, { tipo: "caminar", a: bcx - 22 }, { tipo: "mirar", ms: 1500, ojo: [-1, 0] }, { tipo: "caminar", a: bcx }, { tipo: "sentarse" }],
+  };
+  let ultimoNpc = null;
+
+  function empezarPlan(nombre, ahora) {
+    actor.plan = PLANES[nombre]();
+    actor.paso = null;
+    actor.prox = ahora + 26000 + Math.random() * 34000;
+  }
+
+  function aCasa() {
+    actor.plan = [];
+    actor.paso = null;
+    actor.x = bcx;
+    actor.pose = "sentado";
+    actor.mira = [0, 0];
+    actor.estira = 0;
+  }
+
+  function moverActor(e, ahora, dt) {
+    // quieto en casa si duerme, si hay algo del final o una cara especial fuerte
+    if (e.dormido || e.quieto) {
+      if (actor.pose !== "sentado" || actor.x !== bcx) aCasa();
+      actor.prox = Math.max(actor.prox, ahora + 8000);
+      return;
+    }
+    // alguien golpea la ventana: va a ver quien es
+    if (e.npc && e.npc !== ultimoNpc && actor.plan.length === 0) empezarPlan("ventana", ahora);
+    ultimoNpc = e.npc;
+    if (actor.plan.length === 0) {
+      actor.mira = [0, 0];
+      if (ahora > actor.prox) {
+        const r = Math.random();
+        empezarPlan(r < 0.4 ? "ventana" : r < 0.62 ? "tele" : r < 0.82 ? "pasear" : "estirarse", ahora);
+      }
+      return;
+    }
+    if (!actor.paso) {
+      actor.paso = actor.plan[0];
+      actor.t0 = ahora;
+    }
+    const p = actor.paso;
+    const t = ahora - actor.t0;
+    let listo = false;
+    if (p.tipo === "pararse") {
+      actor.pose = "parado";
+      actor.salto = t < 120 ? -2 : t < 240 ? -1 : 0;
+      listo = t > 320;
+    } else if (p.tipo === "sentarse") {
+      actor.mira = [0, 0];
+      actor.salto = t < 120 ? -1 : 0;
+      if (t > 120) actor.pose = "sentado";
+      listo = t > 300;
+    } else if (p.tipo === "caminar") {
+      const d = p.a - actor.x;
+      actor.dir = d < 0 ? -1 : 1;
+      actor.mira = [actor.dir, 0];
+      const pasoX = (VELOCIDAD * dt) / 1000;
+      if (Math.abs(d) <= pasoX) {
+        actor.x = p.a;
+        listo = true;
+      } else actor.x += Math.sign(d) * pasoX;
+      actor.salto = Math.floor(ahora / 180) % 2 ? -1 : 0;
+    } else if (p.tipo === "mirar") {
+      actor.mira = p.ojo;
+      actor.salto = 0;
+      listo = t > p.ms;
+    } else if (p.tipo === "estirarse") {
+      const k = t / p.ms;
+      actor.estira = k < 0.5 ? Math.sin(k * Math.PI) : Math.sin(k * Math.PI);
+      listo = t > p.ms;
+      if (listo) actor.estira = 0;
+    }
+    if (listo) {
+      actor.plan.shift();
+      actor.paso = null;
+      actor.salto = 0;
+    }
+  }
+
+  function ubicarCajaActor() {
+    const f = Personaje.figura(actor.pose);
+    const caja = [actor.x - 24, PIE - (f.pies - Math.max(f.arriba, 6)), actor.x + 24, PIE];
+    const b = botones.baozi;
+    if (!b) return;
+    b.caja = caja;
+    const [x0, y0, x1, y1] = caja;
+    b.el.style.left = `${T.ox + x0 * T.s}px`;
+    b.el.style.top = `${T.oy + y0 * T.s}px`;
+    b.el.style.width = `${(x1 - x0 + 1) * T.s}px`;
+    b.el.style.height = `${(y1 - y0 + 1) * T.s}px`;
+  }
+
+  // Mantou (dibujo liso): se compone cuerpo+cara en un lienzo propio, se
+  // tine con la luz del cuarto y se dibuja sobre el lienzo visible en alta.
+  const compuestos = new Map();
+  function mantouCompuesto(pose, cara, tinte) {
+    const clave = `${pose}|${cara}|${tinte.join(",")}`;
+    if (compuestos.has(clave)) return compuestos.get(clave);
+    const capasM = Personaje.capas("", "", pose === "parado" ? "parado" : "sentado", "mantou");
+    const cuerpo = img(capasM[0].src);
+    const caraImg = img(cara);
+    if (!listo(cuerpo) || !listo(caraImg)) return null;
+    const c = document.createElement("canvas");
+    c.width = cuerpo.naturalWidth;
+    c.height = cuerpo.naturalHeight;
+    const x = c.getContext("2d");
+    x.drawImage(cuerpo, 0, 0);
+    x.drawImage(caraImg, 0, 0, c.width, c.height);
+    x.globalCompositeOperation = "multiply";
+    x.fillStyle = `rgb(${tinte.join(",")})`;
+    x.fillRect(0, 0, c.width, c.height);
+    x.globalCompositeOperation = "destination-in";
+    x.drawImage(cuerpo, 0, 0);
+    if (compuestos.size > 10) compuestos.delete(compuestos.keys().next().value);
+    compuestos.set(clave, c);
+    return c;
+  }
+  const TINTES = { dia: [255, 250, 244], amanecer: [248, 226, 222], atardecer: [246, 218, 200], noche: [212, 212, 240], dormido: [156, 160, 212] };
 
   const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(medir) : null;
   if (ro) ro.observe(raiz);
@@ -610,10 +747,14 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       m.fillStyle = p.color || "rgb(214,70,80)";
       m.fillRect(Math.round(ppx), Math.round(ppy), 2, 2);
     }
-    // la sombra de Baozi sobre el zabuton
-    for (let yy = 127; yy <= 130; yy++) {
-      for (let xx = bcx - 24; xx <= bcx + 20; xx++) {
-        if (((xx - bcx + 2) / 22) ** 2 + ((yy - 128.5) / 2) ** 2 <= 1 && BAYER[yy % 4][xx % 4] < 11) pixel(xx, yy, "rgb(22,24,46)");
+    // la sombra del personaje (sobre el zabuton, o en el piso si anda parado)
+    {
+      const ax = Math.round(actor.x);
+      const rx = actor.pose === "sentado" ? 22 : 13;
+      for (let yy = 127; yy <= 130; yy++) {
+        for (let xx = ax - rx - 2; xx <= ax + rx; xx++) {
+          if (((xx - ax + 2) / rx) ** 2 + ((yy - 128.5) / 2) ** 2 <= 1 && BAYER[yy % 4][xx % 4] < 11) pixel(xx, yy, "rgb(22,24,46)");
+        }
       }
     }
 
@@ -660,15 +801,16 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       }
     }
 
-    // 5. Baozi, sentado en su zabuton (despues de la luz: siempre se lee)
-    const respira = Math.floor(ahora / 700) % 3 === 0 ? -1 : 0;
-    // lienzo de 96 (tools/personajes.py): ojos en la fila 31, sentado apoya en la fila 64
-    const x0 = bcx - 48;
-    const y0 = bcy - 43 + (e.dormido ? 0 : respira) + offsetGolpe("baozi", ahora) * 2;
-    const cuerpo = img(e.dormido ? "caras/cuerpo_dormido.png" : "caras/cuerpo_sentado.png");
-    if (listo(cuerpo)) m.drawImage(cuerpo, x0, y0);
-    const ojos = img(`caras/${e.ojos}`);
-    const boca = img(`caras/${e.boca}`);
+    // 5. el personaje (despues de la luz: siempre se lee)
+    const dt = ultimoDibujo ? Math.min(250, ahora - ultimoDibujo) : 0;
+    ultimoDibujo = ahora;
+    moverActor(e, ahora, dt);
+    ubicarCajaActor();
+    ubicarGlobo();
+    const respira = actor.pose === "sentado" && Math.floor(ahora / 700) % 3 === 0 ? -1 : 0;
+    const fig = Personaje.figura(actor.pose);
+    const x0 = Math.round(actor.x) - 48;
+    const y0 = PIE - fig.pies + (e.dormido ? 0 : respira) + actor.salto + offsetGolpe("baozi", ahora) * 2;
     let alto = 1;
     if (e.parpadea) {
       if (!parpadeo.t) parpadeo.t = ahora + 2500;
@@ -677,15 +819,36 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       if (k >= 0 && k < pasos.length) alto = pasos[k];
       else if (k >= pasos.length) parpadeo.t = ahora + 2200 + Math.random() * 3800;
     }
-    if (listo(ojos)) {
-      if (alto === 1) m.drawImage(ojos, x0, y0);
-      else {
-        // se aplasta alrededor de la linea de los ojos (fila 31 del lienzo)
-        const h = Math.max(1, Math.round(96 * alto));
-        m.drawImage(ojos, x0, y0 + 31 - Math.round(31 * alto), 96, h);
+    const pose = e.dormido ? "dormido" : actor.pose;
+    const volteado = actor.dir < 0 && actor.pose === "parado";
+    // estirarse: se alarga para arriba y se afina un poquito
+    const ey = actor.estira ? 1 + 0.12 * actor.estira : 1;
+    const ex = actor.estira ? 1 - 0.06 * actor.estira : 1;
+    if (!Personaje.esMantou()) {
+      const [cuerpoSrc, ojosSrc, bocaSrc] = Personaje.capas(e.ojos, e.boca, pose).map((c) => c.src);
+      const cuerpo = img(cuerpoSrc);
+      const ojos = img(ojosSrc);
+      const boca = img(bocaSrc);
+      m.save();
+      // espejo alrededor del centro del lienzo, estiramiento desde los pies
+      m.translate(x0 + 48, y0 + fig.pies);
+      m.scale(volteado ? -ex : ex, ey);
+      m.translate(-48, -fig.pies);
+      if (listo(cuerpo)) m.drawImage(cuerpo, 0, 0);
+      // los ojos miran hacia donde va (o hacia la ventana/la tele)
+      const mx = (volteado ? -actor.mira[0] : actor.mira[0]);
+      const my = actor.mira[1];
+      if (listo(ojos)) {
+        if (alto === 1) m.drawImage(ojos, mx, my);
+        else {
+          const h = Math.max(1, Math.round(96 * alto));
+          m.drawImage(ojos, mx, my + 31 - Math.round(31 * alto), 96, h);
+        }
       }
+      if (listo(boca)) m.drawImage(boca, 0, 0);
+      m.restore();
     }
-    if (listo(boca)) m.drawImage(boca, x0, y0);
+    personajeAlta = Personaje.esMantou() ? { x0, y0, pose, volteado, ex, ey, fig, alto } : null;
 
     // 6. avisos de lo que necesita
     for (const id of e.avisos) aviso(id, ahora);
@@ -694,7 +857,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     if (e.dormido) {
       const z = Math.floor(ahora / 600) % 3;
       for (let i = 0; i <= z; i++) {
-        const zx = bcx + 16 + i * 5;
+        const zx = bcx + 16 + i * 5 + (Personaje.esMantou() ? -6 : 0);
         const zy = bcy - 36 - i * 5;
         m.fillStyle = "rgb(150,170,240)";
         m.fillRect(zx, zy, 3, 1);
@@ -725,6 +888,24 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     g.fillStyle = "rgb(14,12,14)";
     g.fillRect(0, 0, canvas.width, canvas.height);
     g.drawImage(mundo, Math.round(T.ox * dpr), Math.round(T.oy * dpr), Math.round(MW * T.s * dpr), Math.round(MH * T.s * dpr));
+
+    // Mantou: su dibujo liso, en alta, encima del cuarto pixel
+    if (personajeAlta) {
+      const p = personajeAlta;
+      const tinte = TINTES[e.dormido ? "dormido" : e.momento] || TINTES.dia;
+      const cara = Personaje.caraMantou(Personaje.estadoDeArchivos(e.ojos, e.boca));
+      const comp = mantouCompuesto(p.pose, cara, tinte);
+      if (comp) {
+        const k = T.s * dpr; // px de pantalla por px de mundo
+        g.save();
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = "high";
+        g.translate((T.ox + (p.x0 + 48) * T.s) * dpr, (T.oy + (p.y0 + p.fig.pies) * T.s) * dpr);
+        g.scale(p.volteado ? -p.ex : p.ex, p.ey * (p.alto < 1 ? 1 : 1));
+        g.drawImage(comp, -48 * k, -p.fig.pies * k, 96 * k, 96 * k);
+        g.restore();
+      }
+    }
 
     // el globo de Baozi
     const texto2 = e.globo || "";

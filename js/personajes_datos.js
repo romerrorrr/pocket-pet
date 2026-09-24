@@ -1,0 +1,2 @@
+// generado por tools/dibujos.py: no editar a mano
+export const FIGURAS = {"lienzo": 96, "centroCabeza": [47.5, 28.0], "radioCabeza": 15.0, "filaOjos": 31, "personajes": {"baozi": {"estilo": "pixel", "escala": 1, "parado": {"arriba": 0, "pies": 69, "izq": 13, "der": 76}, "sentado": {"arriba": 0, "pies": 67, "izq": 13, "der": 76}}, "mantou": {"estilo": "dibujo", "escala": 12, "parado": {"arriba": 6.1, "pies": 71.9, "izq": 30.1, "der": 63.8}, "sentado": {"arriba": 6.1, "pies": 71.4, "izq": 29.9, "der": 63.8}}}};

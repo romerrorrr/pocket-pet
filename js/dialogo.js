@@ -8,6 +8,8 @@
  * tocar de nervios.
  */
 
+import * as Personaje from "./personaje.js";
+
 import * as Sonido from "./sonido.js";
 
 const MS_POR_LETRA = 32;
@@ -18,6 +20,7 @@ const MS_POR_LETRA = 32;
  */
 export function escribir(el, texto, opts = {}) {
   const { alTerminar = () => {}, sonido = true, velocidad = MS_POR_LETRA } = opts;
+  texto = Personaje.conNombre(texto);
   const letras = Array.from(texto);
   let i = 0;
   let timer = 0;
