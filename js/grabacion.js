@@ -89,44 +89,91 @@ const RESTRICCIONES = {
   audio: { echoCancellation: true, noiseSuppression: true },
 };
 
-/** "granted" | "denied" | "prompt" | "desconocido" para camara y microfono juntos. */
-export async function estadoPermisos() {
-  if (!sePuedeGrabar()) return "sin-soporte";
+// v21.1 (rom: "el video salio sin audio; solo pidio permiso de camara").
+// En iPhone, el microfono se pide APARTE y dentro del toque, y el microfono
+// abierto se guarda vivo hasta que empieza la grabacion (asi no hay que
+// volver a pedirlo fuera del toque, donde iOS lo niega sin preguntar).
+let microVivo = null; // MediaStream solo de audio, abierto desde un toque
+
+function microAbierto() {
+  return !!microVivo && microVivo.getAudioTracks().some((t) => t.readyState === "live");
+}
+
+async function consultar(nombre) {
   try {
     if (!navigator.permissions) return "desconocido";
-    const [c, m] = await Promise.all([navigator.permissions.query({ name: "camera" }), navigator.permissions.query({ name: "microphone" })]);
-    if (c.state === "granted" && m.state === "granted") return "granted";
-    if (c.state === "denied" || m.state === "denied") return "denied";
-    return "prompt";
+    return (await navigator.permissions.query({ name: nombre })).state;
   } catch (e) {
     return "desconocido"; // (Safari viejo no deja preguntar: se pide y listo)
   }
 }
 
-/**
- * Pide camara frontal + microfono y los suelta enseguida. Llamar dentro
- * de un toque. Devuelve true si quedaron permitidos.
- */
-export async function pedirPermisos() {
-  if (!sePuedeGrabar()) return false;
+/** { camara, microfono }: "granted" | "denied" | "prompt" | "desconocido". */
+export async function detallePermisos() {
+  if (!sePuedeGrabar()) return { camara: "sin-soporte", microfono: "sin-soporte" };
+  const [camara, microfono] = await Promise.all([consultar("camera"), consultar("microphone")]);
+  return { camara, microfono: microAbierto() ? "granted" : microfono };
+}
+
+/** "granted" | "denied" | "prompt" | "desconocido" | "sin-soporte" para los dos juntos. */
+export async function estadoPermisos() {
+  const { camara, microfono } = await detallePermisos();
+  if (camara === "sin-soporte") return "sin-soporte";
+  if (camara === "granted" && microfono === "granted") return "granted";
+  if (camara === "denied" || microfono === "denied") return "denied";
+  if (camara === "desconocido" || microfono === "desconocido") return "desconocido";
+  return "prompt";
+}
+
+/** Abre el microfono (dentro de un toque) y lo deja abierto para la grabacion. */
+export async function abrirMicrofono() {
+  if (microAbierto()) return true;
   try {
-    const s = await navigator.mediaDevices.getUserMedia(RESTRICCIONES);
-    for (const p of s.getTracks()) p.stop();
+    microVivo = await navigator.mediaDevices.getUserMedia({ audio: RESTRICCIONES.audio });
     return true;
   } catch (e) {
+    microVivo = null;
     return false;
   }
 }
 
+export function soltarMicrofono() {
+  if (!actual) cerrarMicrofono();
+}
+
+function cerrarMicrofono() {
+  if (microVivo) for (const t of microVivo.getTracks()) t.stop();
+  microVivo = null;
+}
+
 /**
- * Revisa y, si hace falta, pide otra vez (rom: "verificamos antes de
- * comenzar la secuencia que tengamos los permisos, si no los pedimos
- * otra vez para asegurar"). Llamar dentro de un toque.
+ * Pide el microfono y la camara frontal, cada uno por su lado (asi iOS
+ * muestra los dos carteles). Llamar dentro de un toque.
+ * Devuelve { camara: bool, microfono: bool }.
+ */
+export async function pedirPermisos({ dejarMicAbierto = false } = {}) {
+  if (!sePuedeGrabar()) return { camara: false, microfono: false };
+  const microfono = await abrirMicrofono();
+  let camara = false;
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: RESTRICCIONES.video });
+    for (const p of s.getTracks()) p.stop();
+    camara = true;
+  } catch (e) {
+    camara = false;
+  }
+  if (!dejarMicAbierto) cerrarMicrofono();
+  return { camara, microfono };
+}
+
+/**
+ * Justo antes de la secuencia, en el toque de "Take the photo" (rom:
+ * "verificamos que tengamos los permisos, si no los pedimos otra vez").
+ * Abre el microfono ahi mismo y lo deja listo para el video.
  */
 export async function asegurarPermisos() {
-  const e = await estadoPermisos();
-  if (e === "granted") return true;
-  return pedirPermisos();
+  const r = await pedirPermisos({ dejarMicAbierto: true });
+  return r.camara && r.microfono;
 }
 
 export const grabando = () => !!actual;
@@ -155,17 +202,17 @@ function puntoRec(si) {
 
 async function empezarDeVerdad({ ensayo = false } = {}) {
   if (actual || !sePuedeGrabar()) return !!actual;
+  // la imagen, y el sonido: el microfono que quedo abierto desde el toque
+  // (o, si no hay, se intenta abrir ahora); sin microfono, igual se graba
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia(RESTRICCIONES);
+    stream = await navigator.mediaDevices.getUserMedia({ video: RESTRICCIONES.video });
   } catch (e) {
-    try {
-      // sin microfono, por lo menos la imagen
-      stream = await navigator.mediaDevices.getUserMedia({ video: RESTRICCIONES.video });
-    } catch (e2) {
-      return false;
-    }
+    return false;
   }
+  if (!microAbierto()) await abrirMicrofono();
+  if (microAbierto()) for (const t of microVivo.getAudioTracks()) stream.addTrack(t);
+  const conAudio = stream.getAudioTracks().length > 0;
   const mime = tipoSoportado();
   let rec;
   try {
@@ -175,15 +222,15 @@ async function empezarDeVerdad({ ensayo = false } = {}) {
     return false;
   }
   const id = `video_${Date.now()}`;
-  const g = { id, rec, stream, n: 0, empezo: Date.now(), mime: rec.mimeType || mime || "video/mp4", ensayo, timerTope: 0 };
+  const g = { id, rec, stream, n: 0, empezo: Date.now(), mime: rec.mimeType || mime || "video/mp4", ensayo, timerTope: 0, conAudio };
   actual = g;
   if (ensayo) await borrarEnsayos(id);
-  await tx(VIDEOS, "readwrite", (s) => s.put({ id, mime: g.mime, empezo: g.empezo, termino: null, ensayo, pedazos: 0 }));
+  await tx(VIDEOS, "readwrite", (s) => s.put({ id, mime: g.mime, empezo: g.empezo, termino: null, ensayo, pedazos: 0, conAudio }));
   rec.ondataavailable = (ev) => {
     if (!ev.data || !ev.data.size) return;
     const n = g.n++;
     tx(PEDAZOS, "readwrite", (s) => s.put({ clave: [id, n], id, n, blob: ev.data }));
-    tx(VIDEOS, "readwrite", (s) => s.put({ id, mime: g.mime, empezo: g.empezo, termino: Date.now(), ensayo, pedazos: g.n }));
+    tx(VIDEOS, "readwrite", (s) => s.put({ id, mime: g.mime, empezo: g.empezo, termino: Date.now(), ensayo, pedazos: g.n, conAudio }));
   };
   rec.onerror = () => detener();
   // si le cortan la camara (una llamada), se cierra lo que haya
@@ -211,6 +258,7 @@ export function detener() {
   return new Promise((resolve) => {
     const fin = () => {
       for (const p of g.stream.getTracks()) p.stop();
+      cerrarMicrofono();
       // un respiro para que se escriba el ultimo pedazo
       setTimeout(() => resolve(g.id), 400);
     };
@@ -250,7 +298,7 @@ export async function ultimoVideo({ ensayo = false } = {}) {
   if (!pedazos || !pedazos.length) return null;
   pedazos.sort((a, b) => a.n - b.n);
   const tipo = (v.mime || "video/mp4").split(";")[0];
-  return { blob: new Blob(pedazos.map((p) => p.blob), { type: tipo }), mime: tipo, empezo: v.empezo };
+  return { blob: new Blob(pedazos.map((p) => p.blob), { type: tipo }), mime: tipo, empezo: v.empezo, conAudio: v.conAudio !== false };
 }
 
 export async function hayVideo({ ensayo = false } = {}) {

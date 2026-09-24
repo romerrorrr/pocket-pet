@@ -433,7 +433,17 @@ function irACasa() {
   renderVistaActual();
 }
 
+/** v21.1: la musica de fondo del cuarto (si rom puso casa.mp3): suena en el cuarto, se va al salir. */
+function musicaDeFondo() {
+  if (!Musica.hayMusicaDeCasa()) return;
+  const enCasa = controller.vista === "cara" && !finalOcupado() && Sonido.sonidoHabilitado();
+  const sonando = Musica.escenaSonando();
+  if (enCasa && !sonando) Musica.tocar("casa");
+  else if (!enCasa && sonando === "casa") Musica.detener(0.8);
+}
+
 function renderVistaActual() {
+  musicaDeFondo();
   actualizarTabbar();
   actualizarMarco();
   screenEl.classList.toggle("sin-margen", VISTAS_SIN_MARGEN.has(controller.vista));
@@ -616,6 +626,7 @@ function tocarObjeto(id) {
     case "radio":
       Sonido.alternarSonido();
       if (!Sonido.sonidoHabilitado()) Musica.detener(0.1);
+      else musicaDeFondo();
       Sonido.sonar("tocar");
       decir(Sonido.sonidoHabilitado() ? "Music on ♪" : "Shh… quiet mode.");
       break;
@@ -2270,6 +2281,7 @@ function tick() {
   revisarLugares();
   revisarClima();
   sonidoDelClima();
+  musicaDeFondo();
 
   if (controller.vista === "cara" && !especialActiva) renderVistaActual();
 

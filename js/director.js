@@ -14,6 +14,7 @@
  */
 
 import * as Grabacion from "./grabacion.js";
+import { guardarVideoEnGaleria } from "./galeria.js";
 import * as Final from "./final.js";
 
 function esc(s) {
@@ -80,6 +81,8 @@ export async function renderDirector(contenedor, acciones) {
             <button class="boton boton-fantasma" id="dir-gps"><i class="glifo g-pin"></i> Test location here</button>
             <div class="director-gps" id="dir-gps-resultado"></div>
             <button class="boton boton-fantasma" id="dir-permisos"><i class="glifo g-camara"></i> Allow camera + mic</button>
+            <button class="boton boton-fantasma" id="dir-probar-video">Test video (5 s)</button>
+            <div class="director-gps" id="dir-video-resultado"></div>
             <button class="boton boton-fantasma" id="dir-ensayo">Rehearse everything</button>
             ${antes ? `<button class="boton boton-fantasma" id="dir-pedir">Ask for the photo now</button>` : ""}
             ${antes ? `<button class="boton boton-fantasma" id="dir-ya">Start the sequence now</button>` : ""}
@@ -104,10 +107,43 @@ export async function renderDirector(contenedor, acciones) {
   $("dir-permisos").addEventListener("click", async () => {
     const b = $("dir-permisos");
     b.disabled = true;
-    const ok = await Grabacion.pedirPermisos();
-    b.textContent = ok ? "Camera + mic: OK" : "Not allowed — check the phone settings";
+    const r = await Grabacion.pedirPermisos();
+    b.textContent = `Camera: ${r.camara ? "OK" : "NO"} · Mic: ${r.microfono ? "OK" : "NO"}`;
     b.disabled = false;
     pintarChequeos();
+  });
+  // v21.1: una prueba de 5 s para escuchar si el video trae sonido
+  $("dir-probar-video").addEventListener("click", async () => {
+    const b = $("dir-probar-video");
+    const res = $("dir-video-resultado");
+    b.disabled = true;
+    const r = await Grabacion.pedirPermisos({ dejarMicAbierto: true });
+    const ok = await Grabacion.empezar({ ensayo: true });
+    if (!ok) {
+      res.textContent = "Couldn't record here.";
+      b.disabled = false;
+      return;
+    }
+    let n = 5;
+    b.textContent = `Recording… ${n}`;
+    const tic = setInterval(() => {
+      n -= 1;
+      if (n > 0) b.textContent = `Recording… ${n}`;
+    }, 1000);
+    setTimeout(async () => {
+      clearInterval(tic);
+      await Grabacion.detener();
+      const v = await Grabacion.ultimoVideo({ ensayo: true });
+      b.textContent = "Test video (5 s)";
+      b.disabled = false;
+      if (!v) {
+        res.textContent = "Nothing was recorded.";
+        return;
+      }
+      res.innerHTML = `${v.conAudio && r.microfono ? "With sound: OK" : "NO SOUND — the mic is not allowed"} · <button class="boton chico boton-galeria" type="button" id="dir-guardar-prueba">Save to Photos</button>`;
+      $("dir-guardar-prueba").addEventListener("click", () => guardarVideoEnGaleria(v.blob, "prueba-video"));
+      pintarChequeos();
+    }, 5000);
   });
 
   // Los botones que no tienen vuelta atras piden un segundo toque.

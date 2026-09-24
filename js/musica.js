@@ -275,7 +275,13 @@ export function precargar(escena) {
   if (c) cargarClip(c, escena);
 }
 
-const LOOPEA = new Set(["propuesta", "si", "busqueda"]);
+const LOOPEA = new Set(["propuesta", "si", "busqueda", "casa"]);
+// v21.1: "casa" es la musica de fondo del cuarto (solo con un archivo de
+// rom: assets/musica/casa.mp3 + "casa" en MUSICA_CLIPS). Va mas bajita.
+const VOLUMEN = { casa: 0.45 };
+
+/** true si hay musica de fondo para el cuarto (un archivo de rom). */
+export const hayMusicaDeCasa = () => MUSICA_CLIPS.includes("casa");
 
 /**
  * Arranca la musica de una escena (cortando la anterior con fundido).
@@ -290,7 +296,7 @@ export async function tocar(escena, opts = {}) {
   if (c.state !== "running") c.resume().catch(() => {});
 
   const maestro = c.createGain();
-  maestro.gain.value = TEMAS[escena] && !MUSICA_CLIPS.includes(escena) ? 1.8 : 1;
+  maestro.gain.value = (TEMAS[escena] && !MUSICA_CLIPS.includes(escena) ? 1.8 : 1) * (VOLUMEN[escena] || 1);
   maestro.connect(c.destination);
   const registro = { escena, maestro, cortar: null };
   actual = registro;

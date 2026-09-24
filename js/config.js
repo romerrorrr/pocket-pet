@@ -65,9 +65,14 @@ export const FINAL = {
   // TU DIALOGO. Una linea = una caja de texto; avanzan solas al ritmo
   // de lectura (y ella puede tocar para seguir). Mientras tanto pasan
   // todas las fotos que sacaron juntos. Vacio = solo fotos y musica.
+  //
+  // Las lineas que empiezan con "TODO" son de relleno: se ven SOLO en el
+  // ensayo (para ver donde va cada cosa) y NUNCA en el de verdad.
   carta: [
-    // "Line one.",
-    // "Line two.",
+    "TODO: Line 1 — start here (how we met, the first thing you want to say).",
+    "TODO: Line 2 — a memory of the two of you.",
+    "TODO: Line 3 — what she means to you.",
+    "TODO: Line 4 — the last line before 'Look up.'",
   ],
 
   // Lo ultimo que dice la pantalla antes de que ella levante la vista.

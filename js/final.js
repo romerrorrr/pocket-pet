@@ -217,6 +217,8 @@ function cara(nombre) {
  * este pendiente.
  */
 export function abrirPedido({ ensayo = false } = {}) {
+  // (si volvio de la selfie sin sacarla, el microfono no queda abierto)
+  Grabacion.soltarMicrofono();
   ctx.prepararVista("intro");
   if (!ensayo) marcarPedido();
   Sonido.sonar("descubrimiento");
@@ -694,8 +696,17 @@ function duracionDelDialogo(lineas) {
   return lineas.reduce((total, l) => total + l.length * MS_POR_LETRA + msDeLectura(l), 0);
 }
 
+/** Las lineas de rom. Las de relleno ("TODO…") solo se ven en el ensayo. */
+function lineasDeLaCarta(ensayo) {
+  return FINAL.carta
+    .map(t)
+    .filter(Boolean)
+    .filter((l) => ensayo || !esRelleno(l));
+}
+const esRelleno = (l) => /^\s*TODO/i.test(l);
+
 function pasoDialogo() {
-  const lineas = FINAL.carta.map(t).filter(Boolean);
+  const lineas = lineasDeLaCarta(sesion.ensayo && !sesion.repeticion);
   const fotos = recuerdos();
   const nombre = (FINAL.nombreDeEl || "").trim();
   const { cine, escena } = escenaDelLago("dialogo");
@@ -1030,27 +1041,27 @@ async function permisoUbicacion() {
 export async function chequeos({ sonidoHabilitado }) {
   const persistente = await almacenamientoPersistente();
   const gps = await permisoUbicacion();
+  const permisos = await Grabacion.detallePermisos();
   const video = await Grabacion.estadoPermisos();
-  const lineas = FINAL.carta.filter(Boolean).length;
+  const txt = (e) => ({ granted: "allowed", denied: "DENIED", prompt: "not asked yet", desconocido: "unknown", "sin-soporte": "not supported" })[e] || e;
+  const lineas = FINAL.carta.filter((l) => l && !esRelleno(l)).length;
+  const relleno = FINAL.carta.filter((l) => l && esRelleno(l)).length;
   return [
     [camaraEnVivoPosible(), camaraEnVivoPosible() ? "Live camera available" : "No live camera here (will use the camera app)"],
     [gps === "granted", gps === "granted" ? "Location allowed" : gps === "denied" ? "Location DENIED — use 'Ask for the photo now'" : "Location not asked yet (the corkboard map asks for it)"],
     [
       video === "granted",
-      video === "granted"
-        ? "Camera + mic allowed (the video will record)"
-        : video === "denied"
-          ? "Camera or mic DENIED — allow them in the phone settings for this app"
-          : video === "sin-soporte"
-            ? "This browser can't record video"
-            : "Camera + mic: tap 'Allow camera + mic' (asked again before the sequence)",
+      video === "sin-soporte"
+        ? "This browser can't record video"
+        : `Video: camera ${txt(permisos.camara)}, mic ${txt(permisos.microfono)}` +
+          (video === "granted" ? "" : video === "denied" ? " — allow them in the phone settings" : " — tap 'Allow camera + mic' and 'Test video (5 s)'"),
     ],
     [standalone(), standalone() ? "Installed on the home screen" : "Not installed — add to home screen"],
     [persistente, persistente ? "Storage is protected" : "Storage not protected yet"],
     [true, sonidoHabilitado ? "Sound on" : "Sound off (the ending plays music anyway)"],
     [!!nombreDeElla(), nombreDeElla() ? `Her name: ${nombreDeElla()}` : "No name set"],
     [cantidadDeFotos() > 0, `Photos for the montage: ${cantidadDeFotos()}`],
-    [lineas > 0, lineas ? `Your dialogue: ${lineas} lines` : "Your dialogue is empty (only photos + music)"],
+    [lineas > 0 && !relleno, lineas ? `Your dialogue: ${lineas} lines${relleno ? ` (+${relleno} placeholders, only in rehearsal)` : ""}` : relleno ? `Your dialogue: only ${relleno} placeholders (they don't show on the real day)` : "Your dialogue is empty (only photos + music)"],
     [FINAL.pin !== "0000", FINAL.pin !== "0000" ? "PIN changed" : "PIN is still 0000"],
     [false, "On the day: Auto-Lock → Never, Low Power off, volume up"],
   ];
