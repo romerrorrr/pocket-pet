@@ -26,6 +26,7 @@ import {
 import { claveDelDia } from "./diario.js";
 import * as Sonido from "./sonido.js";
 import { vibrar } from "./actuadores.js";
+import { guardarFotoEnGaleria } from "./galeria.js";
 
 const MS_ENTRE_CUADROS = 45; // ~22 fps: de sobra para pixel art, y cuida la bateria
 const MS_REVELADO_PEDIDO = 1900;
@@ -136,6 +137,7 @@ export function abrirLente(contenedor, opts = {}) {
             ? ""
             : `<div class="revelado-botones">
                  <button class="boton boton-fantasma" id="revelado-otra">Retake</button>
+                 <button class="boton boton-fantasma boton-galeria" id="revelado-galeria" type="button">Save to Photos</button>
                  <button class="boton" id="revelado-guardar"><i class="glifo g-check"></i> Keep</button>
                </div>`
         }
@@ -585,6 +587,11 @@ export function abrirLente(contenedor, opts = {}) {
       if (!stream) iniciarStream();
     });
     $("revelado-guardar").addEventListener("click", guardarRevelado);
+    // v21: tambien a la galeria del telefono (no cierra: despues puede Keep)
+    $("revelado-galeria").addEventListener("click", () => {
+      Sonido.sonar("tocar");
+      guardarFotoEnGaleria($("revelado-lienzo"), lugar ? `baozi-${lugar}` : "baozi");
+    });
   }
   document.addEventListener("visibilitychange", alCambiarVisibilidad);
 

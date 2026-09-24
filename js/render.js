@@ -174,6 +174,48 @@ export function renderElegir(container) {
     </div>`;
 }
 
+// v21: instrucciones muy cortas, despues de elegir el personaje (y desde Settings)
+export const TUTORIAL = [
+  {
+    titulo: "This is your room",
+    texto: "Tap anything to use it: the fridge to eat and drink, the bucket for a bath, the TV to play, the camera for photos. Keep Baozi happy!",
+    arte: ["pieza/heladera.png", "pieza/balde.png", "pieza/tele.png", "pieza/camara.png"],
+  },
+  {
+    titulo: "Your notebook",
+    texto: "The notebook on the little table is your diary. Write a page every night. Your friends, gifts and settings live there too.",
+    arte: ["pieza/mesita.png"],
+  },
+  {
+    titulo: "Go out together",
+    texto: "Open the app when you're out in Hangzhou: places stamp themselves on the map on the wall. Photos can be saved to your phone.",
+    arte: ["pieza/corcho.png", "pieza/sello_pagoda.png"],
+  },
+  {
+    titulo: "Friends will visit",
+    texto: "Sometimes a friend knocks on the window. Say hi! They'll ask for little favors and send you gifts.",
+    arte: ["npcs/npc_usagi.png", "npcs/npc_mimi.png"],
+  },
+];
+
+export function renderTutorial(container, i) {
+  const c = TUTORIAL[i];
+  const ultima = i === TUTORIAL.length - 1;
+  container.innerHTML = `
+    <div class="pantalla-tutorial con-cuarto" id="pantalla-tutorial">
+      <div class="tarjeta-tutorial papel">
+        <div class="tutorial-arte">${c.arte.map((a) => `<img src="${arte(a)}" alt="" draggable="false" />`).join("")}</div>
+        <div class="tutorial-titulo">${esc(c.titulo)}</div>
+        <div class="tutorial-texto">${esc(c.texto)}</div>
+        <div class="tutorial-puntos">${TUTORIAL.map((_, k) => `<i class="${k === i ? "activo" : ""}"></i>`).join("")}</div>
+        <div class="fila-botones">
+          ${ultima ? "" : `<button class="boton boton-fantasma" id="tutorial-saltar">Skip</button>`}
+          <button class="boton" id="tutorial-seguir">${ultima ? "Let's go!" : "Next"}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 export function renderHuevo(container) {
   container.innerHTML = `
     <div class="pantalla-huevo con-cuarto" id="pantalla-huevo">
@@ -479,7 +521,10 @@ export function renderPostal(container, lugar, foto, fechaMs) {
           <div class="postal-fecha">${esc(fechaDeMs(fechaMs))}</div>
         </figcaption>
       </figure>
-      <button class="boton" id="btn-postal-listo">${glifo("pin")} Pin it on the board</button>
+      <div class="fila-botones">
+        ${foto ? `<button class="boton boton-fantasma boton-galeria" id="btn-postal-guardar" type="button">Save to Photos</button>` : ""}
+        <button class="boton" id="btn-postal-listo">${glifo("pin")} Pin it on the board</button>
+      </div>
     </div>`;
 }
 
@@ -517,6 +562,10 @@ export function htmlAjustes(sonidoOn) {
       <div class="subtitulo-lista">Sound</div>
       <div class="fila-botones">
         <button class="boton ${sonidoOn ? "" : "boton-fantasma"}" id="btn-ajuste-sonido">${glifo("nota")} Sound ${sonidoOn ? "ON" : "OFF"}</button>
+      </div>
+      <div class="subtitulo-lista">Help</div>
+      <div class="fila-botones">
+        <button class="boton boton-fantasma" id="btn-ver-tutorial">How to play</button>
       </div>
       <div class="subtitulo-lista">Backup</div>
       <div class="cuerpo-backup">
@@ -1329,6 +1378,7 @@ export function renderDiario(container, diario, opts = {}) {
                 ${e.texto ? `<div class="escrito-polaroid" data-sin-nombre>${esc(e.texto)}</div>` : ""}
                 <div class="texto-polaroid ${e.texto ? "chico" : ""}">${esc(resumenDelDia(e))}</div>
                 ${hitos}${notas}
+                ${ordenadas.length ? `<button class="boton chico boton-fantasma boton-galeria" data-guardar-foto="1" type="button">Save to Photos</button>` : ""}
               </figcaption>
             </figure>`;
         })

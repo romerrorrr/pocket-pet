@@ -13,6 +13,7 @@
  * si ella lo llegara a ver, parece una pantalla de configuracion.
  */
 
+import * as Grabacion from "./grabacion.js";
 import * as Final from "./final.js";
 
 function esc(s) {
@@ -78,6 +79,7 @@ export async function renderDirector(contenedor, acciones) {
             ${puedeDesarmar ? `<button class="boton boton-fantasma" id="dir-desarmar">Disarm</button>` : ""}
             <button class="boton boton-fantasma" id="dir-gps"><i class="glifo g-pin"></i> Test location here</button>
             <div class="director-gps" id="dir-gps-resultado"></div>
+            <button class="boton boton-fantasma" id="dir-permisos"><i class="glifo g-camara"></i> Allow camera + mic</button>
             <button class="boton boton-fantasma" id="dir-ensayo">Rehearse everything</button>
             ${antes ? `<button class="boton boton-fantasma" id="dir-pedir">Ask for the photo now</button>` : ""}
             ${antes ? `<button class="boton boton-fantasma" id="dir-ya">Start the sequence now</button>` : ""}
@@ -98,6 +100,15 @@ export async function renderDirector(contenedor, acciones) {
   if (desarmar) desarmar.addEventListener("click", () => { Final.desarmar(); renderDirector(contenedor, acciones); });
   $("dir-gps").addEventListener("click", () => acciones.probarGPS($("dir-gps-resultado")));
   $("dir-ensayo").addEventListener("click", acciones.ensayar);
+  // v21: permisos para el video del final (se vuelven a revisar antes de la secuencia)
+  $("dir-permisos").addEventListener("click", async () => {
+    const b = $("dir-permisos");
+    b.disabled = true;
+    const ok = await Grabacion.pedirPermisos();
+    b.textContent = ok ? "Camera + mic: OK" : "Not allowed — check the phone settings";
+    b.disabled = false;
+    pintarChequeos();
+  });
 
   // Los botones que no tienen vuelta atras piden un segundo toque.
   const conConfirmacion = (boton, texto, fn) => {
@@ -119,10 +130,13 @@ export async function renderDirector(contenedor, acciones) {
     renderDirector(contenedor, acciones);
   });
 
-  const lista = await Final.chequeos({ sonidoHabilitado: acciones.sonidoHabilitado() });
-  const ul = $("dir-chequeos");
-  if (!ul) return;
-  ul.innerHTML = lista
-    .map(([ok, texto]) => `<li class="${ok ? "ok" : "ojo"}"><i class="glifo ${ok ? "g-check" : "g-exclama"}"></i><span>${esc(texto)}</span></li>`)
-    .join("");
+  async function pintarChequeos() {
+    const lista = await Final.chequeos({ sonidoHabilitado: acciones.sonidoHabilitado() });
+    const ul = $("dir-chequeos");
+    if (!ul) return;
+    ul.innerHTML = lista
+      .map(([ok, texto]) => `<li class="${ok ? "ok" : "ojo"}"><i class="glifo ${ok ? "g-check" : "g-exclama"}"></i><span>${esc(texto)}</span></li>`)
+      .join("");
+  }
+  await pintarChequeos();
 }

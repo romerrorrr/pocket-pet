@@ -47,6 +47,8 @@ import * as Despierto from "./despierto.js";
 import { crearEscena } from "./escena.js";
 import { crearPieza, posicionEnMapa } from "./pieza.js";
 import { crearMapaFinal } from "./mapa_final.js";
+import * as Grabacion from "./grabacion.js";
+import { guardarVideoEnGaleria } from "./galeria.js";
 import { arteDeLugar, spriteCara } from "./render.js";
 import * as Personaje from "./personaje.js";
 
@@ -265,7 +267,11 @@ export function abrirPedido({ ensayo = false } = {}) {
   });
   ctx.pantalla.querySelector("#pedido-abrir").addEventListener("click", () => {
     Despierto.mantener(); // dentro del toque: es cuando iOS lo permite
-    abrirSelfie({ ensayo });
+    // v21: antes de la secuencia, revisar camara + microfono para el video
+    // (si faltan, se piden ahora, en el toque). Pase lo que pase, sigue.
+    Grabacion.asegurarPermisos()
+      .catch(() => false)
+      .then(() => abrirSelfie({ ensayo }));
   });
   mostrar();
 }
@@ -336,6 +342,11 @@ export function iniciarSecuencia({ ensayo = false, desde = null, repeticion = fa
   if (sesion) cortarSesion();
   Despierto.mantener();
   sesion = { pasos, i, ensayo: ensayo || repeticion, repeticion, selfie, escritor: null, timers: [], bloqueadoHasta: 0 };
+  // v21: el video del momento (camara frontal + audio, sin filtro). Tambien
+  // en el ensayo, para que rom lo pruebe. Si se retoma, se graba de nuevo
+  // desde ahi. Hasta la foto con el anillo o el final.
+  const pasoActual = pasos[i] && pasos[i].tipo;
+  if (!repeticion && !["foto", "fin"].includes(pasoActual)) Grabacion.empezar({ ensayo }).catch(() => {});
   ctx.prepararVista("final");
   mostrarPaso();
 }
@@ -897,6 +908,8 @@ function pasoFoto() {
   alTocar(papel.querySelector("#foto-despues"), avanzar);
   alTocar(papel.querySelector("#foto-sacar"), () => {
     const s = sesion;
+    // la camara pasa a la foto: el video se corta aca (el momento ya quedo)
+    Grabacion.detener();
     ctx.abrirLente({
       modo: "foto",
       frontal: true,
@@ -933,13 +946,33 @@ function pasoFin() {
         : `<div class="final-cara">${cara("enamorado")}</div><div class="final-rotulo">${esc(fecha)}</div>`
     }
     <div class="final-texto">Baozi will remember this day forever.</div>
-    <button class="boton" id="fin-casa"><i class="glifo g-corazon"></i> Home</button>`,
+    <div class="fila-botones">
+      <button class="boton boton-fantasma boton-galeria oculto" id="fin-video" type="button">Save our video</button>
+      <button class="boton" id="fin-casa"><i class="glifo g-corazon"></i> Home</button>
+    </div>`,
     "es-fin",
   );
   alTocar(papel.querySelector("#fin-casa"), terminar);
+  // v21: el video del momento, listo para guardar en la galeria (se arma
+  // antes del toque: compartir tiene que salir enseguida del toque)
+  if (!sesion.repeticion) {
+    const s = sesion;
+    const ensayo = s.ensayo;
+    Grabacion.detener()
+      .then(() => Grabacion.ultimoVideo({ ensayo }))
+      .then((v) => {
+        const b = papel.querySelector("#fin-video");
+        if (!v || !b || sesion !== s) return;
+        if (ensayo) b.textContent = "Save the test video";
+        b.classList.remove("oculto");
+        b.addEventListener("click", () => guardarVideoEnGaleria(v.blob, ensayo ? "ensayo-video" : "nuestro-video"));
+      })
+      .catch(() => {});
+  }
 }
 
 function terminar() {
+  Grabacion.detener();
   const ensayo = sesion && sesion.ensayo;
   const repeticion = sesion && sesion.repeticion;
   cortarSesion();
@@ -997,10 +1030,21 @@ async function permisoUbicacion() {
 export async function chequeos({ sonidoHabilitado }) {
   const persistente = await almacenamientoPersistente();
   const gps = await permisoUbicacion();
+  const video = await Grabacion.estadoPermisos();
   const lineas = FINAL.carta.filter(Boolean).length;
   return [
     [camaraEnVivoPosible(), camaraEnVivoPosible() ? "Live camera available" : "No live camera here (will use the camera app)"],
     [gps === "granted", gps === "granted" ? "Location allowed" : gps === "denied" ? "Location DENIED — use 'Ask for the photo now'" : "Location not asked yet (the corkboard map asks for it)"],
+    [
+      video === "granted",
+      video === "granted"
+        ? "Camera + mic allowed (the video will record)"
+        : video === "denied"
+          ? "Camera or mic DENIED — allow them in the phone settings for this app"
+          : video === "sin-soporte"
+            ? "This browser can't record video"
+            : "Camera + mic: tap 'Allow camera + mic' (asked again before the sequence)",
+    ],
     [standalone(), standalone() ? "Installed on the home screen" : "Not installed — add to home screen"],
     [persistente, persistente ? "Storage is protected" : "Storage not protected yet"],
     [true, sonidoHabilitado ? "Sound on" : "Sound off (the ending plays music anyway)"],

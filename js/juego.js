@@ -8,14 +8,25 @@
  *
  *   comida comun  +1 (por el combo: x2 a las 5 seguidas, x3 a las 10, x4 a las 16)
  *   bao dorado    +5, raro
- *   chile         pica: se pierde un corazon (3 corazones)
+ *   chile         pica: se pierde un corazon (3 corazones), atrapado O tocado
  *
- * Termina a los 40 s o sin corazones. Guarda el record.
+ * Antes de empezar se elige la dificultad (EASY / NORMAL / HARD): cambia
+ * lo rapido que cae, cada cuanto sale algo y cuantos chiles hay. Hay un
+ * record por dificultad. Termina a los 40 s o sin corazones.
  */
 
 const DURACION_MS = 40000;
 const CORAZONES = 3;
-const CLAVE_RECORD = "baozi_record_juego";
+const CLAVE_RECORD = "baozi_record_juego"; // + "_easy" / "_hard" (normal usa la clave de siempre)
+const CLAVE_DIFICULTAD = "baozi_dificultad_juego";
+
+// velocidad: fraccion del alto por segundo (arranca en v0, llega a v0 + dv al final)
+// cada: ms entre comida y comida (de cada0 a cada1); chile: probabilidad (de ch0 a ch0 + dch)
+export const DIFICULTADES = {
+  easy: { nombre: "EASY", v0: 0.32, dv: 0.3, cada0: 760, cada1: 430, ch0: 0.1, dch: 0.1 },
+  normal: { nombre: "NORMAL", v0: 0.46, dv: 0.46, cada0: 620, cada1: 320, ch0: 0.14, dch: 0.14 },
+  hard: { nombre: "HARD", v0: 0.62, dv: 0.62, cada0: 500, cada1: 250, ch0: 0.18, dch: 0.16 },
+};
 
 const BUENAS = [
   "comida/comida_manzana.png",
@@ -28,19 +39,32 @@ const BUENAS = [
 const DORADO = "comida/juego_bao_dorado.png";
 const CHILE = "comida/juego_chile.png";
 
-export function leerRecord() {
+const claveRecord = (dif) => (dif === "normal" ? CLAVE_RECORD : `${CLAVE_RECORD}_${dif}`);
+
+/** El record de una dificultad (sin dificultad: el mejor de todas). */
+export function leerRecord(dif = null) {
+  if (!dif) return Math.max(...Object.keys(DIFICULTADES).map((d) => leerRecord(d)));
   try {
-    return Number(localStorage.getItem(CLAVE_RECORD)) || 0;
+    return Number(localStorage.getItem(claveRecord(dif))) || 0;
   } catch (e) {
     return 0;
   }
 }
 
-function guardarRecord(n) {
+function guardarRecord(dif, n) {
   try {
-    localStorage.setItem(CLAVE_RECORD, String(n));
+    localStorage.setItem(claveRecord(dif), String(n));
   } catch (e) {
     /* nada */
+  }
+}
+
+function leerDificultad() {
+  try {
+    const d = localStorage.getItem(CLAVE_DIFICULTAD);
+    return DIFICULTADES[d] ? d : "normal";
+  } catch (e) {
+    return "normal";
   }
 }
 
@@ -59,7 +83,9 @@ function multiplicador(combo) {
  */
 export function iniciarJuego(contenedor, opts) {
   const { arte, sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, alTerminar = () => {} } = opts;
-  const record = leerRecord();
+  let dif = leerDificultad();
+  let D = DIFICULTADES[dif];
+  let record = leerRecord(dif);
   contenedor.innerHTML = `
     <div class="pantalla-juego con-cuarto" id="area-minijuego">
       <div class="juego-hud">
@@ -68,12 +94,20 @@ export function iniciarJuego(contenedor, opts) {
         <span class="juego-corazones" id="juego-corazones">${"<i></i>".repeat(CORAZONES)}</span>
         <span class="juego-chip" id="minijuego-tiempo">40</span>
       </div>
-      <div class="juego-record">BEST ${record}</div>
+      <div class="juego-record" id="juego-record">BEST ${record}</div>
       <div class="juego-cielo" id="juego-cielo"></div>
       <div class="juego-personaje" id="caja-cara-minijuego">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
       ${opts.bannerMotion || ""}
       <div class="pista-minijuego" id="juego-pista">Drag to move · catch the snacks · avoid the chili!</div>
-      <div class="juego-cuenta" id="juego-cuenta">3</div>
+      <div class="juego-cuenta oculto" id="juego-cuenta">3</div>
+      <div class="juego-dificultad" id="juego-dificultad">
+        <div class="juego-dificultad-titulo">SNACK RAIN</div>
+        <div class="juego-dificultad-botones">
+          ${Object.entries(DIFICULTADES)
+            .map(([id, d]) => `<button class="boton ${id === dif ? "" : "boton-fantasma"}" data-dificultad="${id}">${d.nombre}<small>best ${leerRecord(id)}</small></button>`)
+            .join("")}
+        </div>
+      </div>
     </div>`;
 
   const area = contenedor.querySelector("#area-minijuego");
@@ -126,18 +160,18 @@ export function iniciarJuego(contenedor, opts) {
   function nuevoItem(t) {
     const avance = Math.min(1, (t - st.empezo) / DURACION_MS);
     const r = Math.random();
-    const tipo = r < 0.12 + avance * 0.14 ? "chile" : r < 0.19 + avance * 0.14 ? "dorado" : "buena";
+    const tipo = r < D.ch0 + avance * D.dch ? "chile" : r < D.ch0 + 0.07 + avance * D.dch ? "dorado" : "buena";
     const src = tipo === "chile" ? CHILE : tipo === "dorado" ? DORADO : BUENAS[Math.floor(Math.random() * BUENAS.length)];
     const el = document.createElement("img");
     el.className = `juego-item ${tipo}`;
     el.src = arte(src);
     el.alt = "";
     el.draggable = false;
-    const item = { el, tipo, x: 0.08 + Math.random() * 0.84, y: -0.12, v: 0.28 + avance * 0.34 + Math.random() * 0.08, giro: (Math.random() - 0.5) * 40 };
+    const item = { el, tipo, x: 0.08 + Math.random() * 0.84, y: -0.12, v: D.v0 + avance * D.dv + Math.random() * 0.08, giro: (Math.random() - 0.5) * 40 };
     el.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
-      if (item.tipo === "chile") quitar(item, "aplastado");
-      else atrapar(item);
+      // tocar un chile tambien pica (si no, tocando se esquivan gratis)
+      atrapar(item);
     });
     cielo.appendChild(el);
     st.items.push(item);
@@ -232,7 +266,7 @@ export function iniciarJuego(contenedor, opts) {
     if (t > st.proximo) {
       nuevoItem(t);
       const avance = Math.min(1, (t - st.empezo) / DURACION_MS);
-      st.proximo = t + 720 - avance * 380 + Math.random() * 220;
+      st.proximo = t + D.cada0 - avance * (D.cada0 - D.cada1) + Math.random() * 200;
     }
     // caer y chocar con la boca (la boca del personaje esta a ~80% del alto)
     for (const it of [...st.items]) {
@@ -255,12 +289,12 @@ export function iniciarJuego(contenedor, opts) {
     if (st.terminado) return;
     st.terminado = true;
     const nuevoRecord = st.puntos > record;
-    if (nuevoRecord) guardarRecord(st.puntos);
+    if (nuevoRecord) guardarRecord(dif, st.puntos);
     for (const it of st.items) it.el.remove();
     st.items = [];
     setTimeout(() => {
       detener();
-      alTerminar({ puntos: st.puntos, atrapadas: st.atrapadas, record: Math.max(record, st.puntos), nuevoRecord });
+      alTerminar({ puntos: st.puntos, atrapadas: st.atrapadas, record: Math.max(record, st.puntos), nuevoRecord, dificultad: dif });
     }, 400);
   }
 
@@ -269,26 +303,47 @@ export function iniciarJuego(contenedor, opts) {
     window.removeEventListener("keydown", teclas);
   }
 
-  // cuenta regresiva 3-2-1
-  const cuenta = $("juego-cuenta");
-  let n = 3;
-  const tic = setInterval(() => {
-    n -= 1;
-    if (!st.vivo) {
-      clearInterval(tic);
-      return;
-    }
-    if (n > 0) cuenta.textContent = String(n);
-    else {
-      clearInterval(tic);
-      cuenta.textContent = "GO!";
-      setTimeout(() => cuenta.remove(), 500);
-      st.empezo = performance.now();
-      st.proximo = st.empezo + 200;
-      const pista = $("juego-pista");
-      if (pista) setTimeout(() => pista.classList.add("oculto"), 3500);
-    }
-  }, 600);
+  // cuenta regresiva 3-2-1, despues de elegir la dificultad
+  function arrancar() {
+    const cuenta = $("juego-cuenta");
+    cuenta.classList.remove("oculto");
+    let n = 3;
+    const tic = setInterval(() => {
+      n -= 1;
+      if (!st.vivo) {
+        clearInterval(tic);
+        return;
+      }
+      if (n > 0) cuenta.textContent = String(n);
+      else {
+        clearInterval(tic);
+        cuenta.textContent = "GO!";
+        setTimeout(() => cuenta.remove(), 500);
+        st.empezo = performance.now();
+        st.proximo = st.empezo + 200;
+        const pista = $("juego-pista");
+        if (pista) setTimeout(() => pista.classList.add("oculto"), 3500);
+      }
+    }, 600);
+  }
+  for (const b of contenedor.querySelectorAll("[data-dificultad]")) {
+    b.addEventListener("pointerdown", (e) => e.stopPropagation());
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dif = b.dataset.dificultad;
+      D = DIFICULTADES[dif];
+      record = leerRecord(dif);
+      try {
+        localStorage.setItem(CLAVE_DIFICULTAD, dif);
+      } catch (err) {
+        /* nada */
+      }
+      $("juego-record").textContent = `${D.nombre} · BEST ${record}`;
+      $("juego-dificultad").remove();
+      sonar("tocar");
+      arrancar();
+    });
+  }
   requestAnimationFrame(cuadro);
 
   return { detener, atraparPrimera, terminar, estado: () => st };

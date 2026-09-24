@@ -21,10 +21,13 @@ export const DECAY_POR_HORA = {
   hambre: 9, // ~11 h a cero: aguanta una jornada normal
   sed: 10,
   felicidad: 6,
-  energia: 7, // se recupera durmiendo, ver dormir automatico
+  energia: 4, // v21: antes 7 (rom: "le da sueño muy rapido"); se recupera durmiendo
   higiene: 7,
   aburrimiento: 4, // este SUBE con el tiempo (al reves que los demas)
 };
+
+// Cuanta energia recupera por hora de sueño (una siesta de 2 h: +70).
+export const ENERGIA_DURMIENDO_POR_HORA = 35;
 
 // Tope al deterioro acumulado con la app cerrada. Sin esto, volver
 // despues de cinco dias aplicaba 120 horas de castigo de golpe.
@@ -32,7 +35,7 @@ export const MAX_HORAS_DECAY_OFFLINE = 10;
 
 // Ventana de dormir automatico (hora local): la mascota duerme cuando
 // ella duerme. Antes, si no tocaba "Sleep" a mano, amanecia sin energia.
-export const HORA_DORMIR = 22;
+export const HORA_DORMIR = 23; // v21: antes 22
 export const HORA_DESPERTAR = 7;
 
 // Un toque manual de Sleep le gana al automatico por este rato.
@@ -107,7 +110,8 @@ export class PetState {
 
     if (this.dormida) {
       // dormida recupera energia en vez de perderla, y casi no gasta nada mas
-      this.stats.energia = clamp(this.stats.energia + 20 * horasPasadas);
+      // v21: antes +20/h (rom: "se demora mucho en recuperar energia")
+      this.stats.energia = clamp(this.stats.energia + ENERGIA_DURMIENDO_POR_HORA * horasPasadas);
       this.stats.hambre = clamp(
         this.stats.hambre - DECAY_POR_HORA.hambre * 0.3 * horasPasadas
       );
@@ -131,16 +135,41 @@ export class PetState {
   }
 
   /**
+   * v21: los dias del final (armado, el pedido de la foto, la secuencia)
+   * tiene que estar bien: con energia, contenta, sin hambre ni sed y sana.
+   * despierta = true la despierta tambien (pedido y secuencia).
+   */
+  prepararParaElFinal({ despierta = false } = {}) {
+    this.stats.energia = Math.max(this.stats.energia, 85);
+    this.stats.felicidad = Math.max(this.stats.felicidad, 75);
+    this.stats.hambre = Math.max(this.stats.hambre, 60);
+    this.stats.sed = Math.max(this.stats.sed, 60);
+    this.stats.higiene = Math.max(this.stats.higiene, 60);
+    this.stats.aburrimiento = Math.min(this.stats.aburrimiento, 40);
+    this.stats.salud = Math.max(this.stats.salud ?? 100, 70);
+    this.enferma = false;
+    if (despierta && this.dormida) {
+      this.dormida = false;
+      this.dormidaAuto = false;
+    }
+  }
+
+  /**
    * Dormir automatico segun la hora local. Devuelve "durmio" |
    * "desperto" | null. Un toque manual gana por GRACIA_OVERRIDE_MS: si
    * no, apagarle la luz a la noche la volveria a dormir al instante.
    */
   revisarSuenioAutomatico(ahoraMs = null, fecha = new Date()) {
     const ahora = ahoraMs ?? Date.now();
-    if (ahora - (this.ultimoOverrideManualMs || 0) < GRACIA_OVERRIDE_MS) return null;
-
     const hora = fecha.getHours();
     const esNoche = hora >= HORA_DORMIR || hora < HORA_DESPERTAR;
+
+    // v21: una siesta de dia termina sola cuando ya recupero toda la energia
+    if (!esNoche && this.dormida && !this.dormidaAuto && this.stats.energia >= 100) {
+      this.dormida = false;
+      return "desperto";
+    }
+    if (ahora - (this.ultimoOverrideManualMs || 0) < GRACIA_OVERRIDE_MS) return null;
 
     if (esNoche && !this.dormida) {
       this.dormida = true;
@@ -270,7 +299,7 @@ export class PetState {
     const bonus = clamp(bocadosAtrapados * 4, 0, 40);
     this.stats.felicidad = clamp(this.stats.felicidad + 35 + bonus);
     this.stats.hambre = clamp(this.stats.hambre + 5);
-    this.stats.energia = clamp(this.stats.energia - 8);
+    this.stats.energia = clamp(this.stats.energia - 4); // v21: antes -8
     this.registrarEventoRasgo("sociable", 1.0, ahoraMs);
   }
 
@@ -279,7 +308,7 @@ export class PetState {
     // pasos totales — esa es la señal para disparar la especial "Orgulloso".
     const pasosAntes = this.pasosTotales;
     this.pasosTotales += pasosNuevos;
-    this.stats.energia = clamp(this.stats.energia - pasosNuevos * 0.01);
+    this.stats.energia = clamp(this.stats.energia - pasosNuevos * 0.004); // v21: 3000 pasos = -12 (antes -30)
     this.stats.felicidad = clamp(this.stats.felicidad + pasosNuevos * 0.01);
     this.registrarEventoRasgo("explorador", pasosNuevos * 0.02, ahoraMs);
 

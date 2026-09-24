@@ -37,6 +37,8 @@ import { crearPieza, posicionEnMapa } from "./pieza.js";
 import * as Clima from "./clima.js";
 import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progresoDe } from "./amigos.js";
 import { leerRecord } from "./juego.js";
+import * as Galeria from "./galeria.js";
+import * as Grabacion from "./grabacion.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -270,6 +272,7 @@ function arrancar() {
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
     mascota.actualizarTiempo(Date.now());
     mascota.revisarSuenioAutomatico(Date.now());
+    cuidarParaElFinal();
     programarProximoParpadeo();
     if (Final.hayQueRetomar()) {
       // La app se cerro en medio del final: se vuelve al mismo paso, pero
@@ -340,13 +343,34 @@ function wireElegir() {
       Sonido.sonar("tocar");
       b.classList.add("elegida");
       setTimeout(() => {
-        conTransicion(() => {
+        conTransicion(() => abrirTutorial(() => {
           controller.vista = "huevo";
           renderVistaActual();
-        });
+        }));
       }, 350);
     });
   }
+}
+
+/** v21: las instrucciones cortas (despues de elegir, o desde Settings). al final: que sigue. */
+function abrirTutorial(alTerminar) {
+  let i = 0;
+  const mostrar = () => {
+    controller.vista = "tutorial";
+    screenEl.classList.add("sin-margen");
+    R.renderTutorial(screenEl, i);
+    const saltar = document.getElementById("tutorial-saltar");
+    if (saltar) saltar.addEventListener("click", () => conTransicion(alTerminar));
+    document.getElementById("tutorial-seguir").addEventListener("click", () => {
+      Sonido.sonar("tocar");
+      if (i >= R.TUTORIAL.length - 1) conTransicion(alTerminar);
+      else {
+        i += 1;
+        mostrar();
+      }
+    });
+  };
+  mostrar();
 }
 
 function wireNombre() {
@@ -921,6 +945,17 @@ async function actualizarEstadoUbicacion() {
   return estadoUbicacion;
 }
 
+/**
+ * v21: desde que rom arma el final, la mascota esta bien (energia, animo,
+ * hambre, sed, sana). En el pedido y la secuencia, ademas, despierta.
+ */
+function cuidarParaElFinal() {
+  if (!mascota) return;
+  const fase = Final.fase();
+  if (!["armado", "pedido", "en_curso"].includes(fase)) return;
+  mascota.prepararParaElFinal({ despierta: fase !== "armado" });
+}
+
 function finalOcupado() {
   return ["armado", "pedido", "en_curso"].includes(Final.fase());
 }
@@ -1063,7 +1098,10 @@ function wireSello(lugar) {
 function mostrarPostal(lugar) {
   conTransicion(() => {
     prepararVista("postal");
-    R.renderPostal(screenEl, lugar, Camara.fotoDeLugar(lugar.id), lugaresReg.fechas[lugar.id] || Date.now());
+    const fotoPostal = Camara.fotoDeLugar(lugar.id);
+    R.renderPostal(screenEl, lugar, fotoPostal, lugaresReg.fechas[lugar.id] || Date.now());
+    const guardarPostal = document.getElementById("btn-postal-guardar");
+    if (guardarPostal && fotoPostal) guardarPostal.addEventListener("click", () => Galeria.guardarFotoEnGaleria(fotoPostal, `baozi-${lugar.id}`));
     document.getElementById("btn-postal-listo").addEventListener("click", () => {
       Sonido.sonar("guardado");
       terminarSello(lugar);
@@ -1482,6 +1520,15 @@ function renderConsulta() {
   }
   if (tipo === "ajustes" || tipo === "backup") {
     wireBackup();
+    document.getElementById("btn-ver-tutorial").addEventListener("click", () =>
+      conTransicion(() =>
+        abrirTutorial(() => {
+          controller.abrirConsulta("ajustes");
+          controller.vista = "consulta";
+          renderVistaActual();
+        }),
+      ),
+    );
     document.getElementById("btn-ajuste-sonido").addEventListener("click", () => {
       Sonido.alternarSonido();
       if (!Sonido.sonidoHabilitado()) Musica.detener(0.1);
@@ -1500,10 +1547,33 @@ function renderConsulta() {
 }
 
 function wireDiario() {
+  // v21: despues del si, el video del momento arriba del diario (se ve y se guarda)
+  if (Final.dijoQueSi()) {
+    Grabacion.ultimoVideo()
+      .then((v) => {
+        const tira = screenEl.querySelector(".tira-diario");
+        if (!v || !tira || screenEl.querySelector(".tarjeta-video")) return;
+        const url = URL.createObjectURL(v.blob);
+        const t = document.createElement("div");
+        t.className = "tarjeta-video";
+        t.innerHTML = `<video src="${url}" controls playsinline preload="metadata"></video>
+          <div class="tarjeta-video-texto"><b>Our video ♥</b><span>${fechaLegible(claveDelDia(new Date(v.empezo)))}</span>
+          <button class="boton chico boton-galeria" type="button">Save to Photos</button></div>`;
+        t.querySelector("button").addEventListener("click", () => Galeria.guardarVideoEnGaleria(v.blob, "nuestro-video"));
+        tira.parentNode.insertBefore(t, tira);
+      })
+      .catch(() => {});
+  }
   const escribirBtn = document.getElementById("btn-escribir-hoy");
   if (escribirBtn) escribirBtn.addEventListener("click", () => conTransicion(abrirEscribir));
   for (const fig of screenEl.querySelectorAll(".polaroid")) {
     fig.addEventListener("click", (e) => {
+      if (e.target.closest("[data-guardar-foto]")) {
+        // la foto que se esta viendo en la polaroid, a la galeria del telefono
+        const img = fig.querySelector("img.imagen-polaroid.foto-real");
+        if (img) Galeria.guardarFotoEnGaleria(img.src, "baozi-" + fig.dataset.dia);
+        return;
+      }
       if (e.target.closest("[data-repetir-final]")) {
         conTransicion(() => Final.repetir());
         return;
@@ -2167,7 +2237,9 @@ function tick() {
   vigilarLugarFinal();
   intentarPedido();
 
-  const cambioSuenio = mascota.revisarSuenioAutomatico(ahora);
+  cuidarParaElFinal();
+  // (los dias del pedido y de la secuencia no se duerme sola)
+  const cambioSuenio = ["pedido", "en_curso"].includes(Final.fase()) ? null : mascota.revisarSuenioAutomatico(ahora);
   if (cambioSuenio) {
     Sonido.sonar(cambioSuenio === "durmio" ? "dormir" : "despertar");
     guardarTodo();
