@@ -752,9 +752,12 @@ img { -webkit-user-drag: none; }
 }
 
 .sprite-cara .capa-ojos { transform-origin: 50% 33%; }
-/* Mantou es un dibujo liso: se suaviza al escalar (Baozi, pixel, no) */
+/* un personaje de estilo "dibujo" (liso) se suaviza al escalar; los pixel no */
 .sprite-cara.estilo-dibujo img { image-rendering: auto; }
 .sprite-cara.estilo-dibujo .capa-cara { transform-origin: 50% 32%; }
+/* Mantou: la cara es una sola capa; los ojos (filas 0-38) y la boca van por separado */
+.sprite-cara .capa-cara.cara-arriba { clip-path: inset(0 0 59.375% 0); transform-origin: 50% 35.5%; }
+.sprite-cara .capa-cara.cara-abajo { clip-path: inset(40.625% 0 0 0); }
 .sprite-cara.parpadeando .capa-ojos { animation: parpadeo 0.25s steps(3); }
 
 @keyframes parpadeo {
@@ -4010,8 +4013,10 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .juego-cielo { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .juego-item {
   position: absolute;
-  width: min(30vh, 150px);
-  height: min(30vh, 150px);
+  z-index: 2;
+  /* la comida ocupa ~28% de su lienzo de 64: se agranda para que se vea bien en el telefono */
+  width: min(44vh, 210px);
+  height: min(44vh, 210px);
   image-rendering: pixelated;
   pointer-events: auto;
   cursor: pointer;
@@ -4021,8 +4026,8 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .juego-item.dorado { filter: drop-shadow(0 0 8px rgba(255, 220, 90, 0.9)); }
 .juego-item.comido { animation: comido 0.3s steps(3) forwards; }
 .juego-item.aplastado { animation: aplastado 0.3s steps(3) forwards; }
-@keyframes comido { to { opacity: 0; transform: translate(-50%, 30%) scale(0.2); } }
-@keyframes aplastado { to { opacity: 0; transform: translate(-50%, 0) scale(1.4, 0.2); } }
+@keyframes comido { to { opacity: 0; transform: translate(-50%, -20%) scale(0.2); } }
+@keyframes aplastado { to { opacity: 0; transform: translate(-50%, -50%) scale(1.4, 0.2); } }
 
 .juego-flota {
   position: absolute;
@@ -4094,3 +4099,242 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 }
 .escena-lago .dialogo-cara { width: min(62vh, 38vw); height: min(62vh, 38vw); }
 .escena-lago .dialogo-cara .sprite-cara { width: 100%; height: 100%; }
+
+/* ================================================================
+   v20 — la apertura del final: la ventana y el mapa
+   ================================================================ */
+.final.es-ventana,
+.final.es-mapa { display: block; }
+
+/* el cuarto de siempre, con la otra mascota golpeando la ventana */
+.ventana-cuarto {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.ventana-cuarto .pieza { flex: 1; }
+.ventana-cuarto .toque-objeto { pointer-events: none; }
+.es-ventana .capa-paso { cursor: pointer; }
+.es-ventana .cine-dialogo {
+  position: absolute;
+  left: 50%;
+  bottom: calc(6% + 10px);
+  width: min(92%, 760px);
+  transform: translateX(-50%);
+  min-height: 78px;
+  margin: 0;
+  animation: aparecer-caja 0.4s steps(4) both;
+}
+.es-ventana .cine-dialogo.oculto { display: none; }
+
+/* el nombre del lugar, cuando el zoom llega al lago */
+.rotulo-mapa {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 8px 16px 9px;
+  background: rgb(16, 16, 26);
+  color: rgb(255, 236, 214);
+  border: 2px solid rgb(255, 236, 214);
+  font-family: var(--fuente-display);
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: rotulo-mapa 0.5s steps(4) both;
+}
+.rotulo-mapa.oculto { display: none; }
+@keyframes rotulo-mapa {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* al final del zoom, fundido a negro: el lago aparece desde ahi */
+.velo-salida {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: var(--tinta);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease-in;
+}
+.velo-salida.cerrando { opacity: 1; }
+
+/* ------------------------------------------------------------------
+   v20 — Lente: todos los filtros son pixel; muchos stickers
+   ------------------------------------------------------------------ */
+.capa-stickers { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.capa-stickers .visor-sticker { pointer-events: auto; }
+.visor-sticker::after { content: none; }
+.visor-sticker.elegido::after {
+  content: "";
+  position: absolute;
+  inset: 4%;
+  border: 2px dashed rgba(244, 238, 226, 0.55);
+  pointer-events: none;
+  animation: latido-suave 1.4s steps(2) infinite;
+}
+.visor-sticker .sticker-extra,
+.bandeja-stickers .sticker-extra {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.sticker-quitar {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 26px;
+  height: 26px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: var(--tinta);
+  color: var(--papel);
+  box-shadow: 0 0 0 2px var(--papel);
+  cursor: pointer;
+}
+.visor-sticker.elegido .sticker-quitar { display: flex; }
+
+.bandeja-stickers {
+  position: absolute;
+  z-index: 8; /* arriba del aviso de "sin camara" (6) */
+  inset: 8px 8px auto 8px;
+  max-height: calc(100% - 64px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(14, 13, 14, 0.92);
+  box-shadow: 0 0 0 2px rgba(244, 238, 226, 0.35);
+}
+.bandeja-stickers.oculto { display: none; }
+.bandeja-pestanas {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-bottom: 1px solid rgba(244, 238, 226, 0.2);
+}
+.pestana-sticker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px 0 2px;
+  border: none;
+  background: transparent;
+  color: rgba(244, 238, 226, 0.7);
+  font-family: var(--fuente-display);
+  font-size: 7px;
+  cursor: pointer;
+}
+.pestana-sticker .sprite-cara, .pestana-sticker .sticker-extra { width: 26px; height: 26px; }
+.pestana-sticker.activo { background: var(--papel); color: var(--tinta); }
+.bandeja-poses { display: flex; gap: 2px; margin-left: auto; }
+.bandeja-poses.oculto { display: none; }
+.bandeja-cerrar {
+  margin-left: 4px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--papel);
+  cursor: pointer;
+}
+.bandeja-poses.oculto + .bandeja-cerrar { margin-left: auto; }
+.bandeja-grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 4px;
+  padding: 6px;
+  overflow-y: auto;
+}
+.item-sticker {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  background: rgba(244, 238, 226, 0.08);
+  cursor: pointer;
+  overflow: hidden;
+}
+.item-sticker:active { background: rgba(244, 238, 226, 0.25); }
+.item-sticker .sprite-cara { position: absolute; left: -32%; top: -4%; width: 164%; height: 164%; }
+.item-sticker .sticker-extra { padding: 22%; box-sizing: border-box; }
+
+/* ------------------------------------------------------------------
+   v20 — Los amigos: regalos, secretos, misiones; el ropero
+   ------------------------------------------------------------------ */
+.pantalla-encuentro.con-regalo .escenario-npc { gap: 8px; }
+.pantalla-encuentro.con-regalo .npc-grande { width: 200px; height: 200px; }
+.regalo-muestra {
+  position: relative;
+  align-self: center;
+  width: 120px;
+  height: 120px;
+  display: grid;
+  place-items: center;
+  background: rgba(252, 248, 238, 0.92);
+  box-shadow: 0 0 0 3px var(--tinta), 4px 6px 0 rgba(0, 0, 0, 0.3);
+  animation: regalo-aparece 0.5s steps(4) 0.3s both, latido-suave 1.4s steps(2) 1s infinite;
+}
+@keyframes regalo-aparece {
+  from { opacity: 0; transform: translateY(16px) scale(0.6); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.regalo-muestra .regalo-arte { width: 84%; height: 84%; object-fit: contain; image-rendering: pixelated; }
+.regalo-muestra .regalo-arte.decoracion { width: 70%; height: 70%; }
+.regalo-muestra.con-personaje { overflow: hidden; }
+.regalo-muestra.con-personaje .sprite-cara,
+.regalo-muestra.con-personaje .regalo-acc-encima {
+  position: absolute;
+  left: -30%;
+  top: -2%;
+  width: 160%;
+  height: 160%;
+  image-rendering: pixelated;
+}
+.regalo-nombre { display: flex; align-items: center; gap: 6px; justify-content: center; flex-wrap: wrap; }
+
+/* el cuaderno: cada amigo con su mision */
+.fila-npc.con-detalle { align-items: flex-start; }
+.columna-amigo { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.cabeza-amigo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.detalle-amigo { display: grid; gap: 2px; font-size: 13px; }
+.detalle-amigo .glifo { vertical-align: -2px; }
+.mision-activa { color: var(--tinta); }
+.mision-activa small { color: var(--rosa); margin-left: 4px; }
+.mision-lista { color: var(--rosa); }
+
+/* el ropero */
+.closet-figura { position: relative; width: 150px; height: 118px; margin: 0 auto; overflow: hidden; }
+.closet-figura .sprite-cara { position: absolute; left: 0; top: 0; width: 100%; height: 127%; }
+.grilla-regalos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.tarjeta-regalo {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 2px solid var(--tinta);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--tinta);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+/* el accesorio ocupa la parte de arriba de su lienzo de 96: se muestra esa parte, al 1.6x */
+.acc-vista { position: relative; width: 64px; height: 44px; overflow: hidden; }
+.acc-vista img { position: absolute; left: -45px; top: 2px; width: 154px; height: 154px; max-width: none; image-rendering: pixelated; }
+.tarjeta-regalo small { font-size: 11px; opacity: 0.75; }
+.tarjeta-regalo.puesto { background: var(--rosa); color: var(--papel); }
+.tarjeta-regalo.bloqueada { opacity: 0.5; cursor: default; border-style: dashed; }
+.candado-regalo { width: 64px; height: 64px; display: grid; place-items: center; }
+.nombre-regalo { font-family: var(--fuente-display); font-size: 8px; line-height: 1.4; }
+.fila-regalo { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.fila-regalo img { width: 36px; height: 36px; object-fit: contain; image-rendering: pixelated; }
+.fila-regalo small { margin-left: auto; }
