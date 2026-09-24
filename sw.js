@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-c4e1df7a0c"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-02dba9bc81"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -114,7 +114,7 @@ const ARTE = [
     .flatMap((n) => [`ui/g_${n}@2.png`, `ui/g_${n}@4.png`]),
 ].map((r) => `./assets/${r}`);
 
-const MUSICA_OPCIONAL = ["busqueda", "propuesta", "si", "carta", "descubrimiento", "enamorado"].map((n) => `./assets/musica/${n}.mp3`);
+const MUSICA_OPCIONAL = ["busqueda", "propuesta", "si", "carta", "descubrimiento", "enamorado", "casa"].map((n) => `./assets/musica/${n}.mp3`);
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(
