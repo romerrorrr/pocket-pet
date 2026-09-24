@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-139f8cc2b1"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-6bb2fa5e55"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -53,6 +53,8 @@ const SHELL = [
   "./js/personaje.js",
   "./js/personajes_datos.js",
   "./js/juego.js",
+  "./js/mapa_final.js",
+  "./js/amigos.js",
   "./icons/mochi-192.png",
   "./icons/mochi-512.png",
   "./assets/fondo_caminar.png",
@@ -81,8 +83,23 @@ const ARTE = [
   "mantou/cuerpo.png",
   "mantou/cuerpo_sentado.png",
   "mantou/cara_neutral.png",
+  "mantou/cara_feliz.png",
+  "mantou/cara_euforico.png",
+  "mantou/cara_cansada.png",
   "mantou/cara_dormida.png",
+  "mantou/cara_triste.png",
+  "mantou/cara_enferma.png",
+  "mantou/cara_comiendo.png",
+  "mantou/cara_aburrido.png",
+  "mantou/cara_asqueado.png",
+  "mantou/cara_asustado.png",
+  "mantou/cara_curioso.png",
+  "mantou/cara_enamorado.png",
+  "mantou/cara_hambriento.png",
+  "mantou/cara_sorprendido.png",
   "final/huevo_blanco.png",
+  ...["acc_orejas", "acc_antenas", "acc_boina", "acc_corona", "deco_maceta", "deco_ovni", "deco_te", "deco_cuadro_baozi", "deco_cuadro_mantou"].map((n) => `amigos/${n}.png`),
+  ...["bote_mascotas", "bote_ella", "bote_reflejo_mascotas", "bote_reflejo_ella", "ventana_baozi", "ventana_mantou"].map((n) => `final/${n}.png`),
   ...["westlake", "longjing", "lingyin"].map((n) => `lugares/lugar_${n}.png`),
   ...["chagee", "mimi", "ruchong", "usagi"].flatMap((n) => [`npcs/npc_${n}.png`, `npcs/npc_${n}_saludo.png`]),
   ...["feed", "water", "clean", "sleep", "medicine", "play", "walk", "lens", "stats", "traits", "npcs", "diary", "progress", "sound", "backup"].map((n) => `menu/menu_${n}.png`),
