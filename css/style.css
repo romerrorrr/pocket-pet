@@ -407,6 +407,9 @@ img { -webkit-user-drag: none; }
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+/* el cuarto (y las vistas sin margen) llegan hasta el borde, debajo del notch */
+.marco-manito.pantalla-completa #screen.sin-margen { padding: 0; }
+
 @media (orientation: portrait) {
   #aviso-rotar { display: flex; }
   .marco-manito { display: none; }
@@ -749,6 +752,9 @@ img { -webkit-user-drag: none; }
 }
 
 .sprite-cara .capa-ojos { transform-origin: 50% 33%; }
+/* Mantou es un dibujo liso: se suaviza al escalar (Baozi, pixel, no) */
+.sprite-cara.estilo-dibujo img { image-rendering: auto; }
+.sprite-cara.estilo-dibujo .capa-cara { transform-origin: 50% 32%; }
 .sprite-cara.parpadeando .capa-ojos { animation: parpadeo 0.25s steps(3); }
 
 @keyframes parpadeo {
@@ -3053,6 +3059,26 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 }
 
 .sello-mapa.elegido { animation: saltito 0.9s steps(2) infinite; }
+
+/* v19: con 34 lugares, los que faltan son puntitos; el elegido se agranda */
+.sello-mapa { width: 8%; }
+.sello-mapa.falta { width: 3.2%; }
+.sello-mapa.falta span { width: 100%; border-width: 0; background: rgba(90, 76, 64, 0.45); font-size: 0; }
+.sello-mapa.falta.elegido { width: 7%; z-index: 2; }
+.sello-mapa.falta.elegido span { border-width: 2px; background: rgba(252, 248, 236, 0.85); font-size: 9px; }
+.sello-mapa.hecho { z-index: 1; }
+
+.mapa-cabecera { flex-wrap: wrap; }
+.colecciones { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; }
+.coleccion {
+  font-family: var(--fuente-cuerpo);
+  font-size: 11px;
+  padding: 1px 6px;
+  color: var(--tinta);
+  background: rgba(252, 248, 236, 0.8);
+  box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.3);
+}
+.coleccion.completa { background: var(--rosa); }
 .sello-mapa.elegido::after {
   content: "";
   position: absolute;
@@ -3316,3 +3342,755 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .papel-sello { gap: 6px; padding: 10px 16px 12px; }
 .huella-sello { width: min(96px, 22vh); height: min(96px, 22vh); }
 .frase-sello { min-height: 56px; }
+
+/* ================================================================
+   v19 — el cuarto de fondo en las pantallas que no son el cuarto
+   (desenfocado y a media luz: se sigue estando "en casa")
+   ================================================================ */
+.con-cuarto {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.con-cuarto::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  z-index: -1;
+  background: url("../assets/pieza/fondo.png") center 60% / cover no-repeat;
+  image-rendering: pixelated;
+  filter: blur(3px) brightness(0.5) saturate(0.95);
+  transform: scale(1.06);
+}
+
+:root[data-momento="noche"] .con-cuarto::before { filter: blur(3px) brightness(0.32) saturate(0.8) hue-rotate(-8deg); }
+:root[data-momento="atardecer"] .con-cuarto::before { filter: blur(3px) brightness(0.42) sepia(0.2); }
+
+.con-cuarto::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, transparent 30%, rgba(10, 8, 10, 0.6) 100%);
+}
+
+/* ------------------------------------------------------------------
+   Elegir personaje
+   ------------------------------------------------------------------ */
+.pantalla-elegir {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+.rotulo-elegir {
+  font-family: var(--fuente-display);
+  font-size: 12px;
+  color: var(--crema);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.04em;
+}
+
+.fila-personajes {
+  display: flex;
+  gap: clamp(14px, 4vw, 40px);
+  align-items: stretch;
+}
+
+.tarjeta-personaje {
+  width: clamp(150px, 26vw, 220px);
+  border: none;
+  padding: 10px 10px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 20, 22, 0.55);
+  box-shadow: 0 0 0 2px rgba(236, 232, 224, 0.35), 0 6px 0 rgba(0, 0, 0, 0.35);
+  color: var(--crema);
+  cursor: pointer;
+  transition: transform 0.15s steps(2), box-shadow 0.15s steps(2);
+}
+
+.tarjeta-personaje:active,
+.tarjeta-personaje.elegida {
+  transform: translateY(-4px) scale(1.04);
+  box-shadow: 0 0 0 2px var(--rosa), 0 10px 0 rgba(0, 0, 0, 0.35);
+}
+
+.tarjeta-personaje-figura {
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  animation: flotar 2.6s steps(4) infinite;
+}
+
+.tarjeta-personaje:nth-child(2) .tarjeta-personaje-figura { animation-delay: -1.3s; }
+
+.tarjeta-personaje-figura .sprite-cara { width: 100%; height: 100%; }
+
+@keyframes flotar {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.tarjeta-personaje-nombre {
+  font-family: var(--fuente-display);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.tarjeta-personaje-frase {
+  font-family: var(--fuente-cuerpo);
+  font-size: 12px;
+  color: var(--tenue);
+  text-align: center;
+}
+
+/* v19: pantallas a sangre completa, con el contenido dentro de la zona segura */
+.pantalla-huevo,
+.pantalla-nombre {
+  padding: max(10px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+.pantalla-nombre { justify-content: center; }
+
+/* ================================================================
+   v19 — PRIMER PLANO: la camara se acerca al personaje
+   El lienzo del personaje es cuadrado; su cabeza esta en (49.5%, 29%).
+   --B es el tamaño del lienzo; la cabeza cae en (--cx, --cy) de la pantalla.
+   ================================================================ */
+.primer-plano {
+  position: absolute;
+  inset: 0;
+  --B: min(142vh, 142dvh, 100vw);
+  --cx: 31%;
+  --cy: 43%;
+}
+
+.pp-figura {
+  position: absolute;
+  width: var(--B);
+  height: var(--B);
+  left: calc(var(--cx) - 0.495 * var(--B));
+  top: calc(var(--cy) - 0.29 * var(--B));
+  animation: pp-acercar 0.45s steps(5) both;
+  transform-origin: 49.5% 29%;
+}
+
+.pp-figura .sprite-cara { width: 100%; height: 100%; }
+.pp-primera, .pp-segunda { position: absolute; inset: 0; }
+.pp-segunda { opacity: 0; }
+
+/* primero una cara, despues la otra (comer, bañarse, remedio, despertarse) */
+.pp-comer .pp-segunda, .pp-beber .pp-segunda, .pp-limpiar .pp-segunda, .pp-remedio .pp-segunda, .pp-despertar .pp-segunda {
+  animation: pp-cambio 2.4s steps(1) forwards;
+}
+.pp-comer .pp-primera, .pp-beber .pp-primera, .pp-limpiar .pp-primera, .pp-remedio .pp-primera, .pp-despertar .pp-primera {
+  animation: pp-cambio-sale 2.4s steps(1) forwards;
+}
+@keyframes pp-cambio { 0%, 50% { opacity: 0; } 51%, 100% { opacity: 1; } }
+@keyframes pp-cambio-sale { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+@keyframes pp-acercar {
+  0% { transform: scale(0.62) translateY(18%); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.pp-texto {
+  position: absolute;
+  right: max(5%, env(safe-area-inset-right));
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(38%, 320px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: pp-texto-entra 0.5s 0.25s steps(4) both;
+}
+
+@keyframes pp-texto-entra {
+  0% { opacity: 0; transform: translate(12px, -50%); }
+  100% { opacity: 1; transform: translate(0, -50%); }
+}
+
+.pp-titulo {
+  font-family: var(--fuente-display);
+  font-size: clamp(16px, 5.4vh, 28px);
+  line-height: 1.25;
+  color: var(--crema);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.55);
+}
+
+.pp-sub {
+  font-family: var(--fuente-cuerpo);
+  font-size: clamp(14px, 4.4vh, 20px);
+  color: rgba(236, 232, 224, 0.82);
+}
+
+/* ---- props (en % del lienzo del personaje: la boca esta en ~49%, 41%) ---- */
+.pp-comida {
+  position: absolute;
+  width: 26%;
+  height: 26%;
+  left: 36%;
+  top: 28%;
+  image-rendering: pixelated;
+  animation: pp-comida-vuela 1.05s steps(8) forwards;
+}
+
+@keyframes pp-comida-vuela {
+  0% { transform: translate(190%, -40%) scale(1.4) rotate(12deg); opacity: 0; }
+  15% { opacity: 1; }
+  70% { transform: translate(0, 0) scale(0.8) rotate(-6deg); opacity: 1; }
+  100% { transform: translate(0, 5%) scale(0.2); opacity: 0; }
+}
+
+.pp-bebida { animation-name: pp-bebida-sorbe; animation-duration: 1.2s; }
+
+@keyframes pp-bebida-sorbe {
+  0% { transform: translate(170%, 10%) scale(1.3); opacity: 0; }
+  20% { opacity: 1; }
+  45% { transform: translate(35%, 6%) rotate(-24deg) scale(1.1); }
+  80% { transform: translate(30%, 6%) rotate(-38deg) scale(1.1); opacity: 1; }
+  100% { transform: translate(120%, 20%) rotate(0) scale(1); opacity: 0; }
+}
+
+.pp-miga, .pp-gota {
+  position: absolute;
+  width: 1.1%;
+  height: 1.1%;
+  background: rgb(246, 232, 200);
+  left: 50%;
+  top: 43%;
+  opacity: 0;
+  animation: pp-miga 0.6s 0.8s steps(4) forwards;
+}
+.pp-gota { background: rgb(150, 200, 255); }
+.m2, .g2 { left: 46%; animation-delay: 0.9s; }
+.m3 { left: 53%; animation-delay: 1s; }
+@keyframes pp-miga {
+  0% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(var(--dx, 300%), 900%); }
+}
+.m2 { --dx: -400%; }
+
+.pp-burbuja {
+  position: absolute;
+  width: calc(3% + (var(--i) * 0.6%));
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85), inset 3px -3px 0 rgba(170, 220, 255, 0.35);
+  left: calc(28% + (var(--i) * 5%));
+  top: 62%;
+  opacity: 0;
+  animation: pp-burbuja 1.6s calc(var(--i) * 0.12s) steps(10) forwards;
+}
+@keyframes pp-burbuja {
+  0% { opacity: 0; transform: translateY(0); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-420%) translateX(calc((var(--i) - 4) * 30%)); }
+}
+
+.pp-brillo {
+  position: absolute;
+  width: 3%;
+  aspect-ratio: 1;
+  background:
+    linear-gradient(var(--papel), var(--papel)) center / 100% 30% no-repeat,
+    linear-gradient(var(--papel), var(--papel)) center / 30% 100% no-repeat;
+  opacity: 0;
+  animation: pp-brillo 0.9s steps(3) forwards;
+}
+.b1 { left: 30%; top: 16%; animation-delay: 1s; }
+.b2 { left: 66%; top: 24%; animation-delay: 1.15s; }
+.b3 { left: 60%; top: 52%; animation-delay: 1.3s; }
+@keyframes pp-brillo { 0% { opacity: 0; transform: scale(0.4); } 40% { opacity: 1; transform: scale(1.3); } 100% { opacity: 0; transform: scale(0.8); } }
+
+.pp-pastilla {
+  position: absolute;
+  width: 7%;
+  height: 3.2%;
+  left: 45.5%;
+  top: 39%;
+  background: linear-gradient(90deg, rgb(236, 110, 120) 50%, rgb(250, 246, 240) 50%);
+  box-shadow: 0 0 0 2px var(--tinta);
+  animation: pp-comida-vuela 1s steps(8) forwards;
+}
+
+.pp-zzz {
+  position: absolute;
+  left: calc(64% + var(--k) * 6%);
+  top: calc(20% - var(--k) * 6%);
+  font-family: var(--fuente-display);
+  font-size: calc(var(--B) * (0.03 + var(--k) * 0.012));
+  color: rgb(170, 190, 250);
+  animation: pp-zzz 1.8s steps(6) infinite;
+}
+@keyframes pp-zzz { 0% { opacity: 0; transform: translateY(20%); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-60%); } }
+
+.pp-noche {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 14, 40, 0.55);
+}
+.pp-noche .estrella-fija { position: absolute; }
+
+.pp-sol {
+  position: absolute;
+  right: -10%;
+  top: -12%;
+  width: 40%;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, rgba(255, 236, 190, 0.5), transparent 65%);
+  animation: pp-brillo 1.9s steps(6) forwards;
+}
+
+.pp-corazon {
+  position: absolute;
+  width: 5%;
+  aspect-ratio: 1;
+  background: var(--rosa);
+  clip-path: polygon(50% 100%, 0 40%, 0 15%, 20% 0, 50% 18%, 80% 0, 100% 15%, 100% 40%);
+  animation: pp-burbuja 1.8s steps(8) infinite;
+  --i: 4;
+}
+.c1 { left: 22%; top: 30%; }
+.c2 { left: 70%; top: 22%; animation-delay: 0.5s; }
+.c3 { left: 64%; top: 50%; animation-delay: 1s; }
+
+.pp-insignia {
+  position: absolute;
+  left: 70%;
+  top: 8%;
+  color: var(--papel);
+  animation: pp-brillo 1.6s steps(4) infinite;
+}
+
+/* ------------------------------------------------------------------
+   La heladera abierta
+   ------------------------------------------------------------------ */
+.pantalla-heladera {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(22, 22, 30);
+}
+
+.heladera-caja {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 200 / 112;
+  max-width: 100%;
+}
+
+.heladera-caja .heladera-fondo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  image-rendering: pixelated;
+}
+
+.item-heladera {
+  position: absolute;
+  width: 13%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -64%);
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  animation: item-respira 2.8s steps(2) infinite;
+}
+.item-heladera:nth-child(2n) { animation-delay: -1.4s; }
+.item-heladera img { position: absolute; left: -60%; top: -60%; width: 220%; height: 220%; image-rendering: pixelated; pointer-events: none; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.25)); }
+.item-heladera:active img { transform: translateY(-6%) scale(1.08); }
+@keyframes item-respira { 50% { transform: translate(-50%, -67%); } }
+
+.etiqueta-item {
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--fuente-display);
+  font-size: 7px;
+  color: var(--tinta);
+  background: rgba(252, 250, 244, 0.9);
+  padding: 2px 4px;
+  box-shadow: 0 0 0 1px var(--tinta);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.item-heladera:hover .etiqueta-item, .item-heladera:focus-visible .etiqueta-item { opacity: 1; }
+
+/* el personaje asomado por la izquierda, con hambre */
+.heladera-espia {
+  position: absolute;
+  left: max(-6vh, calc(env(safe-area-inset-left) - 6vh));
+  bottom: -38vh;
+  width: 92vh;
+  height: 92vh;
+  pointer-events: none;
+  animation: espia 0.6s 0.2s steps(5) both;
+}
+.heladera-espia .sprite-cara { width: 100%; height: 100%; }
+@keyframes espia { 0% { transform: translateX(-60%); } 100% { transform: translateX(-18%); } }
+
+.pantalla-heladera .volver-flotante {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  z-index: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-figura, .pp-texto, .item-heladera, .heladera-espia { animation: none !important; }
+}
+
+/* ------------------------------------------------------------------
+   v19 — Lente: filtros y el personaje como sticker
+   ------------------------------------------------------------------ */
+.visor-lienzo.lisa, .revelado-lienzo.lisa, .imagen-polaroid.lisa { image-rendering: auto; }
+
+.visor-filtros {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(14, 13, 14, 0.55);
+  box-shadow: 0 0 0 1px rgba(244, 238, 226, 0.2);
+}
+
+.chip-filtro {
+  border: none;
+  padding: 6px 8px;
+  font-family: var(--fuente-display);
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  color: rgba(244, 238, 226, 0.7);
+  background: transparent;
+  cursor: pointer;
+}
+
+.chip-filtro.activo {
+  color: var(--tinta);
+  background: var(--papel);
+}
+
+.visor-sticker {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  cursor: grab;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.25));
+}
+.visor-sticker .sprite-cara { width: 100%; height: 100%; }
+.visor-sticker::after {
+  content: "";
+  position: absolute;
+  inset: 6%;
+  border: 2px dashed rgba(244, 238, 226, 0.45);
+  pointer-events: none;
+  animation: latido-suave 1.4s steps(2) infinite;
+}
+
+.boton-sticker { position: relative; overflow: hidden; padding: 0; }
+.boton-sticker .sprite-cara { position: absolute; inset: -8% 0 0; width: 100%; height: 130%; }
+.boton-sticker.activo { box-shadow: 0 0 0 2px var(--rosa); }
+
+/* ------------------------------------------------------------------
+   v19 — El diario: la pagina de hoy, la semana, el recuerdo
+   ------------------------------------------------------------------ */
+.cabeza-diario {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 2px 0 14px;
+  align-items: stretch;
+}
+
+.tarjeta-hoy {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  background: rgb(255, 236, 242);
+  box-shadow: 0 0 0 2px var(--tinta), 3px 4px 0 1px rgba(0, 0, 0, 0.18);
+  color: var(--tinta);
+  animation: latido-suave 2.4s steps(2) infinite;
+}
+.tarjeta-hoy.escrita { background: rgb(246, 244, 236); animation: none; }
+.tarjeta-hoy-lapiz { color: var(--rosa-oscuro); }
+.tarjeta-hoy-texto { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tarjeta-hoy-titulo { font-family: var(--fuente-display); font-size: 9px; letter-spacing: 0.04em; }
+.tarjeta-hoy-frase { font-family: var(--fuente-cuerpo); font-size: 13px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tarjeta-hoy-pista { font-family: var(--fuente-cuerpo); font-size: 11px; color: rgba(22, 20, 22, 0.5); }
+
+.semana-diario {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(22, 20, 22, 0.04);
+  box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.15);
+}
+.semana-dias { display: flex; gap: 4px; }
+.dia-semana { display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--fuente-display); font-size: 7px; color: rgba(22, 20, 22, 0.5); }
+.dia-semana.hoy span { color: var(--rosa-oscuro); }
+.racha { font-family: var(--fuente-cuerpo); font-size: 12px; color: var(--rosa-oscuro); text-align: center; }
+
+.animo-cara, .animo-vacio { display: inline-block; vertical-align: middle; position: relative; }
+.animo-cara.mini { width: 24px; height: 24px; }
+.animo-cara.grande { width: 58px; height: 58px; flex-shrink: 0; }
+/* la cara sola: el lienzo se agranda para que la cabeza (49.5%, 29%) llene el circulo */
+.animo-cara { overflow: hidden; border-radius: 50%; }
+.animo-cara .sprite-cara { width: 290%; height: 290%; position: absolute; left: -93.5%; top: -34%; }
+.animo-cara.grande { background: rgba(22, 20, 22, 0.08); }
+.animo-vacio.mini { width: 24px; height: 24px; box-shadow: inset 0 0 0 2px rgba(22, 20, 22, 0.12); border-radius: 50%; transform: scale(0.6); }
+.dia-semana .animo-cara.mini, .dia-semana .animo-vacio.mini { width: 22px; height: 22px; overflow: hidden; border-radius: 50%; background: rgba(22, 20, 22, 0.06); }
+.dia-semana.escrito .animo-cara.mini { background: rgba(232, 142, 160, 0.25); }
+.fecha-polaroid .animo-cara.mini { width: 18px; height: 18px; overflow: hidden; border-radius: 50%; }
+
+.tarjeta-recuerdo {
+  flex: 1 1 100%;
+  padding: 8px 10px;
+  background: rgb(250, 244, 222);
+  box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.2);
+  font-family: var(--fuente-cuerpo);
+  font-size: 13px;
+}
+.tarjeta-recuerdo-cuando { font-family: var(--fuente-display); font-size: 8px; color: rgb(170, 120, 40); margin-bottom: 4px; }
+
+.escrito-polaroid { font-family: var(--fuente-cuerpo); font-size: 14px; line-height: 1.3; color: var(--tinta); margin: 2px 0 4px; }
+.texto-polaroid.chico { font-size: 11px; opacity: 0.65; }
+
+/* Escribir la pagina */
+.pantalla-escribir {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2%;
+  padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+}
+
+.escribir-personaje {
+  width: min(40vh, 30vw);
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: -4vh;
+}
+.escribir-personaje .sprite-cara { width: 100%; height: 100%; }
+
+.hoja-escribir {
+  width: min(560px, 62vw);
+  max-height: 100%;
+  overflow: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--tinta);
+  background: var(--papel);
+  box-shadow: 0 0 0 2px var(--tinta), 5px 6px 0 1px rgba(0, 0, 0, 0.3);
+}
+.hoja-fecha { font-family: var(--fuente-display); font-size: 8px; color: rgba(22, 20, 22, 0.55); }
+.hoja-pregunta { font-family: var(--fuente-cuerpo); font-size: 17px; font-weight: 600; }
+.fila-animos { display: flex; gap: 6px; flex-wrap: wrap; }
+.fila-animos.sacude { animation: sacudir 0.4s steps(4); }
+@keyframes sacudir { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.boton-animo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 4px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--fuente-cuerpo);
+  font-size: 13px;
+  color: var(--tinta);
+  background: rgba(22, 20, 22, 0.05);
+  box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.2);
+}
+.boton-animo .animo-cara.mini { width: 26px; height: 26px; overflow: hidden; border-radius: 50%; }
+.boton-animo.elegido { background: rgb(255, 222, 232); box-shadow: 0 0 0 2px var(--rosa-oscuro); }
+#texto-hoy {
+  width: 100%;
+  resize: none;
+  font-family: var(--fuente-cuerpo);
+  font-size: 16px; /* 16px: iOS no hace zoom al escribir */
+  line-height: 1.35;
+  padding: 8px 10px;
+  border: none;
+  color: var(--tinta);
+  background:
+    repeating-linear-gradient(180deg, transparent 0 21px, rgba(140, 170, 210, 0.45) 21px 22px),
+    rgb(252, 250, 244);
+  box-shadow: inset 0 0 0 1px rgba(22, 20, 22, 0.25);
+}
+.hoja-pie { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hoja-botones { display: flex; gap: 8px; margin-left: auto; }
+.hoja-foto { width: 64px; aspect-ratio: 4 / 3; object-fit: cover; image-rendering: pixelated; box-shadow: 0 0 0 2px var(--tinta); }
+.hoja-foto.lisa { image-rendering: auto; }
+
+/* ------------------------------------------------------------------
+   v19 — SNACK RAIN (el juego de la tele)
+   ------------------------------------------------------------------ */
+.pantalla-juego {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.juego-hud {
+  position: absolute;
+  z-index: 3;
+  top: max(8px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.juego-chip {
+  font-family: var(--fuente-display);
+  font-size: 12px;
+  color: var(--tinta);
+  background: var(--papel);
+  padding: 6px 9px;
+  box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.3);
+}
+#minijuego-tiempo { margin-left: auto; }
+.juego-combo { background: var(--rosa); animation: latido-suave 0.6s steps(2) infinite; }
+.juego-corazones { display: flex; gap: 4px; }
+.juego-corazones i {
+  width: 18px;
+  height: 16px;
+  background: var(--rosa);
+  clip-path: polygon(50% 100%, 0 40%, 0 15%, 20% 0, 50% 18%, 80% 0, 100% 15%, 100% 40%);
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
+}
+.juego-corazones i.vacio { background: rgba(236, 232, 224, 0.2); }
+.juego-record {
+  position: absolute;
+  z-index: 3;
+  top: calc(max(8px, env(safe-area-inset-top)) + 40px);
+  right: max(12px, env(safe-area-inset-right));
+  font-family: var(--fuente-display);
+  font-size: 8px;
+  color: var(--tenue);
+}
+
+.juego-cielo { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.juego-item {
+  position: absolute;
+  width: min(30vh, 150px);
+  height: min(30vh, 150px);
+  image-rendering: pixelated;
+  pointer-events: auto;
+  cursor: pointer;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35));
+}
+.juego-item.chile { filter: drop-shadow(0 0 6px rgba(255, 80, 60, 0.6)); }
+.juego-item.dorado { filter: drop-shadow(0 0 8px rgba(255, 220, 90, 0.9)); }
+.juego-item.comido { animation: comido 0.3s steps(3) forwards; }
+.juego-item.aplastado { animation: aplastado 0.3s steps(3) forwards; }
+@keyframes comido { to { opacity: 0; transform: translate(-50%, 30%) scale(0.2); } }
+@keyframes aplastado { to { opacity: 0; transform: translate(-50%, 0) scale(1.4, 0.2); } }
+
+.juego-flota {
+  position: absolute;
+  top: 62%;
+  transform: translateX(-50%);
+  font-family: var(--fuente-display);
+  font-size: 14px;
+  color: var(--papel);
+  text-shadow: 0 2px 0 var(--tinta);
+  animation: flota 0.7s steps(5) forwards;
+}
+.juego-flota.oro { color: rgb(255, 220, 90); font-size: 18px; }
+.juego-flota.mal { color: rgb(255, 120, 110); }
+@keyframes flota { to { transform: translate(-50%, -140%); opacity: 0; } }
+
+.juego-personaje {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: -7vh;
+  width: 46vh;
+  height: 46vh;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.juego-personaje .sprite-cara { width: 100%; height: 100%; }
+.juego-personaje.mira-izq .sprite-cara { transform: scaleX(-1); }
+.juego-personaje.pica { animation: pica 0.5s steps(4); }
+@keyframes pica { 25% { transform: translateX(-54%); } 75% { transform: translateX(-46%); } }
+
+.juego-cuenta {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--fuente-display);
+  font-size: clamp(32px, 14vh, 64px);
+  color: var(--papel);
+  text-shadow: 0 4px 0 var(--tinta);
+  pointer-events: none;
+}
+.pantalla-juego .pista-minijuego {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.pantalla-juego .banner-sensor { position: absolute; z-index: 5; top: 56px; left: 50%; transform: translateX(-50%); }
+
+/* v19: el pedido de la foto, con el lago (desenfocado) de fondo y el personaje grande */
+.escena-dialogo.escena-lago {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  overflow: hidden;
+  padding: max(10px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+.escena-dialogo.escena-lago::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  z-index: -1;
+  background: url("../assets/final/lago.png") center / cover no-repeat;
+  image-rendering: pixelated;
+  filter: blur(3px) brightness(0.62) saturate(1.05);
+}
+.escena-lago .dialogo-cara { width: min(62vh, 38vw); height: min(62vh, 38vw); }
+.escena-lago .dialogo-cara .sprite-cara { width: 100%; height: 100%; }
