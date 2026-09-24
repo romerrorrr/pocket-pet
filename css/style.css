@@ -4338,3 +4338,95 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .fila-regalo { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
 .fila-regalo img { width: 36px; height: 36px; object-fit: contain; image-rendering: pixelated; }
 .fila-regalo small { margin-left: auto; }
+
+/* ------------------------------------------------------------------
+   v21 — Snack Rain: elegir la dificultad
+   ------------------------------------------------------------------ */
+.juego-dificultad {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(14, 12, 16, 0.55);
+}
+.juego-dificultad-titulo {
+  font-family: var(--fuente-display);
+  font-size: 18px;
+  color: var(--papel);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+.juego-dificultad-botones { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.juego-dificultad-botones .boton { display: grid; gap: 4px; min-width: 104px; justify-items: center; }
+.juego-dificultad-botones .boton small { font-size: 9px; opacity: 0.75; font-family: var(--fuente-cuerpo); }
+.juego-cuenta.oculto { display: none; }
+
+/* ------------------------------------------------------------------
+   v21 — el video del final y "Save to Photos"
+   ------------------------------------------------------------------ */
+.rec-punto {
+  position: fixed;
+  z-index: 9999;
+  top: max(6px, env(safe-area-inset-top));
+  left: max(6px, env(safe-area-inset-left));
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(230, 60, 70);
+  opacity: 0.55;
+  pointer-events: none;
+  animation: latido-suave 1.6s steps(2) infinite;
+}
+.boton-galeria.oculto { display: none; }
+.polaroid .boton-galeria { margin-top: 6px; font-size: 11px; }
+.tarjeta-video {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+.tarjeta-video video { width: min(46%, 260px); aspect-ratio: 16 / 9; background: #111; object-fit: cover; }
+.tarjeta-video-texto { display: grid; gap: 6px; font-size: 14px; }
+.tarjeta-video-texto b { font-family: var(--fuente-display); font-size: 10px; color: var(--rosa); }
+
+/* ------------------------------------------------------------------
+   v21 — las instrucciones cortas
+   ------------------------------------------------------------------ */
+.pantalla-tutorial {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.tarjeta-tutorial {
+  position: relative;
+  z-index: 1;
+  width: min(92%, 560px);
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  padding: 16px 18px 14px;
+  box-shadow: 0 0 0 3px var(--tinta), 6px 8px 0 rgba(0, 0, 0, 0.3);
+  animation: aparecer-caja-t 0.35s steps(4) both;
+}
+@keyframes aparecer-caja-t { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.tutorial-arte { display: flex; gap: 12px; align-items: flex-end; justify-content: center; min-height: 64px; }
+.tutorial-arte img { height: 64px; width: auto; image-rendering: pixelated; }
+.tutorial-titulo { font-family: var(--fuente-display); font-size: 13px; color: var(--tinta); }
+.tutorial-texto { font-size: 16px; line-height: 1.45; max-width: 46ch; color: var(--tinta); }
+.tutorial-puntos { display: flex; gap: 6px; }
+.tutorial-puntos i { width: 7px; height: 7px; background: rgba(0, 0, 0, 0.2); }
+.tutorial-puntos i.activo { background: var(--rosa); }
+@media (max-height: 400px) {
+  .tutorial-arte, .tutorial-arte img { height: 48px; min-height: 48px; }
+  .tutorial-texto { font-size: 14px; }
+}
