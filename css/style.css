@@ -2847,6 +2847,9 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .director-gps { font-size: 13px; color: var(--tenue); min-height: 0; margin: -2px 0 6px; }
 .director-gps:empty { display: none; }
 .director-gps.ok { color: var(--verde-ok); }
+/* v21.2: el medidor del microfono (modo director) */
+.medidor-mic { display: block; height: 10px; margin: 6px 0 2px; border: 2px solid var(--tinta, #18161e); background: #f4ecdc; overflow: hidden; }
+.medidor-mic-barra { display: block; height: 100%; width: 0; background: var(--verde-ok, #3a9a5b); transition: width 80ms linear; }
 
 /* ================================================================
    LA PIEZA: el cuarto de Baozi (pieza.js lo dibuja en un canvas)
