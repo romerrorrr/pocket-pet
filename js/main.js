@@ -35,6 +35,8 @@ import { arte } from "./arte.js";
 import { FINAL, FECHAS } from "./config.js";
 import { crearPieza, posicionEnMapa } from "./pieza.js";
 import * as Clima from "./clima.js";
+import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progresoDe } from "./amigos.js";
+import { leerRecord } from "./juego.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -78,7 +80,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual() });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto() });
 }
 
 function registrarServiceWorker() {
@@ -119,6 +121,7 @@ function conTransicion(fn) {
 // ------------------------------------------------------------------
 
 let mascota, npcsReg, lugaresReg, diario;
+let amigos = new RegistroAmigos(); // amistad, secretos, misiones y regalos (amigos.js)
 let cartasEntregadas = [];
 let cartaActual = null;
 const controller = new ControladorVistas();
@@ -252,6 +255,7 @@ function arrancar() {
     volverACasa: () => conTransicion(irACasa),
     abrirDirector: () => conTransicion(abrirDirector),
     guardarTodo,
+    estadoPieza,
   });
 
   const guardado = storage.cargar();
@@ -260,6 +264,7 @@ function arrancar() {
     ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
     Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final);
     Personaje.restaurar(guardado.extras && guardado.extras.personaje);
+    cargarAmigos(guardado.extras && guardado.extras.amigos);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
@@ -361,6 +366,7 @@ function confirmarNombre() {
   mascota = new PetState(nombre, Date.now());
   npcsReg = new RegistroNPCs();
   lugaresReg = new RegistroLugares();
+  cargarAmigos(null);
   diario = diario || new Diario();
   cartasEntregadas = [];
   guardarTodo();
@@ -451,7 +457,7 @@ function renderVistaActual() {
       wireCaminar();
       break;
     case "wheretogo":
-      R.renderWhereTo(screenEl, lugaresReg.pendientes());
+      R.renderWhereTo(screenEl, lugaresReg.pendientes().filter((l) => amigos.lugarVisible(l.id, lugaresReg.desbloqueados)));
       wireWhereTo();
       break;
     case "lugarcerca":
@@ -529,9 +535,12 @@ function estadoPieza() {
             ...(dormido ? [] : R.necesidades(mascota).map((n) => n.objeto).filter(Boolean)),
             // la pagina de hoy sin escribir: un "!" sobre el cuaderno de la mesita
             ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() ? ["mesita"] : []),
+            // un amigo trae un regalo: "!" sobre la ventana
+            ...(visita && visita.regalo ? ["ventana"] : []),
           ]),
         ],
     npc: visita ? visita.npc.id : null,
+    decoraciones: amigos.decoraciones(),
     clima: Clima.tipo(),
     globo: globo.texto,
     globoRosa: globo.rosa,
@@ -652,6 +661,78 @@ function tocarReloj() {
   }
 }
 
+// ------------------------------------------------------------------
+// Los amigos (amigos.js): misiones que se cumplen solas con lo que ella hace
+// ------------------------------------------------------------------
+
+function cargarAmigos(datos) {
+  amigos = RegistroAmigos.desdeObjeto(datos);
+  Personaje.ponerAccesorio(amigos.puesto);
+}
+
+function contextoAmigos() {
+  return {
+    pasosHoy: diario ? diario.hoy().pasos : 0,
+    racha: diario ? diario.racha() : 0,
+    sellados: lugaresReg ? lugaresReg.desbloqueados : new Set(),
+    record: leerRecord(),
+  };
+}
+
+function estadoParaAmigos() {
+  return { tipo: "estado", ...contextoAmigos() };
+}
+
+/** Algo paso: si cumple una mision, el amigo viene a la ventana con el regalo. */
+function eventoAmigos(ev, { sinVisita = false } = {}) {
+  if (!mascota) return;
+  const listos = amigos.evento(ev);
+  if (!listos.length) return;
+  guardarTodo();
+  if (sinVisita) return;
+  // si esta en el cuarto, llega enseguida; si no, cuando vuelva (talVezVisita)
+  if (controller.vista === "cara" && !visita && !mascota.dormida && !finalOcupado()) {
+    const npc = NPCS.find((n) => n.id === listos[0]);
+    if (npc) anunciarVisita(npc, { regalo: true });
+  }
+}
+
+/** Se sello un lugar: los secretos sellados antes de tiempo quedan revelados. */
+function alSellar(idLugar) {
+  if (LUGARES_SECRETOS.has(idLugar)) amigos.revelar(idLugar);
+  eventoAmigos({ tipo: "sello", lugar: idLugar });
+  eventoAmigos(estadoParaAmigos());
+}
+
+/** Una foto guardada: donde se saco (el lugar del sello, o el GPS) y a que hora. */
+function fotoParaAmigos(foto) {
+  const base = { tipo: "foto", filtro: foto.filtro, stickers: foto.stickers || [], momento: momentoActual };
+  if (foto.lugar) {
+    eventoAmigos({ ...base, lugar: foto.lugar });
+    return;
+  }
+  const conPosicion = (lat, lon) => {
+    const l = lugarCercano(lat, lon);
+    eventoAmigos({ ...base, lugar: l ? l.id : null });
+  };
+  if (ultimaPosicion && Date.now() - (ultimaPosicion.t || 0) < 5 * 60000) {
+    conPosicion(ultimaPosicion.lat, ultimaPosicion.lon);
+    return;
+  }
+  if (estadoUbicacion === "ok" && Sensores.geolocationDisponible()) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: Date.now() };
+        conPosicion(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => eventoAmigos({ ...base, lugar: null }),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 },
+    );
+    return;
+  }
+  eventoAmigos({ ...base, lugar: null });
+}
+
 function tocarVentana() {
   if (visita) {
     const npc = visita.npc;
@@ -687,6 +768,15 @@ function tocarVentana() {
 function talVezVisita() {
   if (!mascota || mascota.dormida || visita || controller.vista !== "cara") return;
   if (["armado", "pedido", "en_curso"].includes(Final.fase())) return;
+  // un amigo con un regalo viene enseguida, y espera en la ventana hasta que ella abra
+  const conRegalo = amigos.regaloPendiente();
+  if (conRegalo) {
+    const npc = NPCS.find((n) => n.id === conRegalo);
+    if (npc) {
+      anunciarVisita(npc, { regalo: true });
+      return;
+    }
+  }
   const ahora = Date.now();
   if (ahora < proximaConsultaVisitaMs) return;
   proximaConsultaVisitaMs = ahora + 5 * 60000;
@@ -696,13 +786,13 @@ function talVezVisita() {
   anunciarVisita(npc);
 }
 
-function anunciarVisita(npc) {
-  visita = { npc, hastaMs: Date.now() + 35000 };
+function anunciarVisita(npc, { regalo = false } = {}) {
+  visita = { npc, hastaMs: regalo ? Infinity : Date.now() + 35000, regalo };
   Sonido.sonar("encuentro");
   vibrar(30);
   // primero el susto, despues la curiosidad: "¿quien sera?"
   sorpresa(2500, { nombre: "curioso", ms: 5500 });
-  decir("Knock knock… someone's at the window!", 4000);
+  decir(regalo ? `${npc.nombre} is at the window with a gift!` : "Knock knock… someone's at the window!", 4000);
 }
 
 /**
@@ -776,7 +866,10 @@ function sonidoDelClima() {
 function wireHeladera() {
   document.getElementById("btn-volver-heladera").addEventListener("click", () => conTransicion(irACasa));
   for (const b of screenEl.querySelectorAll("[data-comida]")) {
-    b.addEventListener("click", () => manejarTapItem(b.dataset.comida, { item: b.dataset.item }));
+    b.addEventListener("click", () => {
+      if ((b.dataset.item || "").endsWith("bebida_te.png")) eventoAmigos({ tipo: "comer", item: "te" });
+      manejarTapItem(b.dataset.comida, { item: b.dataset.item });
+    });
   }
 }
 
@@ -841,7 +934,8 @@ async function revisarLugares(forzar = false) {
   if ((await actualizarEstadoUbicacion()) !== "ok") return;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: Date.now() };
+      eventoAmigos({ tipo: "posicion", lat: pos.coords.latitude, lon: pos.coords.longitude });
       const lugar = lugaresReg.lugarEnRango(pos.coords.latitude, pos.coords.longitude, Date.now());
       if (lugar && controller.vista === "cara" && !finalOcupado()) abrirSello(lugar);
     },
@@ -864,7 +958,7 @@ function renderMapaActual() {
   const sellados = lugaresReg.desbloqueados;
   if (!mapaSeleccion) mapaSeleccion = (LUGARES.find((l) => sellados.has(l.id)) || LUGARES[0]).id;
   R.renderMapa(screenEl, {
-    lugares: LUGARES,
+    lugares: LUGARES.filter((l) => amigos.lugarVisible(l.id, sellados)),
     sellados,
     fechas: lugaresReg.fechas,
     seleccionado: mapaSeleccion,
@@ -890,6 +984,8 @@ function renderMapaActual() {
             localStorage.setItem(CLAVE_UBICACION, "1");
           } catch (e) {}
           estadoUbicacion = "ok";
+          ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: Date.now() };
+          eventoAmigos({ tipo: "posicion", lat: pos.coords.latitude, lon: pos.coords.longitude });
           const lugar = lugaresReg.lugarEnRango(pos.coords.latitude, pos.coords.longitude, Date.now());
           if (lugar) abrirSello(lugar);
           else renderMapaActual();
@@ -917,6 +1013,7 @@ function abrirSello(lugar) {
   if (!mascota || lugaresReg.desbloqueados.has(lugar.id)) return;
   lugarDelSello = lugaresReg.descubrir(mascota, lugar.id, Date.now()) || lugar;
   diario.anotarLugar(lugar.id);
+  alSellar(lugar.id);
   guardarTodo();
   Musica.tocar("descubrimiento");
   conTransicion(() => {
@@ -1102,18 +1199,80 @@ function cerrarLente() {
   }
 }
 
+// Los stickers de la camara: los dos personajes (no solo el de ella), con
+// todas sus caras, parados o sentados; y unos extras.
+const CARAS_STICKER = [
+  ["feliz", "ojo_base_energia_alta.png", "boca_base_feliz.png"],
+  ["euforico", "ojo_especial_euforico.png", "boca_especial_euforico.png"],
+  ["enamorado", "ojo_especial_enamorado.png", "boca_especial_enamorado.png"],
+  ["sorprendido", "ojo_especial_sorprendido.png", "boca_especial_sorprendido.png"],
+  ["curioso", "ojo_especial_curioso.png", "boca_especial_curioso.png"],
+  ["hambriento", "ojo_especial_hambriento.png", "boca_especial_hambriento.png"],
+  ["aburrido", "ojo_especial_aburrido.png", "boca_especial_aburrido.png"],
+  ["triste", "ojo_especial_decepcionado.png", "boca_especial_decepcionado.png"],
+  ["asustado", "ojo_especial_asustado.png", "boca_especial_asustado.png"],
+  ["asqueado", "ojo_especial_asqueado.png", "boca_especial_asqueado.png"],
+  ["cansada", "ojo_base_energia_baja.png", "boca_base_neutral.png"],
+  ["dormida", "ojo_dormida.png", "boca_dormida.png"],
+];
+
+function catalogoStickers() {
+  const suya = Personaje.actual();
+  const quienes = [suya, ...Personaje.IDS.filter((q) => q !== suya)];
+  const stickers = [];
+  for (const quien of quienes) {
+    for (const pose of ["parado", "sentado"]) {
+      for (const [nombre, ojo, boca] of CARAS_STICKER) {
+        // dormida: siempre con el cuerpo de dormir
+        const p = nombre === "dormida" ? (pose === "parado" ? null : "dormido") : pose;
+        if (!p) continue;
+        stickers.push({
+          id: `${quien}-${pose}-${nombre}`,
+          nombre: `${Personaje.nombre(quien)} ${nombre}`,
+          grupo: quien,
+          pose,
+          html: R.spriteCara(ojo, boca, false, "", { pose: p, quien }),
+          capas: Personaje.capas(ojo, boca, p, quien).map((c) => arte(c.src)),
+          lado: 96,
+        });
+      }
+    }
+  }
+  const extras = [
+    ["corazon", "final/corazon_rojo.png"],
+    ["corazon-rosa", "final/corazon_rosa.png"],
+    ["destello", "final/destello.png"],
+    ["estrella", "ui/g_estrella@4.png"],
+    ...(Final.dijoQueSi() ? [["anillo", "final/anillo.png"]] : []),
+  ];
+  for (const [id, src] of extras) {
+    stickers.push({ id: `extra-${id}`, nombre: id, grupo: "extras", html: `<img class="sticker-extra" src="${arte(src)}" alt="" draggable="false" />`, capas: [arte(src)] });
+  }
+  // los stickers que regalaron los amigos
+  for (const id of amigos.stickers()) {
+    const npc = NPCS.find((n) => n.id === id);
+    if (!npc) continue;
+    const src = arte(`npcs/npc_${id}.png`);
+    stickers.push({ id: `npc-${id}`, nombre: npc.nombre, grupo: "amigos", html: `<img class="sticker-extra sticker-npc" src="${src}" alt="" draggable="false" />`, capas: [src], lado: 80 });
+  }
+  const mini = (quien) => R.spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png", false, "mini", { quien });
+  return {
+    stickers,
+    grupos: [
+      ...quienes.map((q) => ({ id: q, nombre: Personaje.nombre(q), html: `${mini(q)}<span>${Personaje.nombre(q)}</span>` })),
+      { id: "extras", nombre: "Extras", html: `<img class="sticker-extra" src="${arte("final/corazon_rojo.png")}" alt="" /><span>Extras</span>` },
+      ...(amigos.stickers().length ? [{ id: "amigos", nombre: "Friends", html: `<img class="sticker-extra" src="${arte(`npcs/npc_${amigos.stickers()[0]}.png`)}" alt="" /><span>Friends</span>` }] : []),
+    ],
+    iconoSticker: mini(suya),
+  };
+}
+
 /** Abre el lente dentro del aparato. */
 function abrirLenteEnPantalla(opts = {}) {
   cerrarLente();
   prepararVista("lente");
-  // el personaje de ella, feliz, para pegar en la foto
-  const ojoS = "ojo_especial_euforico.png";
-  const bocaS = "boca_especial_euforico.png";
   lenteAbierto = abrirLente(screenEl, {
-    stickerHtml: R.spriteCara(ojoS, bocaS),
-    stickerMini: R.spriteCara(ojoS, bocaS, false, "mini"),
-    stickerCapas: Personaje.capas(ojoS, bocaS, "parado").map((c) => arte(c.src)),
-    stickerPixel: !Personaje.esMantou(),
+    ...catalogoStickers(),
     ...opts,
     alSalir: () => {
       lenteAbierto = null;
@@ -1121,6 +1280,7 @@ function abrirLenteEnPantalla(opts = {}) {
     },
     alGuardar: (foto) => {
       lenteAbierto = null;
+      if (opts.modo !== "pedido" && foto && !opts.ensayo) fotoParaAmigos(foto);
       (opts.alGuardar || (() => conTransicion(irACasa)))(foto);
     },
   });
@@ -1300,7 +1460,8 @@ function renderConsulta() {
   if (tipo === "diary") R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi() });
   else if (tipo === "stats") R.renderStats(tmp, mascota);
   else if (tipo === "traits") R.renderTraits(tmp, mascota);
-  else if (tipo === "npcs") R.renderNpcs(tmp, npcsReg);
+  else if (tipo === "npcs") R.renderNpcs(tmp, npcsReg, amigos, { progreso: (m) => progresoDe(m, contextoAmigos()) });
+  else if (tipo === "closet") R.renderCloset(tmp, amigos);
   else if (tipo === "ajustes" || tipo === "backup") tmp.innerHTML = R.htmlAjustes(Sonido.sonidoHabilitado());
   else R.renderProgress(tmp, mascota, lugaresReg);
   const cabecera = tmp.querySelector(".encabezado-vista");
@@ -1308,6 +1469,17 @@ function renderConsulta() {
   R.renderCuaderno(screenEl, tipo === "backup" ? "ajustes" : tipo, tmp.innerHTML);
 
   if (tipo === "diary") wireDiario();
+  if (tipo === "closet") {
+    for (const b of screenEl.querySelectorAll("[data-accesorio]")) {
+      b.addEventListener("click", () => {
+        amigos.poner(amigos.puesto === b.dataset.accesorio ? null : b.dataset.accesorio);
+        Personaje.ponerAccesorio(amigos.puesto);
+        guardarTodo();
+        Sonido.sonar(amigos.puesto ? "guardado" : "tocar");
+        renderConsulta();
+      });
+    }
+  }
   if (tipo === "ajustes" || tipo === "backup") {
     wireBackup();
     document.getElementById("btn-ajuste-sonido").addEventListener("click", () => {
@@ -1412,6 +1584,7 @@ function abrirEscribir() {
     }
     diario.escribirHoy({ animo, texto: texto.value.trim(), pregunta: preguntaDelDia() });
     borradorHoy = null;
+    eventoAmigos(estadoParaAmigos());
     if (mascota) mascota._marcarInteraccion?.(Date.now());
     guardarTodo();
     Sonido.sonar("guardado");
@@ -1447,6 +1620,7 @@ function wireBackup() {
       ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
       Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final, { forzar: true });
       Personaje.restaurar(guardado.extras && guardado.extras.personaje);
+      cargarAmigos(guardado.extras && guardado.extras.amigos);
       if (pieza) pieza.destruir();
       pieza = null;
       mascota.actualizarTiempo(Date.now());
@@ -1551,6 +1725,7 @@ function descubrirLugar(idLugar) {
   lugarDescubierto = lugaresReg.descubrir(mascota, idLugar, Date.now());
   fotoDelDescubrimiento = false;
   diario.anotarLugar(idLugar);
+  alSellar(idLugar);
   Musica.tocar("descubrimiento");
   guardarTodo();
 }
@@ -1674,6 +1849,7 @@ function registrarPasoDetectado() {
   const ahora = Date.now();
   const seDisparoOrgulloso = mascota.registrarPasos(1, ahora);
   diario.sumarPasos(1);
+  if (pasosSesion % 50 === 0) eventoAmigos(estadoParaAmigos());
   const npc = npcsReg.talVezEncontrarAlguien(1, ahora);
   guardarTodo();
 
@@ -1743,17 +1919,70 @@ function renderEncuentro() {
       boton.addEventListener("click", () => manejarEleccionEncuentro(boton.dataset.eleccion));
     }
   } else if (paso === "dialogo") {
-    R.renderEncuentroDialogo(screenEl, npc, npcsReg.lineaPara(npc));
-    document.getElementById("btn-continuar-encuentro").addEventListener("click", () => {
-      conTransicion(() => {
-        encuentro.paso = "despedida";
-        renderVistaActual();
+    const m = amigos.misionActual(npc.id);
+    R.renderEncuentroDialogo(screenEl, npc, amigos.lineaPara(npc.id, npcsReg, progresoDe(m, contextoAmigos())) || npcsReg.lineaPara(npc));
+    document.getElementById("btn-continuar-encuentro").addEventListener("click", () => seguirEncuentro());
+  } else if (paso === "regalo") {
+    const entregado = encuentro.entregado;
+    R.renderEncuentroRegalo(screenEl, npc, entregado.mision.gracias, entregado.clave);
+    Musica.tocar("descubrimiento");
+    Sonido.sonar("hallazgo");
+    vibrar([30, 40, 60]);
+    document.getElementById("btn-continuar-encuentro").addEventListener("click", () => seguirEncuentro());
+  } else if (paso === "secreto") {
+    const secreto = encuentro.secreto;
+    R.renderEncuentroSecreto(screenEl, npc, secreto.texto, LUGARES.find((l) => l.id === secreto.lugar));
+    Sonido.sonar("descubrimiento");
+    document.getElementById("btn-continuar-encuentro").addEventListener("click", () => seguirEncuentro());
+  } else if (paso === "mision") {
+    R.renderEncuentroMision(screenEl, npc, encuentro.mision);
+    for (const b of screenEl.querySelectorAll("[data-mision]")) {
+      b.addEventListener("click", () => {
+        if (b.dataset.mision === "si") {
+          amigos.aceptar(npc.id);
+          Sonido.sonar("guardado");
+          // si ya estaba hecha (por ejemplo, ya tenia los lugares), se cumple enseguida
+          eventoAmigos(estadoParaAmigos(), { sinVisita: true });
+          guardarTodo();
+        } else Sonido.sonar("tocar");
+        seguirEncuentro();
       });
-    });
+    }
   } else if (paso === "despedida") {
     R.renderEncuentroDespedida(screenEl, npc);
     setTimeout(terminarEncuentro, DURACION_FEEDBACK_MS);
   }
+}
+
+/**
+ * Despues del saludo, lo que el amigo tenga para ella, en orden: el regalo
+ * de una mision cumplida, un secreto nuevo, una mision nueva. Y chau.
+ */
+function seguirEncuentro() {
+  if (!encuentro) return;
+  const npc = encuentro.npc;
+  let siguiente = "despedida";
+  if (amigos.estado(npc.id) === "lista") {
+    encuentro.entregado = amigos.entregar(npc.id);
+    Personaje.ponerAccesorio(amigos.puesto);
+    if (pieza) pieza.refrescar();
+    diario.anotarHito(`${npc.nombre}: ${encuentro.entregado.regalo.nombre}`);
+    siguiente = "regalo";
+  } else if (!encuentro.secretoVisto && amigos.secretoNuevo(npc.id, npcsReg)) {
+    encuentro.secreto = amigos.secretoNuevo(npc.id, npcsReg);
+    encuentro.secretoVisto = true;
+    amigos.revelar(encuentro.secreto.lugar);
+    siguiente = "secreto";
+  } else if (!encuentro.misionVista && amigos.misionParaOfrecer(npc.id, npcsReg)) {
+    encuentro.mision = amigos.misionParaOfrecer(npc.id, npcsReg);
+    encuentro.misionVista = true;
+    siguiente = "mision";
+  }
+  guardarTodo();
+  conTransicion(() => {
+    encuentro.paso = siguiente;
+    renderVistaActual();
+  });
 }
 
 function manejarEleccionEncuentro(eleccion) {
@@ -1842,6 +2071,7 @@ function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord 
   detectorSacudida = null;
   mascota.resultadoMinijuego(atrapadas, Date.now());
   diario.anotarJuego(puntos);
+  eventoAmigos({ tipo: "juego", puntos });
   guardarTodo();
   vibrar(puntos > 0 ? [20, 40, 20, 40, 20] : 20);
   Sonido.sonar(puntos > 0 ? "hito" : "mimo");
@@ -2025,6 +2255,10 @@ window.__mochi = {
     if (controller.vista === "cara") renderVistaActual();
   },
   mascota: () => mascota,
+  amigos: () => amigos,
+  // simular algo que cumple una mision (como lo haria el juego)
+  eventoAmigos: (ev) => eventoAmigos(ev),
+  npcs: () => npcsReg,
   especial: () => especialActiva,
   terminarJuego: () => minijuego && minijuego.terminar(),
   personaje: (quien) => {

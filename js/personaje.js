@@ -2,7 +2,7 @@
  * personaje.js
  * =============
  * Con quien juega ella: Baozi (pixel, negro de puas) o Mantou (su gatita
- * blanca, dibujada a mano). Se elige una sola vez, al principio.
+ * blanca, pixel desde el dibujo de rom). Se elige una sola vez, al principio.
  *
  * Los dos comparten los mismos estados y el mismo lienzo (96 px de juego,
  * la cabeza siempre en el mismo lugar: tools/dibujos.py), asi que el resto
@@ -10,8 +10,8 @@
  * capas(archivoOjo, archivoBoca, pose) y listo.
  *
  * Baozi: cuerpo + ojos + boca en pixel (assets/caras/).
- * Mantou: cuerpo sin cara + una capa de cara dibujada (assets/mantou/).
- *   Las caras las dibuja rom; mientras falte una, va la neutral.
+ * Mantou: cuerpo sin cara + una capa de cara, todo en pixel (assets/mantou/,
+ *   generado por tools/mantou_pixel.py desde el dibujo de rom).
  */
 
 import { FIGURAS } from "./personajes_datos.js";
@@ -22,11 +22,13 @@ export const NOMBRES = { baozi: "Baozi", mantou: "Mantou" };
 
 // Las caras de Mantou que ya existen (assets/mantou/cara_<estado>.png).
 // Agregar aca cada una que dibuje rom (y en sw.js).
-export const CARAS_MANTOU = new Set(["neutral", "dormida"]); // dormida: provisoria (tools/dibujos.py)
+export const CARAS_MANTOU = new Set(["neutral", "feliz", "euforico", "cansada", "dormida", "triste", "enferma", "comiendo", "aburrido", "asqueado", "asustado", "curioso", "enamorado", "hambriento", "sorprendido"]);
 // Mientras falte una cara, la mas parecida que ya exista (y si no, la neutral).
 const PARECIDAS = { cansada: "dormida", aburrido: "cansada", decepcionado: "triste", enamorado: "feliz", euforico: "feliz", comiendo: "sorprendido", asustado: "sorprendido", curioso: "sorprendido", hambriento: "neutral", asqueado: "neutral" };
 
 let id = "baozi";
+// el accesorio que le regalo un amigo y tiene puesto (amigos.js): o null
+let accesorio = null;
 try {
   const guardado = localStorage.getItem(CLAVE);
   if (IDS.includes(guardado)) id = guardado;
@@ -49,6 +51,11 @@ export function elegir(nuevo) {
     /* queda en memoria */
   }
 }
+
+export function ponerAccesorio(a) {
+  accesorio = typeof a === "string" && /^[a-z]+$/.test(a) ? a : null;
+}
+export const accesorioPuesto = () => accesorio;
 
 /** Al cargar un guardado (o un backup): lo del guardado manda. */
 export function restaurar(desdeGuardado) {
@@ -88,8 +95,15 @@ export function caraMantou(estado) {
 /**
  * Las capas (de abajo hacia arriba) de una cara: [{ src, tipo }].
  * pose: "parado" | "sentado" | "dormido". Rutas relativas a assets/.
+ * El personaje de ella lleva arriba de todo su accesorio, si tiene uno puesto.
  */
 export function capas(archivoOjo, archivoBoca, pose = "parado", quien = id) {
+  const lista = capasBase(archivoOjo, archivoBoca, pose, quien);
+  if (accesorio && quien === id) lista.push({ src: `amigos/acc_${accesorio}.png`, tipo: "accesorio" });
+  return lista;
+}
+
+function capasBase(archivoOjo, archivoBoca, pose, quien) {
   if (quien === "mantou") {
     const cuerpo = pose === "parado" ? "mantou/cuerpo.png" : "mantou/cuerpo_sentado.png";
     return [

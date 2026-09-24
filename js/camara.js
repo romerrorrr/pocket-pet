@@ -102,12 +102,88 @@ export function tramar(datos, niveles, paleta = PALETA_LENTE) {
   return datos;
 }
 
+// ------------------------------------------------------------------
+// Los filtros (v20): TODOS son pixel, 176x132 y tramados; cambia la
+// paleta. Color trama cada canal y busca el color mas cercano de una
+// paleta chica (pixel a color, como una Game Boy Color).
+// ------------------------------------------------------------------
+
+const PALETA_COLOR = [
+  [22, 20, 22], [62, 56, 58], [120, 110, 108], [196, 186, 178], [244, 238, 226],
+  [122, 48, 52], [214, 86, 94], [240, 164, 152], [196, 124, 92], [120, 76, 56],
+  [232, 196, 110], [96, 140, 72], [52, 88, 62], [84, 132, 180], [44, 60, 108], [164, 198, 222],
+];
+
+export const FILTROS_PIXEL = {
+  pixel: { paleta: PALETA_LENTE },
+  bn: { paleta: [[16, 16, 18], [70, 70, 74], [128, 128, 132], [188, 188, 190], [248, 248, 246]] },
+  sepia: { paleta: [[34, 22, 16], [88, 58, 38], [146, 104, 68], [204, 166, 118], [246, 226, 188]] },
+  vintage: { paleta: [[58, 42, 54], [118, 88, 94], [178, 142, 124], [226, 200, 166], [246, 234, 208]], vineta: 0.5 },
+  color: { color: PALETA_COLOR },
+};
+
+/** Oscurece los bordes (para vintage), en el lugar. */
+function vinetear(datos, fuerza) {
+  const { width: w, height: h, data: d } = datos;
+  const cx = w / 2;
+  const cy = h / 2;
+  const rmax = Math.hypot(cx, cy);
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    const v = 1 - fuerza * Math.pow(Math.hypot((p % w) - cx, ((p / w) | 0) - cy) / rmax, 2.2);
+    d[i] *= v;
+    d[i + 1] *= v;
+    d[i + 2] *= v;
+  }
+}
+
+/** Tramado a color: cada canal con su Bayer, y el color de la paleta mas cercano. */
+function tramarColor(datos, niveles, paleta) {
+  const { width: w, data: d } = datos;
+  const rango = Math.max(1, niveles.hi - niveles.lo);
+  const k = 255 / rango;
+  const n = paleta.length;
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    const b = BAYER4[(((p / w) | 0) & 3) * 4 + ((p % w) & 3)] * 70;
+    const r = (d[i] - niveles.lo) * k + b;
+    const g = (d[i + 1] - niveles.lo) * k + b;
+    const bl = (d[i + 2] - niveles.lo) * k + b;
+    let mejor = 0;
+    let dist = Infinity;
+    for (let j = 0; j < n; j++) {
+      const c = paleta[j];
+      const dr = r - c[0];
+      const dg = g - c[1];
+      const db = bl - c[2];
+      // un poco mas de peso al verde: el ojo lo ve mas
+      const e = dr * dr * 0.3 + dg * dg * 0.59 + db * db * 0.11;
+      if (e < dist) {
+        dist = e;
+        mejor = j;
+      }
+    }
+    const c = paleta[mejor];
+    d[i] = c[0];
+    d[i + 1] = c[1];
+    d[i + 2] = c[2];
+    d[i + 3] = 255;
+  }
+  return datos;
+}
+
+/** Un cuadro de 176x132 ya medido -> tramado con el filtro (en el lugar). */
+export function aplicarFiltro(datos, niveles, filtro = "pixel") {
+  const f = FILTROS_PIXEL[filtro] || FILTROS_PIXEL.pixel;
+  if (f.vineta) vinetear(datos, f.vineta);
+  if (f.color) return tramarColor(datos, niveles, f.color);
+  return tramar(datos, niveles, f.paleta);
+}
+
 /**
  * Cualquier imagen/video -> lienzo de 176x132 ya tramado. Se usa para
  * las fotos que vienen del selector de archivos (respaldo) — el visor
  * en vivo hace lo mismo cuadro a cuadro en lente.js.
  */
-export function fotoTramada(fuente, fw, fh, { espejo = false } = {}) {
+export function fotoTramada(fuente, fw, fh, { espejo = false, filtro = "pixel" } = {}) {
   const lienzo = document.createElement("canvas");
   lienzo.width = ANCHO_FOTO;
   lienzo.height = ALTO_FOTO;
@@ -122,7 +198,7 @@ export function fotoTramada(fuente, fw, fh, { espejo = false } = {}) {
   ctx.drawImage(fuente, r.sx, r.sy, r.sw, r.sh, 0, 0, ANCHO_FOTO, ALTO_FOTO);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const datos = ctx.getImageData(0, 0, ANCHO_FOTO, ALTO_FOTO);
-  tramar(datos, medirNiveles(datos));
+  aplicarFiltro(datos, medirNiveles(datos), filtro);
   ctx.putImageData(datos, 0, 0);
   return lienzo;
 }
@@ -235,9 +311,9 @@ export function cantidadDeFotos() {
  * Guarda una foto. Queda en memoria al instante (el diario la ve ya) y
  * se escribe en IndexedDB en segundo plano. Devuelve la foto guardada.
  */
-export async function guardarFoto({ dataUrl, dia, lugar = null, tipo = "diario", filtro = "pixel" }) {
+export async function guardarFoto({ dataUrl, dia, lugar = null, tipo = "diario", filtro = "pixel", stickers = [] }) {
   const t = Date.now();
-  const foto = { clave: `foto_${t}_${Math.random().toString(36).slice(2, 7)}`, dia, lugar, tipo, dataUrl, t, filtro };
+  const foto = { clave: `foto_${t}_${Math.random().toString(36).slice(2, 7)}`, dia, lugar, tipo, dataUrl, t, filtro, stickers: Array.isArray(stickers) ? stickers.slice(0, 8) : [] };
   fotos.push(foto);
   const db = await Promise.race([abrirDB(), new Promise((r) => setTimeout(() => r(null), 1500))]);
   if (db) {

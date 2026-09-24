@@ -129,11 +129,11 @@ export function iniciarJuego(contenedor, opts) {
     const tipo = r < 0.12 + avance * 0.14 ? "chile" : r < 0.19 + avance * 0.14 ? "dorado" : "buena";
     const src = tipo === "chile" ? CHILE : tipo === "dorado" ? DORADO : BUENAS[Math.floor(Math.random() * BUENAS.length)];
     const el = document.createElement("img");
-    el.className = `juego-item comida-cayendo ${tipo}`;
+    el.className = `juego-item ${tipo}`;
     el.src = arte(src);
     el.alt = "";
     el.draggable = false;
-    const item = { el, tipo, x: 0.08 + Math.random() * 0.84, y: -0.1, v: 0.28 + avance * 0.34 + Math.random() * 0.08, giro: (Math.random() - 0.5) * 40 };
+    const item = { el, tipo, x: 0.08 + Math.random() * 0.84, y: -0.12, v: 0.28 + avance * 0.34 + Math.random() * 0.08, giro: (Math.random() - 0.5) * 40 };
     el.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       if (item.tipo === "chile") quitar(item, "aplastado");
@@ -234,15 +234,16 @@ export function iniciarJuego(contenedor, opts) {
       const avance = Math.min(1, (t - st.empezo) / DURACION_MS);
       st.proximo = t + 720 - avance * 380 + Math.random() * 220;
     }
-    // caer y chocar con la boca (la boca esta a ~76% del alto)
+    // caer y chocar con la boca (la boca del personaje esta a ~80% del alto)
     for (const it of [...st.items]) {
       it.y += it.v * dt;
-      it.el.style.transform = `translate(-50%, 0) rotate(${it.giro * it.y}deg)`;
+      // top = el centro de la comida (el lienzo se centra en su punto)
+      it.el.style.transform = `translate(-50%, -50%) rotate(${it.giro * it.y}deg)`;
       it.el.style.left = `${it.x * 100}%`;
       it.el.style.top = `${it.y * 100}%`;
-      if (it.y > 0.56 && it.y < 0.74 && Math.abs(it.x - st.x) < 0.075) {
+      if (it.y > 0.7 && it.y < 0.88 && Math.abs(it.x - st.x) < 0.08) {
         atrapar(it);
-      } else if (it.y > 1.02) {
+      } else if (it.y > 1.12) {
         if (it.tipo !== "chile") st.combo = 0;
         quitar(it);
         pintarHud();

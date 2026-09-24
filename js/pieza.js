@@ -263,11 +263,21 @@ const DIGITOS = {
 
 const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 
+// Donde va cada decoracion que regalan los amigos (esquina de arriba a la izquierda)
+const DECORACIONES = {
+  maceta: [108, 71], // en el aparador, entre el florero y el tocadiscos
+  ovni: [311, 65], // arriba de la tele
+  cuadro: [222, 60], // en la pared de listones, al costado de donde se sienta
+  te: [83, 107], // en la mesita
+};
+
 /**
  * crearPieza(contenedor, { estado: () => {...}, alTocar: (id) => {} })
  * estado(): { momento, dormido, farol, sonido, ojos, boca, parpadea,
  *             recuerdos: [id], pines: [{lat, lon, color}], dia, anillo,
- *             avisos: [idObjeto], npc: idNpc|null, globo: "texto" }
+ *             avisos: [idObjeto], npc: idNpc|null, npcArte: ruta opcional,
+ *             decoraciones: [id] (maceta, ovni, cuadro, te),
+ *             globo: "texto" }
  */
 export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   contenedor.innerHTML = `
@@ -310,6 +320,15 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
 
   let ultimoDibujo = 0;
   let personajeAlta = null;
+  // lienzos chicos para armar al personaje pixel (y teñirlo con la luz)
+  const actC = document.createElement("canvas");
+  actC.width = actC.height = 96;
+  const act = actC.getContext("2d");
+  const tinC = document.createElement("canvas");
+  tinC.width = tinC.height = 96;
+  const tin = tinC.getContext("2d");
+  // la luz del cuarto sobre un personaje claro (multiplica): de dia casi nada
+  const LUZ_CLARO = { amanecer: [246, 226, 224], atardecer: [244, 214, 196], noche: [178, 178, 218], dormido: [128, 132, 188] };
   let vw = 1;
   let vh = 1;
   let dpr = 1;
@@ -367,6 +386,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     ventana: () => [{ tipo: "pararse" }, { tipo: "caminar", a: 156 }, { tipo: "mirar", ms: 6500, ojo: [-1, -1] }, { tipo: "caminar", a: bcx }, { tipo: "sentarse" }],
     tele: () => [{ tipo: "pararse" }, { tipo: "caminar", a: 236 }, { tipo: "mirar", ms: 5500, ojo: [1, 0] }, { tipo: "caminar", a: bcx }, { tipo: "sentarse" }],
     estirarse: () => [{ tipo: "pararse" }, { tipo: "estirarse", ms: 1700 }, { tipo: "mirar", ms: 900, ojo: [0, 0] }, { tipo: "sentarse" }],
+    // la apertura del final: va a la ventana y se queda ahi, mirando a quien vino
+    visita: () => [{ tipo: "pararse" }, { tipo: "caminar", a: 156 }, { tipo: "mirar", ms: 600000, ojo: [-1, -1] }],
     pasear: () => [{ tipo: "pararse" }, { tipo: "caminar", a: bcx + 26 }, { tipo: "mirar", ms: 1500, ojo: [1, 0] }, { tipo: "caminar", a: bcx - 22 }, { tipo: "mirar", ms: 1500, ojo: [-1, 0] }, { tipo: "caminar", a: bcx }, { tipo: "sentarse" }],
   };
   let ultimoNpc = null;
@@ -648,7 +669,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     // 1. el cielo y la visita, detras del vidrio
     sprite(`pieza/cielo_${e.momento}.png`, vx0, vy0);
     if (e.npc) {
-      const n = img(`npcs/npc_${e.npc}.png`);
+      const n = img(e.npcArte || `npcs/npc_${e.npc}.png`);
       if (listo(n)) {
         m.save();
         m.beginPath();
@@ -674,6 +695,11 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       let dx = 0;
       if (id === "farol") dx = Math.floor(ahora / 1400) % 4 === 1 ? 1 : Math.floor(ahora / 1400) % 4 === 3 ? -1 : 0;
       sprite(rel, caja[0] + dx, caja[1] + offsetGolpe(id, ahora));
+    }
+    // los regalos de los amigos (amigos.js), con la misma luz que el resto
+    for (const id of e.decoraciones || []) {
+      const d = DECORACIONES[id];
+      if (d) sprite(id === "cuadro" ? `amigos/deco_cuadro_${Personaje.actual()}.png` : `amigos/deco_${id}.png`, d[0], d[1]);
     }
     // agujas del reloj
     const ahoraFecha = new Date();
@@ -824,31 +850,68 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     // estirarse: se alarga para arriba y se afina un poquito
     const ey = actor.estira ? 1 + 0.12 * actor.estira : 1;
     const ex = actor.estira ? 1 - 0.06 * actor.estira : 1;
-    if (!Personaje.esMantou()) {
-      const [cuerpoSrc, ojosSrc, bocaSrc] = Personaje.capas(e.ojos, e.boca, pose).map((c) => c.src);
-      const cuerpo = img(cuerpoSrc);
-      const ojos = img(ojosSrc);
-      const boca = img(bocaSrc);
+    const pixelado = Personaje.estilo() === "pixel";
+    if (pixelado) {
+      // se arma en un lienzo propio de 96x96 (cuerpo + cara) y despues se
+      // pone en el cuarto con el espejo y el estiramiento
+      const capasP = Personaje.capas(e.ojos, e.boca, pose);
+      const cuerpo = img(capasP[0].src);
+      act.clearRect(0, 0, 96, 96);
+      if (listo(cuerpo)) act.drawImage(cuerpo, 0, 0);
+      // los ojos miran hacia donde va (o hacia la ventana/la tele)
+      const mx = (volteado ? -actor.mira[0] : actor.mira[0]);
+      const my = actor.mira[1];
+      if (capasP[1] && capasP[1].tipo === "ojos") {
+        // Baozi: ojos y boca en capas separadas
+        const ojos = img(capasP[1].src);
+        const boca = img(capasP[2].src);
+        if (listo(ojos)) {
+          if (alto === 1) act.drawImage(ojos, mx, my);
+          else {
+            const h = Math.max(1, Math.round(96 * alto));
+            act.drawImage(ojos, mx, my + 31 - Math.round(31 * alto), 96, h);
+          }
+        }
+        if (listo(boca)) act.drawImage(boca, 0, 0);
+      } else if (capasP[1]) {
+        // Mantou: una capa de cara; arriba de la fila 39 van los ojos
+        // (miran y parpadean), abajo la boca queda quieta
+        const cara = img(capasP[1].src);
+        if (listo(cara)) {
+          const CORTE = 39;
+          const h = Math.max(1, Math.round(CORTE * alto));
+          act.drawImage(cara, 0, 0, 96, CORTE, mx, my + 34 - Math.round(34 * alto), 96, h);
+          act.drawImage(cara, 0, CORTE, 96, 96 - CORTE, 0, CORTE, 96, 96 - CORTE);
+        }
+      }
+      // lo que tenga puesto (un regalo de un amigo), arriba de todo
+      for (const c of capasP) {
+        if (c.tipo !== "accesorio") continue;
+        const a = img(c.src);
+        if (listo(a)) act.drawImage(a, 0, 0);
+      }
+      // un personaje claro toma la luz del cuarto (si no, brilla de noche)
+      const luz = Personaje.esMantou() ? LUZ_CLARO[e.dormido ? "dormido" : e.momento] : null;
+      if (luz) {
+        tin.globalCompositeOperation = "source-over";
+        tin.clearRect(0, 0, 96, 96);
+        tin.fillStyle = `rgb(${luz.join(",")})`;
+        tin.fillRect(0, 0, 96, 96);
+        tin.globalCompositeOperation = "destination-in";
+        tin.drawImage(actC, 0, 0);
+        act.globalCompositeOperation = "multiply";
+        act.drawImage(tinC, 0, 0);
+        act.globalCompositeOperation = "source-over";
+      }
       m.save();
       // espejo alrededor del centro del lienzo, estiramiento desde los pies
       m.translate(x0 + 48, y0 + fig.pies);
       m.scale(volteado ? -ex : ex, ey);
       m.translate(-48, -fig.pies);
-      if (listo(cuerpo)) m.drawImage(cuerpo, 0, 0);
-      // los ojos miran hacia donde va (o hacia la ventana/la tele)
-      const mx = (volteado ? -actor.mira[0] : actor.mira[0]);
-      const my = actor.mira[1];
-      if (listo(ojos)) {
-        if (alto === 1) m.drawImage(ojos, mx, my);
-        else {
-          const h = Math.max(1, Math.round(96 * alto));
-          m.drawImage(ojos, mx, my + 31 - Math.round(31 * alto), 96, h);
-        }
-      }
-      if (listo(boca)) m.drawImage(boca, 0, 0);
+      m.drawImage(actC, 0, 0);
       m.restore();
     }
-    personajeAlta = Personaje.esMantou() ? { x0, y0, pose, volteado, ex, ey, fig, alto } : null;
+    personajeAlta = !pixelado ? { x0, y0, pose, volteado, ex, ey, fig, alto } : null;
 
     // 6. avisos de lo que necesita
     for (const id of e.avisos) aviso(id, ahora);
@@ -857,7 +920,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     if (e.dormido) {
       const z = Math.floor(ahora / 600) % 3;
       for (let i = 0; i <= z; i++) {
-        const zx = bcx + 16 + i * 5 + (Personaje.esMantou() ? -6 : 0);
+        const zx = bcx + 16 + i * 5;
         const zy = bcy - 36 - i * 5;
         m.fillStyle = "rgb(150,170,240)";
         m.fillRect(zx, zy, 3, 1);
@@ -889,7 +952,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     g.fillRect(0, 0, canvas.width, canvas.height);
     g.drawImage(mundo, Math.round(T.ox * dpr), Math.round(T.oy * dpr), Math.round(MW * T.s * dpr), Math.round(MH * T.s * dpr));
 
-    // Mantou: su dibujo liso, en alta, encima del cuarto pixel
+    // un personaje de estilo "dibujo" (liso, en alta), encima del cuarto pixel
     if (personajeAlta) {
       const p = personajeAlta;
       const tinte = TINTES[e.dormido ? "dormido" : e.momento] || TINTES.dia;
@@ -941,6 +1004,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   return {
     raiz,
     golpe,
+    /** Un plan a pedido (la apertura del final): "visita", "ventana"... */
+    plan: (nombre) => empezarPlan(nombre, performance.now()),
     refrescar: () => dibujar(performance.now()),
     vivo: () => vivo && raiz.isConnected,
     destruir,

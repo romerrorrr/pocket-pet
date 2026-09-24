@@ -45,6 +45,8 @@ import { vibrar } from "./actuadores.js";
 import { camaraEnVivoPosible } from "./lente.js";
 import * as Despierto from "./despierto.js";
 import { crearEscena } from "./escena.js";
+import { crearPieza, posicionEnMapa } from "./pieza.js";
+import { crearMapaFinal } from "./mapa_final.js";
 import { arteDeLugar, spriteCara } from "./render.js";
 import * as Personaje from "./personaje.js";
 
@@ -309,6 +311,8 @@ export function empezar({ ensayo = false, selfie = null } = {}) {
 
 function construirPasos({ repeticion = false } = {}) {
   const pasos = [
+    { tipo: "ventana" },
+    { tipo: "mapa" },
     { tipo: "llegada" },
     { tipo: "ella" },
     { tipo: "el" },
@@ -347,9 +351,12 @@ function cortarSesion() {
 }
 
 function soltarEscena() {
-  if (sesion && sesion.escena) {
-    sesion.escena.destruir();
-    sesion.escena = null;
+  if (!sesion) return;
+  for (const k of ["escena", "pieza", "mapa"]) {
+    if (sesion[k]) {
+      sesion[k].destruir();
+      sesion[k] = null;
+    }
   }
 }
 
@@ -379,8 +386,12 @@ function avanzar() {
 function mostrarPaso() {
   const paso = sesion.pasos[sesion.i];
   const trasElSi = ["celebracion", "foto", "fin"].includes(paso.tipo);
-  Musica.tocar(trasElSi ? "si" : "propuesta", { forzar: FINAL.musicaIgnoraSilencio });
+  // en el cuarto, silencio (solo el toc toc); la musica arranca con el mapa
+  if (paso.tipo === "ventana") Musica.detener(0.4);
+  else Musica.tocar(trasElSi ? "si" : "propuesta", { forzar: FINAL.musicaIgnoraSilencio });
   ({
+    ventana: pasoVentana,
+    mapa: pasoMapa,
     llegada: pasoLlegada,
     ella: () => pasoEnfoque("ella"),
     el: () => pasoEnfoque("el"),
@@ -416,6 +427,159 @@ function alTocar(el, fn) {
   });
 }
 
+// 0a. LA VENTANA: su mascota en el cuarto; golpea la otra ------------
+//
+// El cuarto de siempre (pieza.js) con un guion: la otra mascota se asoma
+// a la ventana y la invita a pasear. Un dialogo cortito que avanza solo
+// (o con un toque).
+
+const CARA_PIEZA = {
+  normal: ["ojo_base_energia_alta.png", "boca_base_feliz.png"],
+  sorprendido: ["ojo_especial_sorprendido.png", "boca_especial_sorprendido.png"],
+  curioso: ["ojo_especial_curioso.png", "boca_especial_curioso.png"],
+  euforico: ["ojo_especial_euforico.png", "boca_especial_euforico.png"],
+  enamorado: ["ojo_especial_enamorado.png", "boca_especial_enamorado.png"],
+};
+
+function otraMascota() {
+  return Personaje.actual() === "mantou" ? "baozi" : "mantou";
+}
+
+function lineasVentana() {
+  const suya = Personaje.nombre();
+  const otra = Personaje.nombre(otraMascota());
+  return [
+    { quien: otra, texto: "Knock knock! It's me!", cara: "curioso" },
+    { quien: otra, texto: "The sun is going down over the lake…", cara: "curioso" },
+    { quien: otra, texto: "Let's go for a walk? Just us two ♥", cara: "enamorado" },
+    { quien: suya, texto: "Yes!! Let's go!", cara: "euforico" },
+  ];
+}
+
+function pasoVentana() {
+  const cine = escenario(
+    `<div class="ventana-cuarto" id="ventana-cuarto"></div>
+     <div class="capa-paso">
+       <div class="caja-dialogo cine-dialogo oculto" id="ventana-caja">
+         <div class="caja-dialogo-nombre" id="ventana-quien"></div>
+         <div class="caja-dialogo-texto" id="ventana-texto"></div>
+         <div class="caja-dialogo-siguiente oculto" id="ventana-sig"><i class="glifo g-der"></i></div>
+       </div>
+     </div>`,
+    "es-ventana",
+  );
+  const guion = { npc: null, npcArte: null, cara: "normal", globo: "" };
+  const base = ctx.estadoPieza ? ctx.estadoPieza : () => ({ momento: "dia" });
+  sesion.pieza = crearPieza(cine.querySelector("#ventana-cuarto"), {
+    estado: () => {
+      const [ojos, boca] = CARA_PIEZA[guion.cara] || CARA_PIEZA.normal;
+      return {
+        ...base(),
+        dormido: false,
+        farol: true,
+        quieto: false,
+        parpadea: guion.cara === "normal",
+        avisos: [],
+        anillo: false,
+        ojos,
+        boca,
+        npc: guion.npc,
+        npcArte: guion.npcArte,
+        globo: guion.globo,
+        globoRosa: false,
+      };
+    },
+    alTocar: () => {},
+  });
+  // (el cuarto de la casa sigue siendo el unico #pieza de la app)
+  sesion.pieza.raiz.id = "pieza-final";
+
+  const lineas = lineasVentana();
+  const caja = cine.querySelector("#ventana-caja");
+  const quien = cine.querySelector("#ventana-quien");
+  const texto = cine.querySelector("#ventana-texto");
+  const sig = cine.querySelector("#ventana-sig");
+  let i = -1;
+  let timer = 0;
+  let terminado = false;
+
+  const siguiente = () => {
+    clearTimeout(timer);
+    if (i >= lineas.length - 1) {
+      if (terminado) return;
+      terminado = true;
+      sig.classList.add("oculto");
+      programar(avanzar, 1400);
+      return;
+    }
+    i += 1;
+    const l = lineas[i];
+    guion.cara = l.cara;
+    quien.textContent = l.quien.toUpperCase();
+    caja.classList.remove("oculto");
+    sig.classList.add("oculto");
+    Sonido.sonar("tocar");
+    sesion.escritor = escribir(texto, l.texto, {
+      velocidad: MS_POR_LETRA,
+      alTerminar: () => {
+        sig.classList.remove("oculto");
+        const s = sesion;
+        timer = setTimeout(() => {
+          if (sesion === s) siguiente();
+        }, Math.max(2600, 1200 + l.texto.length * 55));
+        s.timers.push(timer);
+      },
+    });
+  };
+
+  // toc toc: llega la otra mascota, la suya se sorprende y va a la ventana
+  programar(() => {
+    guion.npc = `pareja_${otraMascota()}`;
+    guion.npcArte = `final/ventana_${otraMascota()}.png`;
+    guion.cara = "sorprendido";
+    guion.globo = "!";
+    Sonido.sonar("encuentro");
+    vibrar(30);
+    sesion.pieza.plan("visita");
+  }, 1800);
+  programar(() => {
+    guion.globo = "";
+    siguiente();
+  }, 1800 + 3600);
+
+  cine.querySelector(".capa-paso").addEventListener("click", () => {
+    if (!sesion || performance.now() < sesion.bloqueadoHasta || i < 0) return;
+    if (sesion.escritor && sesion.escritor.escribiendo()) sesion.escritor.completar();
+    else siguiente();
+  });
+}
+
+// 0b. EL MAPA: de casa al lago, y zoom a West Lake -------------------
+
+function pasoMapa() {
+  const cine = escenario(
+    `<div class="mundo-lago" id="mundo-mapa"></div>
+     <div class="bandas-cine" aria-hidden="true"></div>
+     <div class="rotulo-mapa oculto" id="rotulo-mapa">West Lake</div>
+     <div class="velo-salida" id="velo-mapa"></div>`,
+    "es-mapa",
+  );
+  const lugar = FINAL.lugar || {};
+  const destino = Number.isFinite(lugar.lat) && Number.isFinite(lugar.lon) ? posicionEnMapa(lugar.lat, lugar.lon) : { x: 0.44, y: 0.47 };
+  sesion.mapa = crearMapaFinal(cine.querySelector("#mundo-mapa"), { casa: { x: 0.8, y: 0.3 }, destino });
+  const RECORRIDO = 3600;
+  const ZOOM = 3800;
+  sesion.mapa.recorrer(RECORRIDO);
+  programar(() => sesion.mapa.acercar(ZOOM), RECORRIDO - 400);
+  programar(() => {
+    const r = cine.querySelector("#rotulo-mapa");
+    r.textContent = lugar.nombre || "West Lake";
+    r.classList.remove("oculto");
+  }, RECORRIDO - 400 + ZOOM - 600);
+  programar(() => cine.querySelector("#velo-mapa").classList.add("cerrando"), RECORRIDO - 400 + ZOOM + 1800);
+  programar(avanzar, RECORRIDO - 400 + ZOOM + 2700);
+}
+
 // 1-3. EL LAGO: un solo plano continuo ---------------------------------
 //
 // Llegada, ella, el y el dialogo comparten el MISMO mundo (escena.js):
@@ -439,8 +603,9 @@ function escenaDelLago(tipo, { boteAfuera = false, plano = "general" } = {}) {
      <div class="bandas-cine" aria-hidden="true"></div>`,
     `es-lago es-${tipo}`,
   );
-  // por ahora los dos son personas desde el principio (las mascotas del bote vuelven cuando esten definidas)
-  const formas = { ella: true, el: true };
+  // el bote arranca con las dos mascotas (Mantou es ella, Baozi es el); cada una se vuelve persona
+  // cuando la camara llega a su cara (si se retoma despues, ya lo son)
+  const formas = { ella: !["llegada", "ella"].includes(tipo), el: !["llegada", "ella", "el"].includes(tipo) };
   sesion.escena = crearEscena(nuevo.querySelector("#mundo-lago"), { ojosElla: FINAL.ojosDeElla, boteAfuera, plano, formas });
   return { cine: nuevo, escena: sesion.escena };
 }
@@ -463,14 +628,21 @@ function pasoLlegada() {
   programar(avanzar, 900 + 5000 + 2900);
 }
 
-// La camara entra a la cara de ella; despues se pasa a la de el.
+// La camara entra a la cara de la mascota de ella y ahi se transforma en
+// ella; despues pasa a la otra mascota, que se transforma en el.
+const MS_TRANSFORMAR = 1600;
 function pasoEnfoque(quien) {
   const { escena } = escenaDelLago(quien);
-  const viaje = quien === "ella" ? 2400 : 1600;
-  const quieto = quien === "ella" ? 2600 : 2400;
+  const viaje = quien === "ella" ? 2600 : 1900;
+  const antes = 700; // un momento mirando a la mascota antes del cambio
+  const quieto = quien === "ella" ? 3000 : 2800;
   escena.mover(quien, viaje);
-  escena.parpadear(quien, viaje + 900);
-  programar(avanzar, viaje + quieto);
+  programar(() => {
+    Sonido.sonar("hallazgo");
+    escena.transformar(quien, MS_TRANSFORMAR);
+  }, viaje + antes);
+  escena.parpadear(quien, viaje + antes + MS_TRANSFORMAR + 900);
+  programar(avanzar, viaje + antes + MS_TRANSFORMAR + quieto);
 }
 
 // 3. su dialogo mientras pasan las fotos -------------------------------

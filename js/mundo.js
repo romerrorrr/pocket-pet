@@ -33,38 +33,36 @@
 
 import { LUGARES_PROPIOS } from "./config.js";
 
+// Las lineas de cada amigo viven en amigos.js (con sus secretos y misiones);
+// estas son las mismas, por si algo las pide desde aca.
 export const NPCS = [
   {
     id: "usagi",
     nombre: "Usagi",
-    // TODO: dialogo real de Usagi. Placeholder temporal (texto viejo de "Mora").
-    linea: "What a nice day to explore. Want to walk together for a bit?",
-    lineaReencuentro: "Back here again? This place still has surprises.",
-    lineaEnamorado: "With you, even getting lost feels like finding something.",
+    linea: "Oh, hi. I was just listening to the leaves. Walk with me a little?",
+    lineaReencuentro: "You again! The trees told me you'd come.",
+    lineaEnamorado: "You're my favorite person to be quiet with.",
   },
   {
     id: "mimi",
     nombre: "Mimi",
-    // TODO: dialogo real de Mimi. Placeholder temporal (texto viejo de "Tino").
-    linea: "I'm looking for the perfect angle. Help me find it?",
-    lineaReencuentro: "I was just thinking about you. The light's great today.",
-    lineaEnamorado: "I've taken like a hundred photos of you without you noticing.",
+    linea: "Hold still… perfect. I'm collecting Earth photos. You're a good one.",
+    lineaReencuentro: "Earthling! The light is great today. Found any good angles?",
+    lineaEnamorado: "I've taken a hundred photos of you. Don't tell my planet.",
   },
   {
     id: "ruchong",
     nombre: "Ruchong",
-    // TODO: dialogo real de Ruchong. Placeholder temporal (texto viejo de "Bibi").
-    linea: "Look what I'm painting. Do you like it?",
-    lineaReencuentro: "You're back. I left you a little spot in the painting, really.",
-    lineaEnamorado: "Without noticing, I always end up using your same colors.",
+    linea: "Oh! Um… hi. I'm painting. Do you like it? It's not finished.",
+    lineaReencuentro: "You came back… I saved you a little spot in my painting.",
+    lineaEnamorado: "I keep using your colors without noticing.",
   },
   {
     id: "chagee",
     nombre: "Chagee",
-    // TODO: dialogo real de Chagee. Placeholder temporal (texto viejo de "Sol").
-    linea: "Heading the same way? Ride with me for a bit.",
-    lineaReencuentro: "This route again? Guess you like it as much as I do.",
-    lineaEnamorado: "With you, even the long way feels short.",
+    linea: "Darling! Tea is poured, the stage is set. Sit with me a moment.",
+    lineaReencuentro: "My favorite audience returns! Bravo, bravo.",
+    lineaEnamorado: "Every show I do, I do for you. Don't let it go to your head.",
   },
 ];
 

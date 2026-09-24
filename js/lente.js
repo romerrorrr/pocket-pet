@@ -20,7 +20,7 @@
 
 import * as Personaje from "./personaje.js";
 import {
-  ANCHO_FOTO, ALTO_FOTO, recorte43, medirNiveles, tramar, fotoTramada,
+  ANCHO_FOTO, ALTO_FOTO, recorte43, medirNiveles, aplicarFiltro, fotoTramada,
   guardarFoto, abrirCaptura, cargarImagen,
 } from "./camara.js";
 import { claveDelDia } from "./diario.js";
@@ -30,8 +30,8 @@ import { vibrar } from "./actuadores.js";
 const MS_ENTRE_CUADROS = 45; // ~22 fps: de sobra para pixel art, y cuida la bateria
 const MS_REVELADO_PEDIDO = 1900;
 
-// v19: filtros. "pixel" es el de siempre (Game Boy Camera, tramado en la
-// paleta del juego, 176x132). Los otros son fotos lisas de 704x528.
+// Filtros: todos pixel (176x132, tramados); cada uno con su paleta
+// (camara.js, FILTROS_PIXEL). El pedido del final es siempre PIXEL.
 export const FILTROS = [
   { id: "pixel", nombre: "PIXEL" },
   { id: "bn", nombre: "B&W" },
@@ -40,8 +40,10 @@ export const FILTROS = [
   { id: "color", nombre: "COLOR" },
 ];
 const CLAVE_FILTRO = "baozi_filtro";
-const VIVO_LISO = [352, 264];
-const FOTO_LISA = [704, 528];
+const MAX_STICKERS = 8;
+// con stickers la foto se guarda al doble (352x264): la foto tramada se
+// agranda sin suavizar y los stickers van encima en pixel limpio
+const ESCALA_CON_STICKERS = 2;
 
 function leerFiltro() {
   try {
@@ -50,47 +52,6 @@ function leerFiltro() {
   } catch (e) {
     return "pixel";
   }
-}
-
-/** Aplica un filtro liso a un ImageData (en el lugar). */
-function filtrar(datos, filtro) {
-  if (filtro === "color") return datos;
-  const { width: w, height: h, data: d } = datos;
-  const cx = w / 2;
-  const cy = h / 2;
-  const rmax = Math.hypot(cx, cy);
-  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-    let r = d[i];
-    let g = d[i + 1];
-    let b = d[i + 2];
-    if (filtro === "bn") {
-      let y = 0.3 * r + 0.59 * g + 0.11 * b;
-      y = (y - 128) * 1.12 + 128;
-      r = g = b = y;
-    } else if (filtro === "sepia") {
-      const nr = 0.393 * r + 0.769 * g + 0.189 * b;
-      const ng = 0.349 * r + 0.686 * g + 0.168 * b;
-      const nb = 0.272 * r + 0.534 * g + 0.131 * b;
-      r = nr * 0.95 + 8;
-      g = ng * 0.93 + 6;
-      b = nb * 0.9;
-    } else if (filtro === "vintage") {
-      const y = 0.3 * r + 0.59 * g + 0.11 * b;
-      r = (r * 0.78 + y * 0.22) * 0.86 + 34;
-      g = (g * 0.78 + y * 0.22) * 0.82 + 26;
-      b = (b * 0.78 + y * 0.22) * 0.72 + 22;
-      const x = p % w;
-      const yy = (p / w) | 0;
-      const v = 1 - 0.42 * Math.pow(Math.hypot(x - cx, yy - cy) / rmax, 2.2);
-      r *= v;
-      g *= v;
-      b *= v;
-    }
-    d[i] = r < 0 ? 0 : r > 255 ? 255 : r;
-    d[i + 1] = g < 0 ? 0 : g > 255 ? 255 : g;
-    d[i + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
-  }
-  return datos;
 }
 
 export function camaraEnVivoPosible() {
@@ -104,6 +65,9 @@ function escaparHtml(s) {
 /**
  * Abre el lente dentro de `contenedor`. Devuelve { cerrar }.
  * opts: modo, frontal, lugar, tipoFoto, ensayo, titulo, alGuardar(foto), alSalir()
+ *   stickers: [{ id, grupo, pose?, html, capas: [src], lado }]  (el catalogo)
+ *   grupos:   [{ id, nombre, html }]  (las pestañas del catalogo)
+ *   iconoSticker: html del boton que abre el catalogo
  */
 export function abrirLente(contenedor, opts = {}) {
   const {
@@ -119,13 +83,13 @@ export function abrirLente(contenedor, opts = {}) {
   const esPedido = modo === "pedido";
   // el pedido del final es siempre la foto pixel, sin stickers
   let filtro = esPedido ? "pixel" : leerFiltro();
-  const sticker = { on: false, x: 0.76, y: 0.6, s: 0.62 };
-  // las capas del personaje para pegar en la foto, precargadas
-  const imgsSticker = (opts.stickerCapas || []).map((src) => {
-    const i = new Image();
-    i.src = src;
-    return i;
-  });
+  const catalogo = esPedido ? [] : opts.stickers || [];
+  const grupos = (opts.grupos || []).filter((g) => catalogo.some((c) => c.grupo === g.id));
+  let grupoAbierto = grupos.length ? grupos[0].id : null;
+  let poseAbierta = "parado";
+  const puestos = []; // los stickers en la foto: { def, x, y, s, el, imgs }
+  let elegido = null;
+  let stickersDeLaFoto = []; // los ids que quedaron en la ultima foto (para las misiones)
 
   contenedor.innerHTML = `
     <div class="lente modo-${modo}">
@@ -140,7 +104,18 @@ export function abrirLente(contenedor, opts = {}) {
         ${
           esPedido
             ? ""
-            : `<div class="visor-sticker oculto" id="visor-sticker">${opts.stickerHtml || ""}</div>
+            : `<div class="capa-stickers" id="capa-stickers"></div>
+               <div class="bandeja-stickers oculto" id="bandeja-stickers" data-sin-nombre>
+                 <div class="bandeja-pestanas">
+                   ${grupos.map((g) => `<button class="pestana-sticker" data-grupo="${g.id}">${g.html || escaparHtml(g.nombre)}</button>`).join("")}
+                   <span class="bandeja-poses">
+                     <button class="chip-filtro" data-pose="parado">STAND</button>
+                     <button class="chip-filtro" data-pose="sentado">SIT</button>
+                   </span>
+                   <button class="bandeja-cerrar" id="bandeja-cerrar" aria-label="Close"><i class="glifo g-cerrar"></i></button>
+                 </div>
+                 <div class="bandeja-grilla" id="bandeja-grilla"></div>
+               </div>
                <div class="visor-filtros" id="visor-filtros">
                  ${FILTROS.map((f) => `<button class="chip-filtro" data-filtro="${f.id}">${f.nombre}</button>`).join("")}
                </div>`
@@ -148,7 +123,7 @@ export function abrirLente(contenedor, opts = {}) {
       </div>
       <div class="lente-lateral">
         <button class="boton-icono" id="lente-volver" aria-label="Back"><i class="glifo g-atras"></i></button>
-        ${esPedido ? "" : `<button class="boton-icono boton-sticker" id="lente-sticker" aria-label="Add ${escaparHtml(Personaje.nombre())} to the photo">${opts.stickerMini || ""}</button>`}
+        ${esPedido || !catalogo.length ? "" : `<button class="boton-icono boton-sticker" id="lente-sticker" aria-label="Stickers">${opts.iconoSticker || ""}</button>`}
         <button class="obturador" id="lente-obturador" aria-label="Take photo"><span></span></button>
         <button class="boton-icono" id="lente-girar" aria-label="Flip camera"><i class="glifo g-girar"></i></button>
       </div>
@@ -247,23 +222,6 @@ export function abrirLente(contenedor, opts = {}) {
     ultimoCuadro = ts;
 
     const r = recorte43(video.videoWidth, video.videoHeight);
-    if (filtro !== "pixel") {
-      // liso: se dibuja mas grande y se filtra
-      const [lw, lh] = VIVO_LISO;
-      if (lienzo.width !== lw) {
-        lienzo.width = lw;
-        lienzo.height = lh;
-      }
-      vctx.save();
-      if (frontal) {
-        vctx.translate(lw, 0);
-        vctx.scale(-1, 1);
-      }
-      vctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, lw, lh);
-      vctx.restore();
-      if (filtro !== "color") vctx.putImageData(filtrar(vctx.getImageData(0, 0, lw, lh), filtro), 0, 0);
-      return;
-    }
     if (lienzo.width !== ANCHO_FOTO) {
       lienzo.width = ANCHO_FOTO;
       lienzo.height = ALTO_FOTO;
@@ -281,7 +239,7 @@ export function abrirLente(contenedor, opts = {}) {
     niveles = niveles
       ? { lo: niveles.lo + (medidos.lo - niveles.lo) * 0.2, hi: niveles.hi + (medidos.hi - niveles.hi) * 0.2 }
       : medidos;
-    tramar(datos, niveles);
+    aplicarFiltro(datos, niveles, filtro);
     vctx.putImageData(datos, 0, 0);
   }
 
@@ -303,7 +261,6 @@ export function abrirLente(contenedor, opts = {}) {
     const rl = $("revelado-lienzo");
     rl.width = fuenteLienzo.width;
     rl.height = fuenteLienzo.height;
-    rl.classList.toggle("lisa", filtro !== "pixel");
     rl.getContext("2d").drawImage(fuenteLienzo, 0, 0);
     rev.classList.remove("oculto", "imprimiendo");
     void rev.offsetWidth;
@@ -319,45 +276,39 @@ export function abrirLente(contenedor, opts = {}) {
     }
   }
 
-  /** La foto final: el visor (pixel) o un cuadro grande del video (liso), con el sticker encima. */
+  /** La foto final: el visor (ya tramado con su filtro), con los stickers encima. */
   function fotoFinal() {
     const copia = document.createElement("canvas");
-    if (filtro === "pixel") {
-      copia.width = ANCHO_FOTO;
-      copia.height = ALTO_FOTO;
-      copia.getContext("2d").drawImage(lienzo, 0, 0);
-    } else {
-      const [fw, fh] = FOTO_LISA;
-      copia.width = fw;
-      copia.height = fh;
-      const c = copia.getContext("2d", { willReadFrequently: true });
-      const r = recorte43(video.videoWidth, video.videoHeight);
-      c.save();
-      if (frontal) {
-        c.translate(fw, 0);
-        c.scale(-1, 1);
-      }
-      c.imageSmoothingQuality = "high";
-      c.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, fw, fh);
-      c.restore();
-      if (filtro !== "color") c.putImageData(filtrar(c.getImageData(0, 0, fw, fh), filtro), 0, 0);
-    }
-    pegarSticker(copia);
-    return copia;
+    copia.width = ANCHO_FOTO;
+    copia.height = ALTO_FOTO;
+    copia.getContext("2d").drawImage(lienzo, 0, 0);
+    return pegarStickers(copia);
   }
 
-  function pegarSticker(canvasFoto) {
-    if (!sticker.on || !imgsSticker.length) return;
-    const imgs = imgsSticker;
-    if (!imgs.every((i) => i.complete && i.naturalWidth)) return;
-    const c = canvasFoto.getContext("2d");
-    const lado = sticker.s * canvasFoto.height;
-    const x = sticker.x * canvasFoto.width - lado / 2;
-    const y = sticker.y * canvasFoto.height - lado / 2;
-    c.save();
-    c.imageSmoothingEnabled = !opts.stickerPixel;
-    for (const i of imgs) c.drawImage(i, x, y, lado, lado);
-    c.restore();
+  /**
+   * Con stickers: la foto al doble (sin suavizar) y cada sticker en pixel
+   * limpio, a una escala de medio en medio (asi no se deforman los pixeles).
+   */
+  function pegarStickers(foto) {
+    const listos = puestos.filter((p) => p.imgs.every((i) => i.complete && i.naturalWidth));
+    if (!listos.length) return foto;
+    const k = ESCALA_CON_STICKERS;
+    const c = document.createElement("canvas");
+    c.width = foto.width * k;
+    c.height = foto.height * k;
+    const g = c.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    g.drawImage(foto, 0, 0, c.width, c.height);
+    for (const p of listos) {
+      const lado = p.def.lado || Math.max(p.imgs[0].naturalWidth, p.imgs[0].naturalHeight);
+      const esc = Math.max(0.5, Math.round(((p.s * c.height) / lado) * 2) / 2);
+      for (const i of p.imgs) {
+        const w = i.naturalWidth * esc;
+        const h = i.naturalHeight * esc;
+        g.drawImage(i, Math.round(p.x * c.width - w / 2), Math.round(p.y * c.height - h / 2), w, h);
+      }
+    }
+    return c;
   }
 
   function sacarFoto() {
@@ -366,6 +317,7 @@ export function abrirLente(contenedor, opts = {}) {
     vibrar(25);
     destellar();
     const copia = fotoFinal();
+    stickersDeLaFoto = puestos.map((p) => p.def.id);
     setTimeout(() => {
       if (vivo) mostrarRevelado(copia);
     }, 160);
@@ -375,9 +327,9 @@ export function abrirLente(contenedor, opts = {}) {
     if (guardando) return;
     guardando = true;
     const rl = $("revelado-lienzo");
-    // las lisas van en jpeg (pesan 10 veces menos); las pixel, png
-    const dataUrl = filtro === "pixel" ? rl.toDataURL("image/png") : rl.toDataURL("image/jpeg", 0.86);
-    let foto = { dataUrl, dia: claveDelDia(), lugar, tipo: tipoFoto, filtro };
+    // todas son pixel: png (sin artefactos, y pesan poco)
+    const dataUrl = rl.toDataURL("image/png");
+    let foto = { dataUrl, dia: claveDelDia(), lugar, tipo: tipoFoto, filtro, stickers: stickersDeLaFoto };
     if (!ensayo) foto = await guardarFoto(foto);
     if (!esPedido) Sonido.sonar("guardado");
     cerrar();
@@ -422,20 +374,8 @@ export function abrirLente(contenedor, opts = {}) {
     if (!archivo || !vivo) return;
     try {
       const img = await cargarImagen(archivo);
-      let lista;
-      if (filtro === "pixel") {
-        lista = fotoTramada(img, img.naturalWidth, img.naturalHeight);
-      } else {
-        const [fw, fh] = FOTO_LISA;
-        lista = document.createElement("canvas");
-        lista.width = fw;
-        lista.height = fh;
-        const c = lista.getContext("2d", { willReadFrequently: true });
-        const r = recorte43(img.naturalWidth, img.naturalHeight);
-        c.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, fw, fh);
-        if (filtro !== "color") c.putImageData(filtrar(c.getImageData(0, 0, fw, fh), filtro), 0, 0);
-      }
-      pegarSticker(lista);
+      const lista = pegarStickers(fotoTramada(img, img.naturalWidth, img.naturalHeight, { filtro }));
+      stickersDeLaFoto = puestos.map((p) => p.def.id);
       ocultarAviso();
       mostrarRevelado(lista);
     } catch (e) {
@@ -476,7 +416,6 @@ export function abrirLente(contenedor, opts = {}) {
   // ---- filtros y sticker ----
   function marcarFiltro() {
     for (const b of contenedor.querySelectorAll("[data-filtro]")) b.classList.toggle("activo", b.dataset.filtro === filtro);
-    lienzo.classList.toggle("lisa", filtro !== "pixel");
   }
   for (const b of contenedor.querySelectorAll("[data-filtro]")) {
     b.addEventListener("click", () => {
@@ -493,33 +432,77 @@ export function abrirLente(contenedor, opts = {}) {
   }
   marcarFiltro();
 
-  const stickerEl = $("visor-sticker");
-  function ubicarSticker() {
-    if (!stickerEl) return;
-    stickerEl.style.left = `${sticker.x * 100}%`;
-    stickerEl.style.top = `${sticker.y * 100}%`;
-    stickerEl.style.height = `${sticker.s * 100}%`;
-    stickerEl.style.width = `${sticker.s * 75}%`; // el visor es 4:3: el sticker queda cuadrado
+  // ---- stickers: un catalogo (los dos personajes, sus caras y poses, y
+  // algunos extras), varios a la vez; se mueven con un dedo, se agrandan
+  // con dos (o la ruedita) y se borran con la x del elegido ----
+  const capa = $("capa-stickers");
+  const bandeja = $("bandeja-stickers");
+
+  function ubicar(p) {
+    p.el.style.left = `${p.x * 100}%`;
+    p.el.style.top = `${p.y * 100}%`;
+    p.el.style.height = `${p.s * 100}%`;
+    p.el.style.width = `${p.s * 75}%`; // el visor es 4:3: cada sticker es cuadrado
   }
-  if (stickerEl) {
-    ubicarSticker();
-    $("lente-sticker").addEventListener("click", () => {
-      sticker.on = !sticker.on;
-      stickerEl.classList.toggle("oculto", !sticker.on);
-      $("lente-sticker").classList.toggle("activo", sticker.on);
-      Sonido.sonar("tocar");
+
+  function elegir(p) {
+    elegido = p;
+    for (const q of puestos) q.el.classList.toggle("elegido", q === p);
+  }
+
+  function quitar(p) {
+    const i = puestos.indexOf(p);
+    if (i >= 0) puestos.splice(i, 1);
+    p.el.remove();
+    if (elegido === p) elegir(puestos[puestos.length - 1] || null);
+    Sonido.sonar("tocar");
+  }
+
+  function poner(def) {
+    if (puestos.length >= MAX_STICKERS) quitar(puestos[0]);
+    const el = document.createElement("div");
+    el.className = "visor-sticker";
+    el.dataset.sticker = def.id;
+    el.innerHTML = `${def.html}<button class="sticker-quitar" aria-label="Remove sticker"><i class="glifo g-cerrar"></i></button>`;
+    const n = puestos.length;
+    const p = {
+      def,
+      el,
+      x: Math.min(0.85, 0.5 + ((n % 3) - 1) * 0.18),
+      y: 0.56,
+      s: def.grupo === "extras" ? 0.24 : 0.62,
+      imgs: def.capas.map((src) => {
+        const i = new Image();
+        i.src = src;
+        return i;
+      }),
+    };
+    capa.appendChild(el);
+    puestos.push(p);
+    ubicar(p);
+    elegir(p);
+    movible(p);
+    el.querySelector(".sticker-quitar").addEventListener("pointerdown", (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      quitar(p);
     });
-    // arrastrar con un dedo, agrandar/achicar con dos (o con la ruedita)
+  }
+
+  function movible(p) {
     const dedos = new Map();
     let inicio = null;
     const visorEl = $("visor");
-    stickerEl.addEventListener("pointerdown", (ev) => {
-      stickerEl.setPointerCapture(ev.pointerId);
+    const el = p.el;
+    el.addEventListener("pointerdown", (ev) => {
+      el.setPointerCapture(ev.pointerId);
       dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-      inicio = { ...sticker, dedos: new Map(dedos) };
+      inicio = { x: p.x, y: p.y, s: p.s, dedos: new Map(dedos) };
+      elegir(p);
+      capa.appendChild(el); // el que se toca queda arriba
       ev.preventDefault();
     });
-    stickerEl.addEventListener("pointermove", (ev) => {
+    el.addEventListener("pointermove", (ev) => {
       if (!dedos.has(ev.pointerId) || !inicio) return;
       dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
       const r = visorEl.getBoundingClientRect();
@@ -528,24 +511,71 @@ export function abrirLente(contenedor, opts = {}) {
       if (ps.length >= 2 && ps0.length >= 2) {
         const d = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
         const d0 = Math.hypot(ps0[0].x - ps0[1].x, ps0[0].y - ps0[1].y) || 1;
-        sticker.s = Math.min(1.2, Math.max(0.2, inicio.s * (d / d0)));
+        p.s = Math.min(1.2, Math.max(0.16, inicio.s * (d / d0)));
       } else if (ps.length === 1 && ps0.length >= 1) {
-        sticker.x = Math.min(1, Math.max(0, inicio.x + (ps[0].x - ps0[0].x) / r.width));
-        sticker.y = Math.min(1.1, Math.max(0, inicio.y + (ps[0].y - ps0[0].y) / r.height));
+        p.x = Math.min(1, Math.max(0, inicio.x + (ps[0].x - ps0[0].x) / r.width));
+        p.y = Math.min(1.1, Math.max(0, inicio.y + (ps[0].y - ps0[0].y) / r.height));
       }
-      ubicarSticker();
+      ubicar(p);
     });
     const soltar = (ev) => {
       dedos.delete(ev.pointerId);
-      inicio = { ...sticker, dedos: new Map(dedos) };
+      inicio = { x: p.x, y: p.y, s: p.s, dedos: new Map(dedos) };
     };
-    stickerEl.addEventListener("pointerup", soltar);
-    stickerEl.addEventListener("pointercancel", soltar);
-    stickerEl.addEventListener("wheel", (ev) => {
+    el.addEventListener("pointerup", soltar);
+    el.addEventListener("pointercancel", soltar);
+    el.addEventListener("wheel", (ev) => {
       ev.preventDefault();
-      sticker.s = Math.min(1.2, Math.max(0.2, sticker.s * (ev.deltaY < 0 ? 1.08 : 0.93)));
-      ubicarSticker();
+      p.s = Math.min(1.2, Math.max(0.16, p.s * (ev.deltaY < 0 ? 1.08 : 0.93)));
+      ubicar(p);
     }, { passive: false });
+  }
+
+  function pintarBandeja() {
+    if (!bandeja) return;
+    for (const b of bandeja.querySelectorAll("[data-grupo]")) b.classList.toggle("activo", b.dataset.grupo === grupoAbierto);
+    const conPoses = catalogo.some((c) => c.grupo === grupoAbierto && c.pose);
+    bandeja.querySelector(".bandeja-poses").classList.toggle("oculto", !conPoses);
+    for (const b of bandeja.querySelectorAll("[data-pose]")) b.classList.toggle("activo", b.dataset.pose === poseAbierta);
+    const lista = catalogo.filter((c) => c.grupo === grupoAbierto && (!conPoses || !c.pose || c.pose === poseAbierta));
+    const grilla = $("bandeja-grilla");
+    grilla.innerHTML = lista.map((c) => `<button class="item-sticker" data-id="${escaparHtml(c.id)}" aria-label="${escaparHtml(c.nombre || c.id)}">${c.html}</button>`).join("");
+    for (const b of grilla.querySelectorAll("[data-id]")) {
+      b.addEventListener("click", () => {
+        const def = catalogo.find((c) => c.id === b.dataset.id);
+        if (!def) return;
+        poner(def);
+        Sonido.sonar("tocar");
+        bandeja.classList.add("oculto");
+        $("lente-sticker").classList.remove("activo");
+      });
+    }
+  }
+
+  if (bandeja) {
+    $("lente-sticker").addEventListener("click", () => {
+      const abrir = bandeja.classList.contains("oculto");
+      bandeja.classList.toggle("oculto", !abrir);
+      $("lente-sticker").classList.toggle("activo", abrir);
+      if (abrir) pintarBandeja();
+      Sonido.sonar("tocar");
+    });
+    $("bandeja-cerrar").addEventListener("click", () => {
+      bandeja.classList.add("oculto");
+      $("lente-sticker").classList.remove("activo");
+    });
+    for (const b of bandeja.querySelectorAll("[data-grupo]")) {
+      b.addEventListener("click", () => {
+        grupoAbierto = b.dataset.grupo;
+        pintarBandeja();
+      });
+    }
+    for (const b of bandeja.querySelectorAll("[data-pose]")) {
+      b.addEventListener("click", () => {
+        poseAbierta = b.dataset.pose;
+        pintarBandeja();
+      });
+    }
   }
   if (!esPedido) {
     $("revelado-otra").addEventListener("click", () => {

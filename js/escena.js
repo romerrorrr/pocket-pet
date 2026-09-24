@@ -7,9 +7,10 @@
  * cara de ella, se pasa a la de el y se queda con el mientras habla,
  * todo en el mismo plano, sin cortes.
  *
- * (Queda preparado un fundido tramado para que, mas adelante, cada
- * mascota se transforme en persona cuando la camara llega a su cara;
- * por ahora el final arranca con los dos como personas.)
+ * El bote arranca con las dos MASCOTAS (Mantou en el lugar de ella, Baozi
+ * en el de rom: Mantou ES ella y Baozi ES el, sin importar con quien juegue)
+ * y cada una se transforma en persona, con un fundido tramado, cuando la
+ * camara llega a su cara.
  *
  * Los ojos de las personas (cafe oscuro, como los reales) van en vivo
  * encima del bote y parpadean cada tanto, cada uno a su ritmo.
@@ -101,7 +102,7 @@ function aPantalla(cam, vw, vh) {
 }
 
 /**
- * crearEscena(contenedor, { ojosElla, boteAfuera, plano })
+ * crearEscena(contenedor, { ojosElla, boteAfuera, plano, formas })
  *   -> { mover(plano, ms, fn), entrarBote(ms), hablar(q, si), parpadear(q), destruir() }
  */
 export function crearEscena(contenedor, opciones = {}) {
@@ -118,6 +119,11 @@ export function crearEscena(contenedor, opciones = {}) {
     ojosElla: cargar(`final/ojos_ella_${opciones.ojosElla === "cafe" ? "cafe" : "rosa"}.png`),
     boca: cargar("final/boca_hablando.png"),
   };
+  // los botes con mascotas: Mantou es ella y Baozi es rom (elija con quien elija jugar)
+  for (const k of ["_ella", "_mascotas"]) {
+    img["bote" + k] = cargar(`final/bote${k}.png`);
+    img["reflejo" + k] = cargar(`final/bote_reflejo${k}.png`);
+  }
 
   let vw = 1;
   let vh = 1;
@@ -129,7 +135,7 @@ export function crearEscena(contenedor, opciones = {}) {
 
   const bote = { x: opciones.boteAfuera ? MW + 20 : BX, desde: BX, t0: 0, ms: 0 };
   const hablando = { el: false, ella: false };
-  // true = persona; false = su version mascota (el es Baozi)
+  // true = persona; false = su version mascota
   const formas = { ella: true, el: true, ...(opciones.formas || {}) };
   let transformacion = null; // { q, desde, hasta, t0, ms }
   const [BW, BH] = ESCENA.bote.tam;
@@ -137,6 +143,10 @@ export function crearEscena(contenedor, opciones = {}) {
   fundido.width = BW;
   fundido.height = BH;
   const fg = fundido.getContext("2d");
+  const viejo = document.createElement("canvas");
+  viejo.width = BW;
+  viejo.height = BH;
+  const vg = viejo.getContext("2d");
   const mascara = document.createElement("canvas");
   mascara.width = BW;
   mascara.height = BH;
@@ -270,9 +280,10 @@ export function crearEscena(contenedor, opciones = {}) {
     const claveReflejo = tr && p < 0.5 ? tr.desde : claveBote(formas);
     dibujarSprite(img["reflejo" + claveReflejo] || img.reflejo, bx + ondita, BY + ESCENA.bote.lineaDeAgua, T);
     if (tr) {
-      dibujarSprite(img["bote" + tr.desde], bx, by, T);
+      const viejoImg = img["bote" + tr.desde];
       const nuevo = img["bote" + tr.hasta];
-      if (listo(nuevo)) {
+      if (!listo(nuevo)) dibujarSprite(viejoImg, bx, by, T);
+      else {
         // se abre desde la cara, en un tramado de 8x8
         const [cx, cy] = ESCENA.cara[tr.q];
         const R = 46;
@@ -290,6 +301,15 @@ export function crearEscena(contenedor, opciones = {}) {
         fg.drawImage(nuevo, 0, 0);
         fg.globalCompositeOperation = "destination-in";
         fg.drawImage(mascara, 0, 0);
+        // lo de antes se borra donde ya se abrio (que no asomen puas viejas)
+        if (listo(viejoImg)) {
+          vg.globalCompositeOperation = "source-over";
+          vg.clearRect(0, 0, BW, BH);
+          vg.drawImage(viejoImg, 0, 0);
+          vg.globalCompositeOperation = "destination-out";
+          vg.drawImage(mascara, 0, 0);
+          dibujarSprite(viejo, bx, by, T);
+        }
         dibujarSprite(fundido, bx, by, T);
       }
       // destellos alrededor de la cara
@@ -351,7 +371,7 @@ export function crearEscena(contenedor, opciones = {}) {
     hablar: (q, si) => (hablando[q] = !!si),
     parpadear: (q, enMs = 0) => (parpadeo[q].t = performance.now() + enMs),
     plano: () => nombrePlano,
-    /** La mascota de q se vuelve persona (para mas adelante). */
+    /** La mascota de q se vuelve persona. */
     transformar: (q, ms = 1100) => {
       if (formas[q] || transformacion) return;
       const desde = claveBote(formas);

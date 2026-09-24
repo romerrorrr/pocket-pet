@@ -34,6 +34,7 @@ import { resumenDelDia, fotoDelDia, fechaLegible, ANIMOS, preguntaDelDia, claveD
 import { buscarCarta } from "./cartas.js";
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
 import { RECORTES_MENU } from "./recortes.js";
+import { AMIGOS, REGALOS, MAX_CORAZONES } from "./amigos.js";
 
 // Boca abierta: rom confirmo que la boca de "sorprendido" ES la boca
 // abierta del set. Comer y atrapar usan ese sprite real.
@@ -65,7 +66,11 @@ export function spriteCara(archivoOjo, archivoBoca, parpadeando = false, clase =
   const capas = Personaje.capas(archivoOjo, archivoBoca, pose, quien);
   const imgs = capas
     .map((c) => {
-      const cls = c.tipo === "cuerpo" ? "capa-cuerpo" : c.tipo === "cara" ? "capa-ojos capa-cara" : `capa-${c.tipo}`;
+      // una capa de cara entera (Mantou) va dos veces, recortada: arriba
+      // los ojos (parpadean), abajo la boca (queda quieta)
+      if (c.tipo === "cara")
+        return `<img class="capa-ojos capa-cara cara-arriba" src="${arte(c.src)}" alt="" draggable="false" /><img class="capa-cara cara-abajo" src="${arte(c.src)}" alt="" draggable="false" />`;
+      const cls = c.tipo === "cuerpo" ? "capa-cuerpo" : `capa-${c.tipo}`;
       return `<img class="${cls}" src="${arte(c.src)}" alt="" draggable="false" />`;
     })
     .join("");
@@ -81,8 +86,8 @@ export function cambiarCara(spriteEl, archivoOjo, archivoBoca) {
   if (!spriteEl) return;
   spriteEl.dataset.ojo = archivoOjo;
   if (Personaje.esMantou()) {
-    const cara = spriteEl.querySelector(".capa-cara");
-    if (cara) cara.src = arte(Personaje.caraMantou(Personaje.estadoDeArchivos(archivoOjo, archivoBoca)));
+    const src = arte(Personaje.caraMantou(Personaje.estadoDeArchivos(archivoOjo, archivoBoca)));
+    spriteEl.querySelectorAll(".capa-cara").forEach((c) => (c.src = src));
     return;
   }
   const ojos = spriteEl.querySelector(".capa-ojos");
@@ -98,12 +103,17 @@ export function cambiarCara(spriteEl, archivoOjo, archivoBoca) {
 export function cambiarBoca(spriteEl, archivoBoca) {
   if (!spriteEl) return;
   if (Personaje.esMantou()) {
-    const cara = spriteEl.querySelector(".capa-cara");
-    if (cara) cara.src = arte(Personaje.caraMantou(Personaje.estadoDeArchivos(spriteEl.dataset.ojo, archivoBoca)));
+    const src = arte(Personaje.caraMantou(Personaje.estadoDeArchivos(spriteEl.dataset.ojo, archivoBoca)));
+    spriteEl.querySelectorAll(".capa-cara").forEach((c) => (c.src = src));
     return;
   }
   const boca = spriteEl.querySelector(".capa-boca");
   if (boca) boca.src = arte("caras/" + archivoBoca);
+}
+
+/** Solo las fotos lisas de la v19 (jpeg) se ven suavizadas; desde la v20 todas son pixel. */
+function esLisa(foto) {
+  return !!foto && typeof foto.dataUrl === "string" && foto.dataUrl.startsWith("data:image/jpeg");
 }
 
 function caraSegunEstado(estado, parpadeando = false) {
@@ -480,6 +490,7 @@ export function renderPostal(container, lugar, foto, fechaMs) {
 export const PESTANAS_CUADERNO = [
   ["diary", "Days"],
   ["npcs", "Friends"],
+  ["closet", "Closet"],
   ["stats", "Baozi"],
   ["traits", "Traits"],
   ["ajustes", "Settings"],
@@ -834,7 +845,7 @@ export function renderTraits(container, mascota) {
   `;
 }
 
-export function renderNpcs(container, npcsReg) {
+export function renderNpcs(container, npcsReg, amigos = null, ctx = {}) {
   const filas = NPCS.map((npc) => {
     const veces = npcsReg.vecesEncontrado[npc.id] || 0;
     if (veces === 0) {
@@ -844,20 +855,77 @@ export function renderNpcs(container, npcsReg) {
           <span class="nombre-npc tenue">Not met yet</span>
         </div>`;
     }
-    const llenos = Math.min(veces, VECES_PARA_ENAMORADO);
+    const llenos = amigos ? amigos.corazones(npc.id, npcsReg) : Math.min(veces, VECES_PARA_ENAMORADO);
     let marcas = "";
-    for (let i = 0; i < VECES_PARA_ENAMORADO; i++) marcas += glifo("corazon", `corazon-vinculo ${i < llenos ? "lleno" : ""}`);
+    for (let i = 0; i < MAX_CORAZONES; i++) marcas += glifo("corazon", `corazon-vinculo ${i < llenos ? "lleno" : ""}`);
+    let detalle = "";
+    if (amigos && AMIGOS[npc.id]) {
+      const m = amigos.misionActual(npc.id);
+      const est = amigos.estado(npc.id);
+      const hechas = amigos.misiones[npc.id].n;
+      const secretos = AMIGOS[npc.id].secretos.filter((sx) => amigos.revelados.has(sx.lugar)).map((sx) => (LUGARES.find((l) => l.id === sx.lugar) || {}).nombre).filter(Boolean);
+      const linea =
+        est === "activa" && m
+          ? `<span class="mision-activa">${glifo("libro")} ${esc(m.resumen)}${ctx.progreso && ctx.progreso(m) ? ` <small>${esc(ctx.progreso(m))}</small>` : ""}</span>`
+          : est === "lista"
+            ? `<span class="mision-lista">${glifo("estrella")} Done! ${esc(npc.nombre)} will bring you a gift</span>`
+            : hechas >= 3
+              ? `<span class="mision-lista">${glifo("check")} All missions done</span>`
+              : `<span class="tenue">No mission yet. Say hi when ${esc(npc.nombre)} visits!</span>`;
+      detalle = `
+        <div class="detalle-amigo">
+          ${linea}
+          <span class="tenue">Missions ${hechas}/3${secretos.length ? ` · Secrets: ${esc(secretos.join(", "))}` : ""}</span>
+        </div>`;
+    }
     return `
-      <div class="fila-npc">
+      <div class="fila-npc con-detalle">
         <img class="avatar-npc" src="${arte("npcs/npc_" + npc.id + ".png")}" alt="" draggable="false" />
-        <span class="nombre-npc">${esc(npc.nombre)}</span>
-        <span class="pips">${marcas}</span>
+        <div class="columna-amigo">
+          <div class="cabeza-amigo"><span class="nombre-npc">${esc(npc.nombre)}</span><span class="pips">${marcas}</span></div>
+          ${detalle}
+        </div>
       </div>`;
   }).join("");
 
   container.innerHTML = `
     ${encabezado("Friends", "btn-volver-consulta")}
     <div class="lista-journal">${filas}</div>
+  `;
+}
+
+/** El ropero: los regalos de los amigos. Los accesorios se tocan para ponerlos. */
+export function renderCloset(container, amigos) {
+  const acc = amigos.accesorios();
+  const tarjetasAcc = ["orejas", "antenas", "boina", "corona"].map((id) => {
+    const clave = `acc:${id}`;
+    const r = REGALOS[clave];
+    const de = Object.keys(AMIGOS).find((n) => AMIGOS[n].misiones.some((m) => m.regalo === clave));
+    const nombreDe = (NPCS.find((n) => n.id === de) || {}).nombre || "";
+    if (!acc.includes(id)) {
+      return `<div class="tarjeta-regalo bloqueada"><span class="candado-regalo">${glifo("candado")}</span><span class="nombre-regalo">???</span><small>A gift from ${esc(nombreDe)}</small></div>`;
+    }
+    const puesto = amigos.puesto === id;
+    return `
+      <button class="tarjeta-regalo ${puesto ? "puesto" : ""}" data-accesorio="${id}" aria-pressed="${puesto}">
+        <span class="acc-vista"><img src="${arte(r.arte)}" alt="" draggable="false" /></span>
+        <span class="nombre-regalo">${esc(r.nombre)}</span>
+        <small>${puesto ? "Wearing it · tap to take off" : "Tap to wear"}</small>
+      </button>`;
+  }).join("");
+  const otros = [...amigos.premios].filter((k) => REGALOS[k] && REGALOS[k].tipo !== "accesorio");
+  const lista = otros.length
+    ? otros.map((k) => `<div class="fila-regalo"><img src="${arteDeRegalo(k)}" alt="" draggable="false" /><span>${esc(REGALOS[k].nombre)}</span><small class="tenue">${REGALOS[k].tipo === "sticker" ? "in your camera" : "in your room"}</small></div>`).join("")
+    : `<div class="vacio-suave">Help your friends with their missions and they'll send you gifts.</div>`;
+  container.innerHTML = `
+    ${encabezado("Closet", "btn-volver-consulta")}
+    <div class="lista-journal">
+      <div class="closet-figura">${spriteCara("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
+      <div class="subtitulo-lista">To wear</div>
+      <div class="grilla-regalos">${tarjetasAcc}</div>
+      <div class="subtitulo-lista">Stickers and things for your room</div>
+      ${lista}
+    </div>
   `;
 }
 
@@ -1063,6 +1131,63 @@ export function renderEncuentroDialogo(container, npc, linea) {
   );
 }
 
+/** El arte de un regalo (el cuadro depende de con quien juega ella). */
+export function arteDeRegalo(clave) {
+  const r = REGALOS[clave];
+  if (!r) return "";
+  if (clave === "deco:cuadro") return arte(`amigos/deco_cuadro_${Personaje.actual()}.png`);
+  return arte(r.arte);
+}
+
+/** Un regalo que se ve bien grande: el accesorio puesto en el personaje, lo demas tal cual. */
+function htmlRegalo(clave) {
+  const r = REGALOS[clave];
+  if (!r) return "";
+  if (r.tipo === "accesorio") {
+    // el personaje de ella con el accesorio puesto encima (aunque todavia no lo tenga puesto)
+    return `<div class="regalo-muestra con-personaje">${spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png")}<img class="regalo-acc-encima" src="${arte(r.arte)}" alt="" draggable="false" /></div>`;
+  }
+  return `<div class="regalo-muestra"><img class="regalo-arte ${r.tipo}" src="${arteDeRegalo(clave)}" alt="" draggable="false" /></div>`;
+}
+
+export function renderEncuentroRegalo(container, npc, texto, clave) {
+  const r = REGALOS[clave] || {};
+  const tipo = { sticker: "A new sticker for your camera", accesorio: "Something to wear (see the Closet)", decoracion: "For your room" }[r.tipo] || "";
+  container.innerHTML = escenaEncuentro(
+    `${spriteNpc(npc, true)}${htmlRegalo(clave)}`,
+    `<div class="titulo-lugar">${esc(npc.nombre)}</div>
+     <div class="texto-lugar globo-dialogo">“${esc(texto)}”</div>
+     <div class="etiqueta-lugar regalo-nombre">${glifo("estrella")} ${esc(r.nombre || "")} · ${esc(tipo)}</div>
+     <button id="btn-continuar-encuentro" class="boton">${glifo("corazon")} Thank you!</button>`,
+    { clase: "hablando con-regalo" },
+  );
+}
+
+export function renderEncuentroSecreto(container, npc, texto, lugar) {
+  container.innerHTML = escenaEncuentro(
+    spriteNpc(npc, true),
+    `<div class="titulo-lugar">${esc(npc.nombre)}</div>
+     <div class="texto-lugar globo-dialogo">“${esc(texto)}”</div>
+     <div class="etiqueta-lugar regalo-nombre">${glifo("pin")} New on your map: ${esc(lugar ? lugar.nombre : "")}</div>
+     <button id="btn-continuar-encuentro" class="boton">Continue</button>`,
+    { clase: "hablando" },
+  );
+}
+
+export function renderEncuentroMision(container, npc, mision) {
+  container.innerHTML = escenaEncuentro(
+    spriteNpc(npc, true),
+    `<div class="titulo-lugar">${esc(npc.nombre)}</div>
+     <div class="texto-lugar globo-dialogo">“${esc(mision.pide)}”</div>
+     <div class="etiqueta-lugar regalo-nombre">${glifo("libro")} ${esc(mision.resumen)}</div>
+     <div class="fila-botones">
+       <button class="boton boton-fantasma" data-mision="despues">Later</button>
+       <button class="boton" data-mision="si">${glifo("check")} Okay!</button>
+     </div>`,
+    { clase: "hablando" },
+  );
+}
+
 export function renderEncuentroDespedida(container, npc = null) {
   container.innerHTML = escenaEncuentro(
     npc ? spriteNpc(npc) : `<div class="silueta-npc" aria-hidden="true">·</div>`,
@@ -1190,7 +1315,7 @@ export function renderDiario(container, diario, opts = {}) {
             .join("");
           const hitos = e.hitos.slice(-2).map((h) => `<div class="hito-polaroid">${glifo("estrella")} ${esc(h)}</div>`).join("");
           const imagen = ordenadas.length
-            ? `<img class="imagen-polaroid foto-real ${ordenadas[0].filtro && ordenadas[0].filtro !== "pixel" ? "lisa" : ""}" src="${ordenadas[0].dataUrl}" alt="" draggable="false" />`
+            ? `<img class="imagen-polaroid foto-real ${esLisa(ordenadas[0]) ? "lisa" : ""}" src="${ordenadas[0].dataUrl}" alt="" draggable="false" />`
             : fotoArteDelDia(e);
           return `
             <figure class="polaroid ${dorada ? "dorada" : ""}" data-dia="${e.fecha}" data-indice="0" data-total="${ordenadas.length}">
@@ -1236,7 +1361,7 @@ export function renderEscribir(container, { entrada = null, foto = null } = {}) 
         </div>
         <textarea id="texto-hoy" maxlength="400" rows="3" placeholder="A few words about today…" data-sin-nombre>${esc((entrada && entrada.texto) || "")}</textarea>
         <div class="hoja-pie">
-          ${foto ? `<img class="hoja-foto ${foto.filtro && foto.filtro !== "pixel" ? "lisa" : ""}" src="${foto.dataUrl}" alt="" />` : `<button class="boton boton-fantasma chico" id="btn-foto-hoy">${glifo("camara")} Photo</button>`}
+          ${foto ? `<img class="hoja-foto ${esLisa(foto) ? "lisa" : ""}" src="${foto.dataUrl}" alt="" />` : `<button class="boton boton-fantasma chico" id="btn-foto-hoy">${glifo("camara")} Photo</button>`}
           <div class="hoja-botones">
             <button class="boton boton-fantasma" id="btn-cancelar-hoy">Later</button>
             <button class="boton" id="btn-guardar-hoy">${glifo("check")} Save</button>
@@ -1265,7 +1390,7 @@ export function siguienteFotoPolaroid(figura) {
   const img = figura.querySelector(".imagen-polaroid");
   if (img) {
     img.src = ordenadas[i].dataUrl;
-    img.classList.toggle("lisa", !!ordenadas[i].filtro && ordenadas[i].filtro !== "pixel");
+    img.classList.toggle("lisa", esLisa(ordenadas[i]));
   }
   const c = figura.querySelector(".contador-fotos");
   if (c) c.textContent = `${i + 1}/${ordenadas.length}`;
