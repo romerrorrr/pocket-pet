@@ -127,6 +127,7 @@ export async function renderDirector(contenedor, acciones) {
             <button class="boton boton-fantasma" id="dir-probar-video">Test video (5 s)</button>
             <div class="director-gps" id="dir-video-resultado"></div>
             <button class="boton boton-fantasma" id="dir-ensayo">Rehearse everything</button>
+            ${acciones.mudanza ? `<button class="boton boton-fantasma" id="dir-mudanza">${acciones.mudanza.estado() === "vive" ? "Move-in test: undo (partner leaves)" : "Move-in test: preview now"}</button>` : ""}
             ${acciones.tienda ? `<button class="boton boton-fantasma" id="dir-monedas">Shop test: +200 coins</button>
             <button class="boton boton-fantasma" id="dir-semanas">${acciones.tienda.todo() ? "Shop test: all weeks ON (tap = off)" : "Shop test: show all weeks"}</button>
             <div class="director-gps" id="dir-tienda-resultado"></div>` : ""}
@@ -149,6 +150,15 @@ export async function renderDirector(contenedor, acciones) {
   if (desarmar) desarmar.addEventListener("click", () => { Final.desarmar(); renderDirector(contenedor, acciones); });
   $("dir-gps").addEventListener("click", () => acciones.probarGPS($("dir-gps-resultado")));
   $("dir-ensayo").addEventListener("click", acciones.ensayar);
+  // v24: para ver la mudanza antes del dia (solo en el telefono de rom)
+  if (acciones.mudanza) {
+    $("dir-mudanza").addEventListener("click", () => {
+      if (acciones.mudanza.estado() === "vive") {
+        acciones.mudanza.deshacer();
+        renderDirector(contenedor, acciones);
+      } else acciones.mudanza.previa();
+    });
+  }
   // v23: para probar la tienda sin esperar semanas
   if (acciones.tienda) {
     $("dir-monedas").addEventListener("click", () => {

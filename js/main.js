@@ -32,12 +32,14 @@ import * as Final from "./final.js";
 import * as Director from "./director.js";
 import { escribir, conNombre } from "./dialogo.js";
 import { arte } from "./arte.js";
-import { FINAL, FECHAS } from "./config.js";
+import { FINAL, FECHAS, DESEOS_PROPIOS, MUDANZA } from "./config.js";
+import { Deseos } from "./deseos.js";
 import { crearPieza, posicionEnMapa } from "./pieza.js";
 import * as Clima from "./clima.js";
 import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progresoDe, registrarAccesoriosExtra } from "./amigos.js";
 import { Tienda, porId as productoTienda } from "./tienda.js";
 import { leerRecord } from "./juego.js";
+import { iniciarPesca, leerRecordPesca, PECES, pezPorId } from "./pesca.js";
 import * as Galeria from "./galeria.js";
 import * as Grabacion from "./grabacion.js";
 
@@ -61,7 +63,7 @@ const marcoEl = document.querySelector(".marco-manito");
 // telefono entero. Todo lo demas vive adentro del aparato.
 const VISTAS_PANTALLA_COMPLETA = new Set(["descubrimiento", "lugarcerca", "encuentro", "carta", "final"]);
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -83,7 +85,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto() });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza });
 }
 
 function registrarServiceWorker() {
@@ -126,6 +128,22 @@ function conTransicion(fn) {
 let mascota, npcsReg, lugaresReg, diario;
 let amigos = new RegistroAmigos(); // amistad, secretos, misiones y regalos (amigos.js)
 let tienda = new Tienda(); // v23: las monedas y lo comprado (tienda.js)
+let deseos = Deseos.desdeObjeto(null, DESEOS_PROPIOS); // v24: el deseo del dia (deseos.js)
+// v24: despues del si, el personaje de rom se muda: "no" -> "llega" (golpea la puerta) -> "vive"
+let mudanza = { estado: "no", desde: 0 };
+function cargarMudanza(datos) {
+  mudanza = { estado: "no", desde: 0 };
+  if (datos && ["no", "llega", "vive"].includes(datos.estado)) mudanza = { estado: datos.estado, desde: Number.isFinite(datos.desde) ? datos.desde : 0 };
+}
+// v24: la pesca: el libro de peces (cuantos de cada uno) y los que nadan en la pecera
+let pescaReg = { libro: {}, pecera: [] };
+const PECES_DE_PECERA = new Set(["dorado", "koi", "koi_dorado"]);
+function cargarPesca(datos) {
+  pescaReg = { libro: {}, pecera: [] };
+  if (!datos || typeof datos !== "object") return;
+  for (const [id, n] of Object.entries(datos.libro || {})) if (pezPorId(id) && Number.isFinite(n) && n > 0) pescaReg.libro[id] = Math.floor(n);
+  pescaReg.pecera = (datos.pecera || []).filter((id) => PECES_DE_PECERA.has(id)).slice(-4);
+}
 registrarAccesoriosExtra(() => tienda.accesorios());
 let cartasEntregadas = [];
 let cartaActual = null;
@@ -316,6 +334,7 @@ function guardarPasosAnotados(p, n) {
   const delDia = e ? e.pasos : n;
   eventoAmigos({ ...estadoParaAmigos(), pasosHoy: Math.max(diario.hoy().pasos, delDia) }, { sinVisita: true });
   const monedas = tienda.ganarPorPasos(p.clave, delDia);
+  eventoDeseo({ tipo: "pasos", pasos: delDia, hoy: p.clave === claveDelDia() });
   guardarTodo();
   if (monedas) setTimeout(() => mostrarMonedas(monedas), 500);
   preguntaPasos = null;
@@ -392,6 +411,9 @@ function arrancar() {
     Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final);
     Personaje.restaurar(guardado.extras && guardado.extras.personaje);
     tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
+    deseos = Deseos.desdeObjeto(guardado.extras && guardado.extras.deseos, DESEOS_PROPIOS);
+    cargarPesca(guardado.extras && guardado.extras.pesca);
+    cargarMudanza(guardado.extras && guardado.extras.mudanza);
     cargarAmigos(guardado.extras && guardado.extras.amigos);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
@@ -517,6 +539,9 @@ function confirmarNombre() {
   npcsReg = new RegistroNPCs();
   lugaresReg = new RegistroLugares();
   tienda = new Tienda();
+  deseos = Deseos.desdeObjeto(null, DESEOS_PROPIOS);
+  cargarPesca(null);
+  cargarMudanza(null);
   cargarAmigos(null);
   diario = diario || new Diario();
   cartasEntregadas = [];
@@ -558,6 +583,8 @@ function irACasa() {
   if (lenteAbierto) cerrarLente();
   controller.irACara();
   renderVistaActual();
+  // v24: si un deseo se cumplio afuera del cuarto, se festeja al volver
+  if (deseos.celebrar) setTimeout(celebrarDeseo, 700);
 }
 
 /**
@@ -643,6 +670,31 @@ function renderVistaActual() {
     case "encuentro":
       renderEncuentro();
       break;
+    case "mudanza":
+      R.renderMudanza(screenEl, { quien: companeroId(), texto: MUDANZA.llegada });
+      wireMudanza();
+      break;
+    case "juegos":
+      R.renderJuegos(screenEl, {
+        recordSnack: leerRecord(),
+        recordPesca: leerRecordPesca(),
+        libro: PECES.map((p) => ({ id: p.id, nombre: p.nombre, n: pescaReg.libro[p.id] || 0 })),
+      });
+      document.getElementById("btn-juego-snack").addEventListener("click", () => conTransicion(iniciarMinijuego));
+      document.getElementById("btn-juego-pesca").addEventListener("click", () => conTransicion(iniciarPescaJuego));
+      document.getElementById("btn-volver-juegos").addEventListener("click", () => conTransicion(irACasa));
+      break;
+    case "deseo": {
+      const d = deseos.actual();
+      if (!d) {
+        controller.vista = "cara";
+        renderVistaActual();
+        break;
+      }
+      R.renderDeseo(screenEl, { texto: d.texto, real: !!d.real, estado: deseos.estado, progreso: deseos.progreso, meta: d.meta || 0 });
+      wireDeseo();
+      break;
+    }
     case "pasos":
       if (!preguntaPasos) {
         controller.vista = "cara";
@@ -671,6 +723,7 @@ function renderVistaActual() {
       abrirDirector();
       break;
     case "minijuego":
+    case "pesca":
     case "lente":
     case "final":
     case "intro":
@@ -729,8 +782,12 @@ function estadoPieza() {
         ],
     npc: visita ? visita.npc.id : null,
     decoraciones: [...amigos.decoraciones(), ...tienda.decoraciones()],
+    deseo: deseos.estado === "nuevo" && !fotoPedida && !finalEnMarcha() ? "nuevo" : null,
     // v23: el peluche es del OTRO personaje; y despues del si, la foto del anillo enmarcada
     peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi",
+    pecera: tienda.tiene("pecera") ? pescaReg.pecera : [],
+    companero: mudanza.estado === "vive" ? { quien: companeroId(), valija: Date.now() - mudanza.desde < 3 * 86400000 } : null,
+    globoCompanero,
     fotoAnillo: Final.dijoQueSi() ? fotoDelAnillo() : null,
     clima: Clima.tipo(),
     globo: globo.texto,
@@ -760,6 +817,9 @@ function tocarObjeto(id) {
   switch (id) {
     case "baozi":
       tocarBaozi();
+      break;
+    case "companero":
+      tocarCompanero();
       break;
     case "reloj":
       tocarReloj();
@@ -796,6 +856,7 @@ function tocarObjeto(id) {
       Sonido.sonar("tocar");
       musicaDeFondo();
       decir(est ? `♪ ${est.nombre} (${Musica.numeroDeEstacion(est)})` : "Radio off. Shh…", 3200);
+      if (est) eventoDeseo({ tipo: "radio", estacion: est.id });
       break;
     }
     case "mesita":
@@ -843,6 +904,16 @@ function tocarBaozi() {
     return;
   }
   const ahora = Date.now();
+  // v24: el primer toque del dia cuenta el deseo; uno de la vida real pendiente se vuelve a mostrar (cada 10 min)
+  if (!finalEnMarcha() && deseos.actual()) {
+    const d = deseos.actual();
+    if (deseos.estado === "nuevo" || (d.real && deseos.estado === "escuchado" && ahora - ultimaTarjetaDeseo > 10 * 60000)) {
+      abrirDeseo();
+      return;
+    }
+  }
+  eventoDeseo({ tipo: "mimo" });
+  if (mudanza.estado === "vive" && Math.random() < 0.35) decirCompanero(MUDANZA.celoso || "Me too!", 2200);
   if (ahora >= proximoMimoConEfectoMs) {
     mascota.mimar(ahora);
     proximoMimoConEfectoMs = ahora + COOLDOWN_MIMO_MS;
@@ -897,6 +968,161 @@ function ganarMonedas(fuente, cantidad) {
   return n;
 }
 
+// ------------------------------------------------------------------
+// v24: el deseo del dia (deseos.js)
+// ------------------------------------------------------------------
+
+const finalEnMarcha = () => ["armado", "pedido", "en_curso"].includes(Final.fase());
+
+function contextoDeseos(ahora = new Date()) {
+  return {
+    hora: ahora.getHours(),
+    finDeSemana: ahora.getDay() === 0 || ahora.getDay() === 6,
+    tieneRopa: amigos.accesorios().length + tienda.accesorios().length > 0,
+    quedanLugares: !!lugaresReg && lugaresReg.pendientes().length > 0,
+  };
+}
+
+/** Elige el deseo del dia (si cambio el dia). */
+function elegirDeseo() {
+  if (!mascota) return;
+  if (deseos.elegir(claveDelDia(), contextoDeseos())) guardarTodo();
+}
+
+/** Algo paso en el juego: ¿se cumplio el deseo? */
+function eventoDeseo(ev) {
+  if (!mascota) return;
+  elegirDeseo();
+  if (deseos.evento({ hora: new Date().getHours(), ...ev })) cumplirDeseo();
+  else guardarTodo();
+}
+
+function cumplirDeseo() {
+  tienda.ganar("deseo", 10);
+  mascota.stats.felicidad = Math.min(100, mascota.stats.felicidad + 10);
+  diario.anotarHito("A wish came true ♥");
+  guardarTodo();
+  if (controller.vista === "cara") celebrarDeseo();
+}
+
+/** El festejo, en el cuarto (si se cumplio en otro lado, cuando vuelve). */
+function celebrarDeseo() {
+  if (!deseos.celebrar || controller.vista !== "cara" || !mascota || mascota.dormida) return false;
+  deseos.celebrar = false;
+  guardarTodo();
+  Sonido.sonar("hallazgo");
+  vibrar([20, 40, 20]);
+  mostrarEspecial("euforico", 3500);
+  decir("My wish came true! Thank you ♥", 4200);
+  setTimeout(() => mostrarMonedas(10), 400);
+  return true;
+}
+
+let ultimaTarjetaDeseo = 0;
+/** La tarjeta del deseo (el primer toque del dia a Baozi, o desde el cuaderno). */
+function abrirDeseo(desde = "cara") {
+  const d = deseos.actual();
+  if (!d) return;
+  deseos.escuchar();
+  ultimaTarjetaDeseo = Date.now();
+  guardarTodo();
+  Sonido.sonar("carta");
+  conTransicion(() => {
+    controller.vista = "deseo";
+    vistaDeseoDesde = desde;
+    renderVistaActual();
+  });
+}
+let vistaDeseoDesde = "cara";
+
+function wireDeseo() {
+  const volver = () => {
+    if (vistaDeseoDesde === "stats") {
+      controller.abrirConsulta("stats");
+      conTransicion(renderVistaActual);
+    } else conTransicion(irACasa);
+  };
+  const ok = document.getElementById("btn-deseo-ok");
+  if (ok) ok.addEventListener("click", volver);
+  const luego = document.getElementById("btn-deseo-luego");
+  if (luego) luego.addEventListener("click", volver);
+  const hecho = document.getElementById("btn-deseo-hecho");
+  if (hecho) {
+    hecho.addEventListener("click", () => {
+      if (deseos.hecho()) {
+        tienda.ganar("deseo", 10);
+        mascota.stats.felicidad = Math.min(100, mascota.stats.felicidad + 10);
+        diario.anotarHito("A wish came true ♥");
+        guardarTodo();
+      }
+      conTransicion(irACasa);
+    });
+  }
+}
+
+// ------------------------------------------------------------------
+// v24: la mudanza (despues del si)
+// ------------------------------------------------------------------
+
+const companeroId = () => Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi";
+let globoCompanero = "";
+let timeoutGloboComp = null;
+let ultimaFraseComp = -1;
+
+function decirCompanero(texto, ms = 3600) {
+  globoCompanero = texto;
+  clearTimeout(timeoutGloboComp);
+  timeoutGloboComp = setTimeout(() => {
+    globoCompanero = "";
+  }, ms);
+}
+
+/** La mañana siguiente al si (despues de medianoche), golpea la puerta. */
+function talVezMudanza() {
+  if (!mascota) return false;
+  if (mudanza.estado === "no" && Final.dijoQueSi() && Final.fechaDelSi() && claveDelDia() > claveDelDia(new Date(Final.fechaDelSi()))) {
+    mudanza.estado = "llega";
+    guardarTodo();
+  }
+  if (mudanza.estado !== "llega" || controller.vista !== "cara" || visita || mascota.dormida || finalEnMarcha()) return false;
+  Sonido.sonar("encuentro");
+  vibrar([30, 80, 30]);
+  conTransicion(() => {
+    controller.vista = "mudanza";
+    renderVistaActual();
+  });
+  return true;
+}
+
+function wireMudanza() {
+  document.getElementById("btn-mudanza-si").addEventListener("click", () => {
+    mudanza = { estado: "vive", desde: Date.now() };
+    diario.anotarHito(`${Personaje.nombre(companeroId())} moved in ♥`);
+    guardarTodo();
+    Sonido.sonar("hallazgo");
+    vibrar([20, 40, 20, 40, 20]);
+    controller.vista = "feedback";
+    conTransicion(() => R.renderFeedback(screenEl, MUDANZA.siSeQueda, { especial: "enamorado" }));
+    setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 1600);
+  });
+}
+
+function tocarCompanero() {
+  if (mudanza.estado !== "vive" || !mascota) return;
+  if (mascota.dormida) {
+    decirCompanero("Zzz…", 1800);
+    return;
+  }
+  const frases = (MUDANZA.frases || []).filter((f) => typeof f === "string" && f.trim());
+  if (!frases.length) return;
+  let i = Math.floor(Math.random() * frases.length);
+  if (frases.length > 1 && i === ultimaFraseComp) i = (i + 1) % frases.length;
+  ultimaFraseComp = i;
+  Sonido.sonar("mimo");
+  vibrar(15);
+  decirCompanero(frases[i], 4200);
+}
+
 /** Baozi avisa una vez por entrega que hay cosas nuevas en la tienda. */
 function talVezAvisarTienda() {
   if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
@@ -947,11 +1173,13 @@ function alSellar(idLugar) {
   eventoAmigos({ tipo: "sello", lugar: idLugar });
   eventoAmigos(estadoParaAmigos());
   ganarMonedas("sello");
+  eventoDeseo({ tipo: "sello" });
 }
 
 /** Una foto guardada: donde se saco (el lugar del sello, o el GPS) y a que hora. */
 function fotoParaAmigos(foto) {
   ganarMonedas("foto");
+  eventoDeseo({ tipo: "foto", filtro: foto.filtro, stickers: foto.stickers || [] });
   const base = { tipo: "foto", filtro: foto.filtro, stickers: foto.stickers || [], momento: momentoActual };
   if (foto.lugar) {
     eventoAmigos({ ...base, lugar: foto.lugar });
@@ -1388,6 +1616,19 @@ function abrirDirector() {
       conTransicion(() => Final.abrirPedido());
     },
     empezarYa: () => Final.empezar({}),
+    mudanza: {
+      estado: () => mudanza.estado,
+      previa: () => {
+        mudanza = { estado: "llega", desde: 0 };
+        guardarTodo();
+        conTransicion(irACasa);
+        setTimeout(() => talVezMudanza(), 900);
+      },
+      deshacer: () => {
+        mudanza = { estado: "no", desde: 0 };
+        guardarTodo();
+      },
+    },
     tienda: {
       sumar: (n) => {
         tienda.monedas += n;
@@ -1672,7 +1913,12 @@ function manejarTapItem(itemId, opts = {}) {
       Sonido.sonar("no");
       mostrarAviso(titulo, subtitulo);
     } else {
-      conTransicion(iniciarMinijuego);
+      // v24: dos juegos en la tele: Snack Rain o Lake Fishing
+      Sonido.sonar("tocar");
+      conTransicion(() => {
+        controller.vista = "juegos";
+        renderVistaActual();
+      });
     }
   } else if (resultado.tipo === "caminar") {
     conTransicion(iniciarCaminar);
@@ -1704,6 +1950,8 @@ function mostrarFeedbackAccion(itemId, opts = {}) {
   diario.anotarCuidado();
   ganarMonedas("cuidar");
 
+  if (itemId === "feed" || itemId === "water") eventoDeseo({ tipo: "comer", item: opts.item || (itemId === "water" ? "comida/bebida_agua.png" : "") });
+  else eventoDeseo({ tipo: "cuidar", accion: itemId });
   if (itemId === "feed") {
     const comida = opts.item || COMIDA_REL[Math.floor(Math.random() * COMIDA_REL.length)];
     conTransicion(() => R.renderFeedAccion(screenEl, comida));
@@ -1749,7 +1997,11 @@ function renderConsulta() {
   // Cada pestaña se arma con su render de siempre y se pega en la hoja del cuaderno.
   const tmp = document.createElement("div");
   if (tipo === "diary") R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi() });
-  else if (tipo === "stats") R.renderStats(tmp, mascota);
+  else if (tipo === "stats") {
+    elegirDeseo();
+    const d = deseos.actual();
+    R.renderStats(tmp, mascota, { deseo: d && !finalEnMarcha() ? { texto: d.texto, real: !!d.real, estado: deseos.estado, progreso: deseos.progreso, meta: d.meta || 0 } : null });
+  }
   else if (tipo === "traits") R.renderTraits(tmp, mascota);
   else if (tipo === "npcs") R.renderNpcs(tmp, npcsReg, amigos, { progreso: (m) => progresoDe(m, contextoAmigos()) });
   else if (tipo === "closet") R.renderCloset(tmp, amigos, tienda.accesorios());
@@ -1770,6 +2022,10 @@ function renderConsulta() {
   if (pestanaTienda && tienda.nuevas().length) pestanaTienda.classList.add("con-novedad");
 
   if (tipo === "diary") wireDiario();
+  if (tipo === "stats") {
+    const b = screenEl.querySelector("[data-ver-deseo]");
+    if (b) b.addEventListener("click", () => abrirDeseo("stats"));
+  }
   if (tipo === "closet") {
     for (const b of screenEl.querySelectorAll("[data-accesorio]")) {
       b.addEventListener("click", () => {
@@ -1975,6 +2231,7 @@ function abrirEscribir() {
     if (mascota) mascota._marcarInteraccion?.(Date.now());
     const racha = diario.racha();
     const monedasDiario = tienda.ganar("diario") + tienda.ganarPorRacha(racha);
+    eventoDeseo({ tipo: "diario" });
     guardarTodo();
     Sonido.sonar("guardado");
     if (monedasDiario) setTimeout(() => mostrarMonedas(monedasDiario), 700);
@@ -2010,6 +2267,9 @@ function wireBackup() {
       Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final, { forzar: true });
       Personaje.restaurar(guardado.extras && guardado.extras.personaje);
       tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
+      deseos = Deseos.desdeObjeto(guardado.extras && guardado.extras.deseos, DESEOS_PROPIOS);
+      cargarPesca(guardado.extras && guardado.extras.pesca);
+      cargarMudanza(guardado.extras && guardado.extras.mudanza);
       cargarAmigos(guardado.extras && guardado.extras.amigos);
       if (pieza) pieza.destruir();
       pieza = null;
@@ -2418,6 +2678,54 @@ function terminarEncuentro() {
 // Minijuego
 // ------------------------------------------------------------------
 
+// ------------------------------------------------------------------
+// v24: Lake Fishing (pesca.js)
+// ------------------------------------------------------------------
+
+let pesca = null;
+function iniciarPescaJuego() {
+  controller.vista = "pesca";
+  actualizarTabbar();
+  actualizarMarco();
+  screenEl.classList.add("sin-margen");
+  const h = new Date().getHours();
+  pesca = iniciarPesca(screenEl, {
+    arte,
+    capas: Personaje.capas("ojo_base_energia_alta.png", "boca_base_feliz.png", "sentado").map((c) => arte(c.src)),
+    pies: Personaje.figura("sentado").pies,
+    noche: h >= 19 || h < 6,
+    sonar: (n) => Sonido.sonar(n),
+    vibrar,
+    alTerminar: terminarPesca,
+  });
+}
+
+function terminarPesca({ puntos = 0, peces = [], record = 0, nuevoRecord = false } = {}) {
+  if (pesca) pesca.destruir();
+  pesca = null;
+  const buenos = peces.filter((id) => (pezPorId(id) || {}).puntos > 0);
+  const nuevos = [...new Set(peces)].filter((id) => !pescaReg.libro[id]);
+  for (const id of peces) pescaReg.libro[id] = (pescaReg.libro[id] || 0) + 1;
+  // los peces lindos van a la pecera (si la tiene), hasta 4
+  if (tienda.tiene("pecera")) {
+    for (const id of peces) if (PECES_DE_PECERA.has(id)) pescaReg.pecera = [...pescaReg.pecera, id].slice(-4);
+  }
+  mascota.resultadoMinijuego(buenos.length, Date.now());
+  diario.anotarJuego(puntos);
+  const monedasPesca = tienda.ganar("juego", Math.floor(puntos / 3)) + (nuevoRecord && puntos > 0 ? tienda.ganar("record") : 0);
+  eventoDeseo({ tipo: "pesca", peces });
+  guardarTodo();
+  if (monedasPesca) setTimeout(() => mostrarMonedas(monedasPesca), 600);
+  vibrar(buenos.length ? [20, 40, 20] : 20);
+  Sonido.sonar(buenos.length ? "hito" : "mimo");
+  controller.vista = "feedback";
+  const titulo = nuevoRecord && puntos > 0 ? `New record: ${puntos}!` : buenos.length ? `${buenos.length} fish!` : "No fish today…";
+  const nombres = nuevos.map((id) => pezPorId(id).nombre.replace(/…$/, "")).join(", ");
+  const sub = nuevos.length ? `New in your fish book: ${nombres}` : `${puntos} points · best ${record}`;
+  conTransicion(() => R.renderFeedback(screenEl, titulo, { especial: buenos.length ? "euforico" : "decepcionado", sub }));
+  setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 1400);
+}
+
 function iniciarMinijuego() {
   controller.vista = "minijuego";
   actualizarTabbar();
@@ -2470,6 +2778,7 @@ function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord 
   diario.anotarJuego(puntos);
   eventoAmigos({ tipo: "juego", puntos });
   const monedasJuego = tienda.ganar("juego", Math.floor(puntos / 10)) + (nuevoRecord && puntos > 0 ? tienda.ganar("record") : 0);
+  eventoDeseo({ tipo: "juego", puntos, atrapadas });
   guardarTodo();
   if (monedasJuego) setTimeout(() => mostrarMonedas(monedasJuego), 600);
   vibrar(puntos > 0 ? [20, 40, 20, 40, 20] : 20);
@@ -2595,7 +2904,9 @@ function tick() {
     }
   }
   // v22: la pregunta de los pasos va antes que una visita al azar (la visita puede esperar)
-  if (!talVezPreguntarPasos() && !talVezAvisarTienda()) {
+  elegirDeseo();
+  if (deseos.pendiente() && amigos.puesto) eventoDeseo({ tipo: "estado", puesto: amigos.puesto });
+  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezAvisarTienda() && !celebrarDeseo()) {
     talVezVisita();
     talVezPedirDiario();
   }
@@ -2678,6 +2989,10 @@ window.__mochi = {
   diario: () => diario,
   tick: () => tick(),
   tienda: () => tienda,
+  deseos: () => deseos,
+  pesca: () => pesca,
+  mudanza: () => mudanza,
+  pescaReg: () => pescaReg,
   sinVisita: () => {
     visita = null;
   },

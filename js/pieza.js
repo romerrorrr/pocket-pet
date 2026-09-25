@@ -237,6 +237,7 @@ function brillo(clave, fuerza, noche) {
 }
 
 const ETIQUETAS = {
+  companero: "Your partner",
   heladera: "Fridge: food and water",
   botiquin: "First aid: medicine",
   radio: "Radio: change the station",
@@ -335,6 +336,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       <canvas class="pieza-lienzo"></canvas>
       <div class="pieza-toques"></div>
       <div class="globo-baozi oculto" id="linea-mochi" aria-live="polite"></div>
+      <div class="globo-baozi oculto" id="linea-companero" aria-live="polite"></div>
     </div>`;
   const raiz = contenedor.querySelector("#pieza");
   const canvas = raiz.querySelector("canvas");
@@ -345,6 +347,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   const m = mundo.getContext("2d");
   const toques = raiz.querySelector(".pieza-toques");
   const globo = raiz.querySelector("#linea-mochi");
+  const globoComp = raiz.querySelector("#linea-companero");
 
   // botones invisibles, uno por objeto (+ ventana y Baozi)
   const cajas = { ...PIEZA.objetos };
@@ -353,6 +356,9 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   const [bcx, bcy] = PIEZA.baozi;
   cajas.baozi = [bcx - 26, bcy - 38, bcx + 24, bcy + 22];
   const PIE = bcy + 21; // la fila donde apoya (sentado en el zabuton o parado en el piso)
+  // v24: despues del si, el personaje de rom vive en el cuarto, en su almohadon (a la derecha)
+  const COMP_X = bcx + 58;
+  cajas.companero = [COMP_X - 22, bcy - 38, COMP_X + 22, bcy + 22];
   const botones = {};
   for (const [id, caja] of Object.entries(cajas)) {
     const b = document.createElement("button");
@@ -367,6 +373,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     toques.appendChild(b);
     botones[id] = { el: b, caja };
   }
+  botones.companero.el.hidden = true; // solo cuando vive aca
 
   let ultimoDibujo = 0;
   let personajeAlta = null;
@@ -621,6 +628,141 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     m.fillRect(cx, y + 5, 1, 1);
   }
 
+  // ------------------------------------------------------------------
+  // v24: el companero. Despues del si, el personaje de rom vive aca: se
+  // sienta en su almohadon, parpadea, a veces se para y da unos pasitos,
+  // de vez en cuando se miran y sale un corazon, y de noche duermen los dos.
+  // ------------------------------------------------------------------
+  const compC = document.createElement("canvas");
+  compC.width = compC.height = 96;
+  const compX = compC.getContext("2d");
+  const compTin = document.createElement("canvas");
+  compTin.width = compTin.height = 96;
+  const compTinX = compTin.getContext("2d");
+  const comp = { pose: "sentado", t0: 0, prox: performance.now() + 25000 + Math.random() * 20000, parpadeo: performance.now() + 3000, corazon: 0, proxCorazon: performance.now() + 12000 };
+
+  function dibujarCompanero(e, ahora) {
+    const c = e.companero;
+    const b = botones.companero;
+    if (b) b.el.hidden = !c;
+    if (!c) return;
+    const dormido = !!e.dormido;
+    // se para y da unos pasitos (6 s) y vuelve a sentarse
+    if (!dormido && comp.pose === "sentado" && ahora > comp.prox) {
+      comp.pose = "parado";
+      comp.t0 = ahora;
+    }
+    let x = COMP_X;
+    let volteado = false;
+    if (comp.pose === "parado") {
+      const t = (ahora - comp.t0) / 6000;
+      if (t >= 1 || dormido) {
+        comp.pose = "sentado";
+        comp.prox = ahora + 30000 + Math.random() * 40000;
+      } else {
+        x = COMP_X + Math.round(16 * Math.sin(Math.PI * t));
+        volteado = t < 0.5; // de ida mira para la tele, de vuelta hacia ella
+      }
+    }
+    const pose = dormido ? "dormido" : comp.pose;
+    let ojo = "ojo_base_energia_alta.png";
+    let boca = "boca_base_feliz.png";
+    if (dormido) {
+      ojo = "ojo_dormida.png";
+      boca = "boca_dormida.png";
+    } else if (ahora > comp.parpadeo) {
+      ojo = "ojo_base_energia_baja.png";
+      if (ahora > comp.parpadeo + 140) comp.parpadeo = ahora + 2600 + Math.random() * 3600;
+    }
+    const capas = Personaje.capas(ojo, boca, pose, c.quien);
+    compX.clearRect(0, 0, 96, 96);
+    for (const capa of capas) {
+      if (capa.tipo === "accesorio") continue;
+      const i = img(capa.src);
+      if (listo(i)) compX.drawImage(i, 0, 0);
+    }
+    const luz = c.quien === "mantou" ? LUZ_CLARO[dormido ? "dormido" : e.momento] : null;
+    if (luz) {
+      compTinX.globalCompositeOperation = "source-over";
+      compTinX.clearRect(0, 0, 96, 96);
+      compTinX.fillStyle = `rgb(${luz.join(",")})`;
+      compTinX.fillRect(0, 0, 96, 96);
+      compTinX.globalCompositeOperation = "destination-in";
+      compTinX.drawImage(compC, 0, 0);
+      compX.globalCompositeOperation = "multiply";
+      compX.drawImage(compTin, 0, 0);
+      compX.globalCompositeOperation = "source-over";
+    }
+    const fig = Personaje.figura(pose === "parado" ? "parado" : "sentado", c.quien);
+    const respira = pose === "sentado" && Math.floor(ahora / 760) % 3 === 1 ? -1 : 0;
+    m.save();
+    m.translate(x, 0);
+    m.scale(volteado ? -1 : 1, 1);
+    m.drawImage(compC, -48, PIE - fig.pies + respira);
+    m.restore();
+    if (b) {
+      b.caja = [x - 22, PIE - (fig.pies - Math.max(fig.arriba, 6)), x + 22, PIE];
+      const [x0, y0, x1, y1] = b.caja;
+      b.el.style.left = `${T.ox + x0 * T.s}px`;
+      b.el.style.top = `${T.oy + y0 * T.s}px`;
+      b.el.style.width = `${(x1 - x0 + 1) * T.s}px`;
+      b.el.style.height = `${(y1 - y0 + 1) * T.s}px`;
+    }
+    // el globo de el
+    const texto = e.globoCompanero || "";
+    if (globoComp.textContent !== texto) {
+      globoComp.textContent = texto;
+      globoComp.classList.toggle("oculto", !texto);
+    }
+    globoComp.style.left = `${T.ox + x * T.s}px`;
+    // si los dos hablan a la vez, el globo de el va un poco mas arriba (no se pisan)
+    const encima = e.globo ? 30 : 0;
+    globoComp.style.top = `${T.oy + (PIE - (fig.pies - Math.max(fig.arriba, 8))) * T.s - encima}px`;
+    // de vez en cuando se miran y sale un corazoncito entre los dos
+    if (!dormido && !e.dormido && comp.pose === "sentado" && ahora > comp.proxCorazon) {
+      comp.corazon = ahora;
+      comp.proxCorazon = ahora + 25000 + Math.random() * 25000;
+    }
+    if (comp.corazon && ahora - comp.corazon < 2200) {
+      const t = (ahora - comp.corazon) / 2200;
+      const hx = Math.round((bcx + COMP_X) / 2) - 3;
+      const hy = Math.round(PIE - 58 - t * 12);
+      CORAZON_NUBE.forEach((fila, j) => {
+        for (let i = 0; i < fila.length; i++) {
+          if (fila[i] === "0") continue;
+          m.fillStyle = fila[i] === "2" ? `rgba(255,214,224,${1 - t})` : `rgba(232,64,96,${1 - t})`;
+          m.fillRect(hx + i, hy + j, 1, 1);
+        }
+      });
+    }
+  }
+
+  // v24: la nubecita del deseo del dia (se mece un poquito)
+  const CORAZON_NUBE = ["0110110", "1211111", "1111111", "0111110", "0011100", "0001000"];
+  function nubeDeseo(x, y, ahora) {
+    y += Math.floor(ahora / 520) % 2;
+    x = Math.max(2, Math.min(MW - 24, x));
+    y = Math.max(2, y);
+    m.fillStyle = TINTA;
+    m.fillRect(x + 1, y, 18, 13);
+    m.fillRect(x, y + 1, 20, 11);
+    m.fillStyle = "rgb(252,248,238)";
+    m.fillRect(x + 1, y + 1, 18, 11);
+    // la colita de burbujas hacia la cabeza
+    m.fillStyle = TINTA;
+    m.fillRect(x - 2, y + 13, 3, 3);
+    m.fillRect(x - 5, y + 17, 2, 2);
+    m.fillStyle = "rgb(252,248,238)";
+    m.fillRect(x - 1, y + 14, 1, 1);
+    CORAZON_NUBE.forEach((fila, j) => {
+      for (let i = 0; i < fila.length; i++) {
+        if (fila[i] === "0") continue;
+        m.fillStyle = fila[i] === "2" ? "rgb(255,214,224)" : "rgb(232,64,96)";
+        m.fillRect(x + 6 + i, y + 3 + j, 1, 1);
+      }
+    });
+  }
+
   // el clima en la ventana: gotas, copos y niebla con posiciones fijas que se mueven con el tiempo
   const rayo = { prox: 0, hasta: 0 };
   const gotas = Array.from({ length: 48 }, (_, i) => ({ x: (i * 37) % (vx1 - vx0 + 1), y: (i * 53) % (vy1 - vy0 + 1), v: 0.9 + ((i * 7) % 5) * 0.12 }));
@@ -751,6 +893,32 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       const d = DECORACIONES[id];
       if (d) sprite(srcDeco(id, e), d[0], d[1]);
     }
+    // v24: los peces que ella pesco nadan en la pecera (hasta 4, ademas de los 2 dibujados)
+    if ((e.decoraciones || []).includes("pecera") && (e.pecera || []).length) {
+      const [px, py] = DECORACIONES.pecera;
+      const COLOR_PEZ = { dorado: "rgb(244,132,44)", koi: "rgb(246,244,240)", koi_dorado: "rgb(250,206,80)" };
+      e.pecera.forEach((id, i) => {
+        const t = ahora / (1700 + i * 380) + i * 1.9;
+        const dx = Math.sin(t) * 4;
+        const dir = Math.cos(t) > 0 ? 1 : -1;
+        const x = Math.round(px + 8 + dx);
+        const y = py + 6 + (i % 2) * 3 + (i > 1 ? 1 : 0);
+        m.fillStyle = COLOR_PEZ[id] || COLOR_PEZ.dorado;
+        m.fillRect(x - 1, y, 3, 1);
+        m.fillRect(x - 2 * dir, y, 1, 1);
+        if (id === "koi") {
+          m.fillStyle = "rgb(230,70,60)";
+          m.fillRect(x, y, 1, 1);
+        }
+      });
+    }
+    // v24: el segundo almohadon (el del personaje de rom)
+    if (e.companero) {
+      const f = img("pieza/fondo.png");
+      if (listo(f)) m.drawImage(f, 168, 120, 56, 19, COMP_X - 28, 120, 56, 19);
+    }
+    // y su valijita, los primeros dias
+    if (e.companero && e.companero.valija) sprite("tienda/valija.png", COMP_X + 28, 114);
     // v23: despues del si, la foto del anillo enmarcada
     if (e.fotoAnillo) {
       const f = fotoChica(e.fotoAnillo);
@@ -912,7 +1080,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       }
     }
 
-    // 5. el personaje (despues de la luz: siempre se lee)
+    // 5. el personaje (despues de la luz: siempre se lee). Primero el companero (atras).
+    dibujarCompanero(e, ahora);
     const dt = ultimoDibujo ? Math.min(250, ahora - ultimoDibujo) : 0;
     ultimoDibujo = ahora;
     moverActor(e, ahora, dt);
@@ -1000,6 +1169,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
 
     // 6. avisos de lo que necesita
     for (const id of e.avisos) aviso(id, ahora);
+    // v24: el deseo del dia, una nubecita con un corazon arriba de la cabeza
+    if (e.deseo === "nuevo" && !e.dormido) nubeDeseo(Math.round(actor.x) + 20, y0 + fig.arriba - 16, ahora);
 
     // 7. las zetas
     if (e.dormido) {

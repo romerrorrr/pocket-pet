@@ -129,3 +129,31 @@ export const LUGARES_PROPIOS = [];
 // Ejemplo: { nombre: "our anniversary", mes: 3, dia: 14 }   (mes 1..12)
 // ---------------------------------------------------------------------
 export const FECHAS = [];
+
+// ---------------------------------------------------------------------
+// v24: el deseo del dia. Deseos de la vida real que escribe rom: salen
+// mezclados con los de la app (y mas seguido), con un boton "Done ♥".
+// Ejemplo: "Give him a big hug today.", "Tell him your favorite memory of us."
+// ---------------------------------------------------------------------
+export const DESEOS_PROPIOS = [];
+
+// ---------------------------------------------------------------------
+// v24: despues del si, el personaje de rom se muda al cuarto. Lo que dice
+// al llegar y las frases dulces cuando ella lo toca (una al azar).
+// ---------------------------------------------------------------------
+export const MUDANZA = {
+  llegada: "Can I live here with you now?",
+  siSeQueda: "Home, finally. With you. ♥",
+  frases: [
+    "I'm so lucky it's you.",
+    "Did you eat something good today?",
+    "Drink some water, okay?",
+    "I missed you all day.",
+    "You make this room feel like home.",
+    "Tell me about your day?",
+    "I love you more than dumplings. And that's a lot.",
+    "Best decision I ever made: you.",
+  ],
+  // cuando ella acaricia al suyo, el otro dice esto
+  celoso: "Me too! Me too!",
+};

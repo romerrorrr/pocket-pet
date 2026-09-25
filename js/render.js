@@ -846,7 +846,7 @@ const ORDEN_STATS = [
   ["felicidad", "Happiness", "corazon"],
 ];
 
-export function renderStats(container, mascota) {
+export function renderStats(container, mascota, opts = {}) {
   const filas = ORDEN_STATS.map(
     ([clave, etiqueta, g]) => `
       <div class="fila-stat">
@@ -863,9 +863,19 @@ export function renderStats(container, mascota) {
   if (mascota.enferma) aviso = `<div class="aviso-salud alerta">Sick — needs medicine</div>`;
   else if (mascota.stats.salud < 60) aviso = `<div class="aviso-salud">Not feeling great</div>`;
 
+  // v24: el deseo de hoy, arriba de todo
+  const d = opts.deseo;
+  const deseoHtml = d
+    ? `<button class="fila-deseo ${d.estado === "cumplido" ? "cumplido" : ""}" data-ver-deseo type="button">
+        <span class="deseo-etiqueta">${glifo("corazon")} Today's wish</span>
+        <span class="deseo-texto">${d.estado === "nuevo" ? "Baozi has a wish… tap to hear it" : esc(d.texto)}</span>
+        <span class="deseo-estado">${d.estado === "cumplido" ? "Came true ✓" : d.real ? "Tap when it's done" : d.meta ? `${Math.min(d.meta, d.progreso)} / ${d.meta}` : ""}</span>
+      </button>`
+    : "";
   container.innerHTML = `
     ${encabezado("Stats", "btn-volver-consulta")}
     <div class="lista-journal">
+      ${deseoHtml}
       ${filas}
       <div class="fila-stat">
         <span class="etiqueta rosa">${glifo("corazon")} Bond</span>
@@ -1575,6 +1585,73 @@ export function renderPreguntaPasos(container, { clave, cuando = "today", contad
           <button class="boton boton-fantasma" id="btn-pasos-luego">Not now</button>
           <button class="boton" id="btn-pasos-guardar">${glifo("check")} Save</button>
         </div>
+      </div>
+    </div>`;
+}
+
+/** v24: el personaje de rom golpea la puerta con su valijita (la mañana despues del si). */
+export function renderMudanza(container, { quien = "baozi", texto = "" } = {}) {
+  container.innerHTML = `
+    <div class="primer-plano con-cuarto pp-mudanza">
+      <div class="pp-figura">
+        <div class="pp-primera">${spriteCara("ojo_especial_enamorado.png", "boca_especial_enamorado.png", false, "", { quien })}</div>
+        <img class="mudanza-valija" src="${arte("tienda/valija.png")}" alt="" draggable="false" />
+      </div>
+      <div class="pp-texto deseo-hoja papel">
+        <div class="pp-titulo">Knock knock…</div>
+        <div class="deseo-grande" data-sin-nombre>“${esc(texto)}”</div>
+        <div class="fila-botones"><button class="boton" id="btn-mudanza-si">${glifo("corazon")} Yes ♥</button></div>
+      </div>
+    </div>`;
+}
+
+/** v24: la tele tiene dos juegos: se elige cual (con el libro de peces). */
+export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, libro = [] } = {}) {
+  const pescados = libro.filter((p) => p.n > 0).length;
+  container.innerHTML = `
+    <div class="pantalla-juegos con-cuarto">
+      <button class="boton-volver volver-flotante" id="btn-volver-juegos" aria-label="Back">${glifo("atras")}</button>
+      <div class="juegos-titulo">What shall we play?</div>
+      <div class="juegos-fila">
+        <button class="tarjeta-juego" id="btn-juego-snack">
+          <span class="juego-arte"><img src="${arte("comida/juego_bao_dorado.png")}" alt="" draggable="false" /></span>
+          <span class="juego-nombre">Snack Rain</span>
+          <span class="juego-best">Best ${recordSnack}</span>
+        </button>
+        <button class="tarjeta-juego" id="btn-juego-pesca">
+          <span class="juego-arte pez"><img src="${arte("pesca/pez_koi.png")}" alt="" draggable="false" /></span>
+          <span class="juego-nombre">Lake Fishing</span>
+          <span class="juego-best">Best ${recordPesca}</span>
+        </button>
+      </div>
+      <div class="libro-peces" aria-label="Fish book: ${pescados} of ${libro.length}">
+        <span class="libro-titulo">Fish book ${pescados}/${libro.length}</span>
+        ${libro
+          .map(
+            (p) => `<span class="libro-pez ${p.n ? "" : "sin"}" title="${p.n ? esc(p.nombre) : "???"}"><img src="${arte(`pesca/pez_${p.id}.png`)}" alt="" draggable="false" />${p.n ? `<small>×${p.n}</small>` : "<small>?</small>"}</span>`,
+          )
+          .join("")}
+      </div>
+    </div>`;
+}
+
+/** v24: la tarjeta del deseo del dia (primer plano del personaje con su nubecita). */
+export function renderDeseo(container, { texto, real = false, estado = "escuchado", progreso = 0, meta = 0 } = {}) {
+  const cumplido = estado === "cumplido";
+  const pie = cumplido
+    ? `<button class="boton" id="btn-deseo-ok">${glifo("corazon")} Yay!</button>`
+    : real
+      ? `<button class="boton boton-fantasma" id="btn-deseo-luego">Later</button><button class="boton" id="btn-deseo-hecho">${glifo("check")} Done ♥</button>`
+      : `<button class="boton" id="btn-deseo-ok">${glifo("corazon")} Okay!</button>`;
+  container.innerHTML = `
+    <div class="primer-plano con-cuarto pp-deseo">
+      ${figuraPrimerPlano(cumplido ? "ojo_especial_euforico.png" : "ojo_especial_curioso.png", cumplido ? "boca_especial_euforico.png" : "boca_especial_curioso.png")}
+      <div class="pp-texto deseo-hoja papel">
+        <div class="pp-titulo">${cumplido ? "My wish came true!" : "Baozi's wish"}</div>
+        <div class="deseo-grande">“${esc(texto)}”</div>
+        ${!cumplido && meta ? `<div class="deseo-progreso">${Math.min(meta, progreso)} / ${meta}</div>` : ""}
+        <div class="deseo-nota">${cumplido ? "Thank you ♥ (+10 coins)" : real ? "A wish for real life. Tap Done when you did it ♥" : "It comes true by itself when you do it. +10 coins"}</div>
+        <div class="fila-botones">${pie}</div>
       </div>
     </div>`;
 }
