@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-02dba9bc81"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-c5507627e0"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -57,6 +57,7 @@ const SHELL = [
   "./js/amigos.js",
   "./js/grabacion.js",
   "./js/galeria.js",
+  "./js/tienda.js",
   "./icons/mochi-192.png",
   "./icons/mochi-512.png",
   "./assets/fondo_caminar.png",
@@ -101,6 +102,8 @@ const ARTE = [
   "mantou/cara_sorprendido.png",
   "final/huevo_blanco.png",
   ...["acc_orejas", "acc_antenas", "acc_boina", "acc_corona", "deco_maceta", "deco_ovni", "deco_te", "deco_cuadro_baozi", "deco_cuadro_mantou"].map((n) => `amigos/${n}.png`),
+  // v23: la tienda
+  ...["moneda", "comida_osmanto", "comida_longjing", "comida_luna", "sticker_loto", "sticker_hoja_loto", "sticker_corazones", "sticker_brillos", "acc_mono", "acc_lentes", "acc_sombrero", "acc_osmanto", "deco_farolitos", "deco_pecera", "deco_bonsai", "deco_poster", "deco_luces", "deco_peluche_baozi", "deco_peluche_mantou", "deco_marco"].map((n) => `tienda/${n}.png`),
   ...["bote_mascotas", "bote_ella", "bote_reflejo_mascotas", "bote_reflejo_ella", "ventana_baozi", "ventana_mantou"].map((n) => `final/${n}.png`),
   ...["westlake", "longjing", "lingyin"].map((n) => `lugares/lugar_${n}.png`),
   ...["chagee", "mimi", "ruchong", "usagi"].flatMap((n) => [`npcs/npc_${n}.png`, `npcs/npc_${n}_saludo.png`]),
