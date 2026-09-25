@@ -4433,3 +4433,157 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   .tutorial-arte, .tutorial-arte img { height: 48px; min-height: 48px; }
   .tutorial-texto { font-size: 14px; }
 }
+
+/* ------------------------------------------------------------------
+   v22 — Baozi pregunta los pasos (la hoja del diario, con un numero)
+   ------------------------------------------------------------------ */
+.pasos-ayuda { font-family: var(--fuente-cuerpo); font-size: 13px; color: rgba(22, 20, 22, 0.75); display: flex; align-items: center; gap: 6px; }
+.pasos-ayuda.tenue { color: rgba(22, 20, 22, 0.55); min-height: 16px; }
+.fila-pasos { display: flex; align-items: baseline; gap: 8px; font-family: var(--fuente-display); font-size: 10px; }
+#input-pasos {
+  width: 150px;
+  font-family: var(--fuente-display);
+  font-size: 22px; /* mas de 16px: iOS no hace zoom al escribir */
+  letter-spacing: 1px;
+  padding: 8px 10px;
+  border: none;
+  color: var(--tinta);
+  background: rgb(252, 250, 244);
+  box-shadow: inset 0 0 0 2px rgba(22, 20, 22, 0.35);
+  text-align: right;
+}
+#input-pasos:focus { outline: none; box-shadow: inset 0 0 0 2px var(--tinta); }
+.pantalla-pasos .hoja-botones { margin-top: 2px; }
+.pantalla-pasos { gap: 4%; }
+.pantalla-pasos .hoja-escribir { flex: 0 0 auto; min-height: 0; text-align: left; width: min(430px, 54vw); align-items: flex-start; justify-content: flex-start; padding: 16px 20px; gap: 10px; }
+.pantalla-pasos .hoja-botones { align-self: flex-end; }
+.pantalla-pasos .escribir-personaje { width: min(64vh, 34vw); margin-bottom: -12vh; }
+
+/* ------------------------------------------------------------------
+   v23 — monedas y tienda
+   ------------------------------------------------------------------ */
+/* la monedita que sube cuando ella gana */
+.pop-monedas {
+  position: absolute;
+  z-index: 40;
+  top: 22%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 7px;
+  font-family: var(--fuente-display);
+  font-size: 12px;
+  color: rgb(255, 234, 170);
+  background: rgba(24, 22, 30, 0.82);
+  box-shadow: 0 0 0 2px rgb(24, 22, 30), 0 0 0 4px rgba(232, 170, 52, 0.9);
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  animation: sube-moneda 1.9s steps(12) forwards;
+}
+.pop-monedas img { width: 24px; height: 24px; image-rendering: pixelated; }
+@keyframes sube-moneda {
+  0% { opacity: 0; transform: translate(-50%, 10px); }
+  12% { opacity: 1; transform: translate(-50%, 0); }
+  75% { opacity: 1; transform: translate(-50%, -14px); }
+  100% { opacity: 0; transform: translate(-50%, -22px); }
+}
+@media (prefers-reduced-motion: reduce) { .pop-monedas { animation: none; } }
+
+/* la pestaña del cuaderno */
+.pestana[data-pestana="shop"] { background: rgb(250, 206, 110); }
+.pestana.con-novedad::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 9px;
+  height: 9px;
+  background: rgb(226, 80, 63);
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+.pestana { position: relative; }
+
+/* la tienda */
+.tienda-cabeza { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.billetera {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px 5px 6px;
+  font-family: var(--fuente-display);
+  font-size: 12px;
+  color: var(--tinta);
+  background: rgb(255, 243, 214);
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+.billetera img { width: 22px; height: 22px; image-rendering: pixelated; }
+.tienda-ayuda { flex: 1; min-width: 180px; font-size: 12px; line-height: 1.3; opacity: 0.75; }
+.grilla-tienda { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px 10px; padding-top: 8px; }
+.tarjeta-tienda {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  align-content: start;
+  padding: 8px 6px 9px;
+  text-align: center;
+  color: var(--tinta);
+  background: rgb(255, 253, 247);
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+.tarjeta-tienda.tengo { background: rgb(236, 244, 230); }
+.tarjeta-tienda.recien { animation: recien-comprado 0.6s steps(3) 2; }
+@keyframes recien-comprado { 50% { transform: translateY(-3px); } }
+.vista-tienda { position: relative; width: 100px; height: 56px; display: grid; place-items: center; overflow: hidden; }
+.vista-tienda img { image-rendering: pixelated; max-width: none; }
+.vista-comida img { position: absolute; left: 50%; top: 50%; width: 150px; height: 150px; transform: translate(-50%, -50%); }
+.tarjeta-tienda .acc-vista { width: 64px; height: 44px; margin-block: 6px; }
+.nombre-tienda { font-family: var(--fuente-display); font-size: 8px; line-height: 1.4; }
+.texto-tienda { font-size: 11px; line-height: 1.25; opacity: 0.7; }
+.precio-tienda {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 6px 9px 6px 6px;
+  border: none;
+  font-family: var(--fuente-display);
+  font-size: 10px;
+  color: var(--papel);
+  background: var(--tinta);
+  cursor: pointer;
+}
+.precio-tienda.caro { background: rgb(150, 142, 138); }
+.precio-tienda:focus-visible, .tarjeta-tienda .boton:focus-visible { outline: 2px solid rgb(232, 170, 52); outline-offset: 2px; }
+.moneda-mini { width: 14px; height: 14px; image-rendering: pixelated; }
+.estado-tienda { font-size: 12px; font-weight: 600; color: rgb(84, 128, 74); }
+.falta-tienda { font-size: 11px; color: var(--rosa-oscuro); }
+.recien-tienda { font-family: var(--fuente-display); font-size: 8px; color: var(--rosa-oscuro); }
+.tienda-pregunta { font-size: 13px; font-weight: 600; }
+.fila-tienda { display: flex; gap: 6px; }
+.nuevo-tienda {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  padding: 3px 4px;
+  font-family: var(--fuente-display);
+  font-size: 7px;
+  color: #fff;
+  background: rgb(226, 80, 63);
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+
+/* la comida de la tienda, en el cajon de abajo de la heladera */
+.item-tienda { width: 11%; }
+.cuantos-tienda {
+  position: absolute;
+  right: -18%;
+  top: 2%;
+  padding: 2px 3px;
+  font-family: var(--fuente-display);
+  font-size: 8px;
+  color: var(--papel);
+  background: var(--tinta);
+  pointer-events: none;
+}
