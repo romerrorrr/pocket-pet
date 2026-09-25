@@ -4587,3 +4587,137 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   background: var(--tinta);
   pointer-events: none;
 }
+
+/* ------------------------------------------------------------------
+   v24 — el deseo del dia
+   ------------------------------------------------------------------ */
+.pp-deseo .deseo-hoja,
+.pp-mudanza .deseo-hoja {
+  width: min(46%, 380px);
+  min-height: 0;
+  flex: none;
+  padding: 14px 16px;
+  gap: 10px;
+  align-items: flex-start;
+  text-align: left;
+  box-shadow: 0 0 0 2px var(--tinta), 5px 6px 0 1px rgba(0, 0, 0, 0.3);
+}
+.pp-deseo .pp-titulo,
+.pp-mudanza .pp-titulo { color: var(--rosa-oscuro); text-shadow: none; font-size: clamp(11px, 3.6vh, 16px); }
+.deseo-grande { font-family: var(--fuente-cuerpo); font-size: clamp(16px, 5vh, 22px); font-weight: 600; line-height: 1.25; color: var(--tinta); }
+.deseo-progreso { font-family: var(--fuente-display); font-size: 10px; color: var(--tinta); }
+.deseo-nota { font-size: 12px; line-height: 1.3; color: rgba(22, 20, 22, 0.65); }
+.pp-deseo .fila-botones,
+.pp-mudanza .fila-botones { align-self: flex-end; }
+
+.fila-deseo {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: none;
+  text-align: left;
+  color: var(--tinta);
+  background: rgb(255, 240, 244);
+  box-shadow: 0 0 0 2px var(--tinta);
+  cursor: pointer;
+}
+.fila-deseo.cumplido { background: rgb(236, 244, 230); }
+.deseo-etiqueta { font-family: var(--fuente-display); font-size: 8px; color: var(--rosa-oscuro); display: flex; align-items: center; gap: 5px; }
+.deseo-texto { font-size: 14px; font-weight: 600; }
+.deseo-estado { font-size: 11px; opacity: 0.7; }
+
+/* ------------------------------------------------------------------
+   v24 — la tele: elegir el juego, y Lake Fishing
+   ------------------------------------------------------------------ */
+.pantalla-juegos {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+}
+.juegos-titulo { font-family: var(--fuente-display); font-size: 14px; color: var(--crema); text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5); }
+.juegos-fila { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.tarjeta-juego {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: 160px;
+  padding: 10px 8px 12px;
+  border: none;
+  color: var(--tinta);
+  background: var(--papel);
+  box-shadow: 0 0 0 2px var(--tinta), 5px 6px 0 1px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.tarjeta-juego:active { transform: translateY(2px); }
+.tarjeta-juego:focus-visible { outline: 2px solid rgb(232, 170, 52); outline-offset: 3px; }
+.juego-arte { position: relative; width: 96px; height: 56px; overflow: hidden; display: grid; place-items: center; }
+.juego-arte img { width: 150px; height: 150px; max-width: none; image-rendering: pixelated; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.juego-arte.pez img { width: 88px; height: 48px; }
+.juego-nombre { font-family: var(--fuente-display); font-size: 10px; }
+.juego-best { font-size: 12px; opacity: 0.7; }
+.libro-peces {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 6px 10px;
+  color: var(--tinta);
+  background: rgba(244, 238, 226, 0.92);
+  box-shadow: 0 0 0 2px var(--tinta);
+}
+.libro-titulo { font-family: var(--fuente-display); font-size: 8px; }
+.libro-pez { display: flex; align-items: center; gap: 2px; font-size: 11px; }
+.libro-pez img { width: 33px; height: 18px; image-rendering: pixelated; }
+.libro-pez.sin img { filter: brightness(0) opacity(0.35); }
+
+.pantalla-pesca {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: rgb(64, 118, 150);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.pesca-lienzo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; }
+.pantalla-pesca .juego-hud { justify-content: flex-start; }
+#pesca-tiempo { margin-left: auto; }
+.pantalla-pesca .pista-minijuego { color: var(--crema); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
+.pesca-barra {
+  position: absolute;
+  z-index: 3;
+  left: 28%;
+  right: 28%;
+  bottom: 44px;
+  height: 18px;
+  background: var(--papel);
+  box-shadow: 0 0 0 2px var(--tinta), 3px 4px 0 1px rgba(0, 0, 0, 0.3);
+}
+.pesca-barra i { position: absolute; top: 0; bottom: 0; background: rgb(150, 184, 140); }
+.pesca-barra b { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--tinta); }
+.pesca-barra.oculto, .pesca-cartel.oculto { display: none; }
+.pesca-cartel {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  padding: 7px 12px;
+  font-family: var(--fuente-display);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--tinta);
+  background: var(--papel);
+  box-shadow: 0 0 0 2px var(--tinta), 3px 4px 0 1px rgba(0, 0, 0, 0.3);
+}
+
+/* v24: la valijita al lado del personaje de rom, cuando golpea la puerta */
+.mudanza-valija { position: absolute; left: 60%; top: 62%; width: 13%; image-rendering: pixelated; }
