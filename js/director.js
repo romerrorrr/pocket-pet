@@ -127,6 +127,9 @@ export async function renderDirector(contenedor, acciones) {
             <button class="boton boton-fantasma" id="dir-probar-video">Test video (5 s)</button>
             <div class="director-gps" id="dir-video-resultado"></div>
             <button class="boton boton-fantasma" id="dir-ensayo">Rehearse everything</button>
+            ${acciones.tienda ? `<button class="boton boton-fantasma" id="dir-monedas">Shop test: +200 coins</button>
+            <button class="boton boton-fantasma" id="dir-semanas">${acciones.tienda.todo() ? "Shop test: all weeks ON (tap = off)" : "Shop test: show all weeks"}</button>
+            <div class="director-gps" id="dir-tienda-resultado"></div>` : ""}
             ${antes ? `<button class="boton boton-fantasma" id="dir-pedir">Ask for the photo now</button>` : ""}
             ${antes ? `<button class="boton boton-fantasma" id="dir-ya">Start the sequence now</button>` : ""}
             <button class="boton boton-peligro" id="dir-reset">Reset the ending</button>
@@ -146,6 +149,16 @@ export async function renderDirector(contenedor, acciones) {
   if (desarmar) desarmar.addEventListener("click", () => { Final.desarmar(); renderDirector(contenedor, acciones); });
   $("dir-gps").addEventListener("click", () => acciones.probarGPS($("dir-gps-resultado")));
   $("dir-ensayo").addEventListener("click", acciones.ensayar);
+  // v23: para probar la tienda sin esperar semanas
+  if (acciones.tienda) {
+    $("dir-monedas").addEventListener("click", () => {
+      $("dir-tienda-resultado").textContent = `Coins: ${acciones.tienda.sumar(200)}`;
+    });
+    $("dir-semanas").addEventListener("click", () => {
+      acciones.tienda.alternarTodo();
+      renderDirector(contenedor, acciones);
+    });
+  }
   // v21: permisos para el video del final (se vuelven a revisar antes de la secuencia)
   $("dir-permisos").addEventListener("click", async () => {
     const b = $("dir-permisos");

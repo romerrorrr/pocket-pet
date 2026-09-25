@@ -21,7 +21,7 @@
  */
 
 import { contexto, sonidoHabilitado } from "./sonido.js";
-import { MUSICA_CLIPS } from "./config.js";
+import { MUSICA_CLIPS, ESTACIONES_PROPIAS } from "./config.js";
 import { arte } from "./arte.js";
 
 // ------------------------------------------------------------------
@@ -53,11 +53,13 @@ const ACORDES = {
   G: ["G2", "D3", "G3", "D3"], D: ["D2", "A2", "D3", "A2"], Em: ["E2", "B2", "E3", "B2"],
   C: ["C3", "G2", "C3", "G2"], Am: ["A2", "E3", "A3", "E3"], F: ["F2", "C3", "F3", "C3"],
   Dm: ["D2", "A2", "D3", "A2"], Bb: ["Bb2", "F2", "Bb2", "F2"], A: ["A2", "E3", "A3", "E3"],
+  Bm: ["B2", "F#3", "B3", "F#3"],
 };
 const ARPEGIOS = {
   G: ["G4", "B4", "D5", "B4"], D: ["F#4", "A4", "D5", "A4"], Em: ["G4", "B4", "E5", "B4"],
   C: ["G4", "C5", "E5", "C5"], Am: ["A4", "C5", "E5", "C5"], F: ["A4", "C5", "F5", "C5"],
   Dm: ["A4", "D5", "F5", "D5"], Bb: ["Bb4", "D5", "F5", "D5"], A: ["A4", "C#5", "E5", "C#5"],
+  Bm: ["F#4", "B4", "D5", "B4"],
 };
 
 function bajo(acordes, pasosPorNota = 2) {
@@ -69,6 +71,93 @@ function arpegio(acordes) {
 function largas(acordes) {
   return acordes.map((a) => `${ACORDES[a][0]}/8`).join(" ");
 }
+// v22: arpegio lento (negras), para las estaciones tranquilas de la radio
+function arpegioLento(acordes) {
+  return acordes.map((a) => ARPEGIOS[a].map((n) => `${n}/2`).join(" ")).join(" ");
+}
+// bajo que salta raiz-octava en corcheas (para las estaciones con ritmo)
+function bajoSaltarin(acordes) {
+  return acordes
+    .map((a) => {
+      const [r, , o] = ACORDES[a];
+      return `${r}/1 ${o}/1 ${r}/1 ${o}/1 ${r}/1 ${o}/1 ${r}/1 ${o}/1`;
+    })
+    .join(" ");
+}
+
+// v22: la radio del cuarto. Cuatro estaciones ORIGINALES, compuestas para
+// escuchar un rato largo: mas lentas y mas suaves que los temas del final.
+const TE_ACORDES = ["D", "Bm", "G", "A", "D", "Bm", "G", "D", "G", "A", "D", "Bm", "G", "A", "D", "D"];
+const LAGO_ACORDES = ["C", "Am", "F", "G", "C", "Am", "Dm", "G", "F", "G", "Em", "Am", "F", "G", "C", "C"];
+const LLUVIA_ACORDES = ["Am", "F", "C", "G", "Am", "F", "Em", "Am", "Am", "F", "C", "G", "Am", "F", "Em", "Am"];
+const NOCHE_ACORDES = ["Dm", "Bb", "C", "A", "Dm", "Bb", "C", "Dm", "Bb", "C", "Am", "Dm", "Bb", "C", "A", "A"];
+
+const ESTACIONES_TEMAS = {
+  // "Tea House": pentatonica de Re, como una casa de te en Longjing.
+  radio_te: {
+    bpm: 72,
+    loop: true,
+    voces: [
+      {
+        onda: "pulso25", vol: 0.05,
+        notas: `A5/2 F#5/1 E5/1 D5/4  F#5/2 A5/2 B5/3 A5/1  B5/2 A5/1 F#5/1 E5/2 D5/2  E5/6 -/2
+                A5/2 B5/1 A5/1 F#5/2 A5/2  B5/2 D6/2 B5/2 A5/2  F#5/2 E5/1 D5/1 E5/2 F#5/2  D5/6 -/2
+                D6/3 B5/1 A5/2 B5/2  A5/2 F#5/2 E5/4  F#5/2 A5/2 D6/2 B5/2  A5/3 F#5/1 E5/2 D5/2
+                E5/2 F#5/1 A5/1 B5/2 A5/2  F#5/2 E5/2 D5/2 E5/2  D5/2 E5/1 F#5/1 A5/4  D5/8`,
+      },
+      { onda: "triangle", vol: 0.12, notas: bajo(TE_ACORDES) },
+      { onda: "pulso12", vol: 0.016, notas: arpegio(TE_ACORDES) },
+    ],
+  },
+  // "West Lake Walk": paseo alegre por el lago, en Do.
+  radio_lago: {
+    bpm: 100,
+    loop: true,
+    voces: [
+      {
+        onda: "pulso25", vol: 0.05,
+        notas: `E5/1 G5/1 C6/2 G5/2 E5/2  A5/2 G5/1 E5/1 C5/4  F5/1 A5/1 C6/2 A5/2 F5/2  G5/2 F5/1 E5/1 D5/4
+                E5/1 G5/1 C6/2 E6/2 D6/2  C6/2 A5/2 E5/4  F5/2 A5/2 D6/2 C6/2  B5/4 G5/4
+                A5/2 C6/2 A5/2 F5/2  B5/2 D6/2 B5/2 G5/2  G5/2 E5/2 B4/2 E5/2  A5/4 C6/4
+                D6/2 C6/1 A5/1 F5/4  D6/2 B5/1 D6/1 G5/4  E5/2 G5/2 C6/2 B5/2  C6/6 -/2`,
+      },
+      { onda: "triangle", vol: 0.12, notas: bajo(LAGO_ACORDES) },
+      { onda: "pulso12", vol: 0.015, notas: arpegio(LAGO_ACORDES) },
+    ],
+  },
+  // "Rainy Day": lenta y con aire, para un dia de lluvia en el cuarto.
+  radio_lluvia: {
+    bpm: 66,
+    loop: true,
+    voces: [
+      {
+        onda: "sine", vol: 0.075,
+        notas: `-/2 E5/2 C5/2 A4/2  C5/6 -/2  -/2 G5/2 E5/2 C5/2  D5/6 -/2
+                -/2 A5/2 G5/2 E5/2  F5/4 E5/2 C5/2  B4/6 -/2  A4/8
+                E5/2 A5/2 B5/2 C6/2  A5/6 -/2  G5/2 E5/2 G5/2 C6/2  B5/4 A5/2 G5/2
+                A5/3 G5/1 E5/2 C5/2  D5/2 C5/2 A4/4  B4/2 E5/2 G5/2 B4/2  A4/8`,
+      },
+      { onda: "triangle", vol: 0.13, notas: largas(LLUVIA_ACORDES) },
+      { onda: "pulso12", vol: 0.018, notas: arpegioLento(LLUVIA_ACORDES) },
+    ],
+  },
+  // "Night Market": farolitos y puestos de comida, en Re menor.
+  radio_noche: {
+    bpm: 108,
+    loop: true,
+    voces: [
+      {
+        onda: "pulso25", vol: 0.045,
+        notas: `D5/1 F5/1 A5/2 G5/1 F5/1 D5/2  F5/2 D5/1 F5/1 Bb5/4  G5/1 A5/1 G5/1 E5/1 C5/4  E5/2 C#5/2 A4/4
+                D5/1 F5/1 A5/2 D6/2 C6/2  Bb5/2 A5/1 G5/1 F5/4  E5/2 G5/2 C6/2 E5/2  D5/6 -/2
+                D6/2 C6/1 Bb5/1 A5/2 F5/2  G5/2 E5/2 C5/4  A5/1 C6/1 A5/1 E5/1 A5/4  F5/2 E5/2 D5/4
+                F5/1 G5/1 A5/1 Bb5/1 D6/4  C6/2 Bb5/1 A5/1 G5/4  A5/2 E5/2 C#5/2 E5/2  A5/6 -/2`,
+      },
+      { onda: "triangle", vol: 0.11, notas: bajoSaltarin(NOCHE_ACORDES) },
+      { onda: "pulso12", vol: 0.014, notas: arpegio(NOCHE_ACORDES) },
+    ],
+  },
+};
 
 // ------------------------------------------------------------------
 // Los temas. Todos originales, compuestos para Baozi.
@@ -160,6 +249,8 @@ const TEMAS = {
     ],
   },
 };
+
+Object.assign(TEMAS, ESTACIONES_TEMAS);
 
 // ------------------------------------------------------------------
 // Motor: planificador con "lookahead" — se agendan las notas un poco
@@ -255,8 +346,10 @@ function tocarTema(c, tema, maestro, alTerminar) {
 
 const buffers = {};
 
+const esPropia = (escena) => ESTACIONES_PROPIAS.some((e) => e && e.archivo === escena);
+
 async function cargarClip(c, escena) {
-  if (!MUSICA_CLIPS.includes(escena)) return null;
+  if (!MUSICA_CLIPS.includes(escena) && !esPropia(escena)) return null;
   if (buffers[escena] !== undefined) return buffers[escena];
   try {
     const r = await fetch(arte(`musica/${escena}.mp3`));
@@ -275,13 +368,64 @@ export function precargar(escena) {
   if (c) cargarClip(c, escena);
 }
 
-const LOOPEA = new Set(["propuesta", "si", "busqueda", "casa"]);
-// v21.1: "casa" es la musica de fondo del cuarto (solo con un archivo de
-// rom: assets/musica/casa.mp3 + "casa" en MUSICA_CLIPS). Va mas bajita.
-const VOLUMEN = { casa: 0.45 };
+const LOOPEA = new Set(["propuesta", "si", "busqueda", ...Object.keys(ESTACIONES_TEMAS)]);
+// la radio va mas bajita que la musica de los momentos especiales
+const VOLUMEN = { radio_te: 0.55, radio_lago: 0.5, radio_lluvia: 0.6, radio_noche: 0.5 };
+const VOLUMEN_PROPIA = 0.45;
 
-/** true si hay musica de fondo para el cuarto (un archivo de rom). */
-export const hayMusicaDeCasa = () => MUSICA_CLIPS.includes("casa");
+// ------------------------------------------------------------------
+// v22: la radio del cuarto (estaciones)
+// ------------------------------------------------------------------
+
+const CLAVE_ESTACION = "baozi_estacion";
+const NOMBRES_ESTACIONES = [
+  { id: "radio_te", nombre: "Tea House" },
+  { id: "radio_lago", nombre: "West Lake Walk" },
+  { id: "radio_lluvia", nombre: "Rainy Day" },
+  { id: "radio_noche", nombre: "Night Market" },
+];
+
+/** Todas las estaciones, en el orden de la perilla (sin "Off"). */
+export function estaciones() {
+  const propias = ESTACIONES_PROPIAS.filter((e) => e && e.archivo).map((e) => ({ id: e.archivo, nombre: e.nombre || "Our song", propia: true }));
+  return [...NOMBRES_ESTACIONES, ...propias];
+}
+
+export const esEstacion = (escena) => !!escena && estaciones().some((e) => e.id === escena);
+
+/** La estacion elegida, o null si la radio esta en "Off". */
+export function estacionActual() {
+  let id = null;
+  try {
+    id = localStorage.getItem(CLAVE_ESTACION);
+  } catch (e) {
+    id = null;
+  }
+  if (id === "off") return null;
+  const lista = estaciones();
+  return lista.find((e) => e.id === id) || lista[0];
+}
+
+/** Gira la perilla: la estacion siguiente (despues de la ultima, "Off"; despues de "Off", la primera). */
+export function siguienteEstacion() {
+  const lista = estaciones();
+  const act = estacionActual();
+  const i = act ? lista.findIndex((e) => e.id === act.id) : -1;
+  const nueva = act && i === lista.length - 1 ? null : lista[i + 1] || lista[0];
+  try {
+    localStorage.setItem(CLAVE_ESTACION, nueva ? nueva.id : "off");
+  } catch (e) {
+    /* nada */
+  }
+  return nueva;
+}
+
+/** "(2/4)": en que estacion va. */
+export function numeroDeEstacion(est) {
+  const lista = estaciones();
+  const i = est ? lista.findIndex((e) => e.id === est.id) : -1;
+  return i < 0 ? "" : `${i + 1}/${lista.length}`;
+}
 
 /**
  * Arranca la musica de una escena (cortando la anterior con fundido).
@@ -296,7 +440,7 @@ export async function tocar(escena, opts = {}) {
   if (c.state !== "running") c.resume().catch(() => {});
 
   const maestro = c.createGain();
-  maestro.gain.value = (TEMAS[escena] && !MUSICA_CLIPS.includes(escena) ? 1.8 : 1) * (VOLUMEN[escena] || 1);
+  maestro.gain.value = esPropia(escena) ? VOLUMEN_PROPIA : (TEMAS[escena] && !MUSICA_CLIPS.includes(escena) ? 1.8 : 1) * (VOLUMEN[escena] || 1);
   maestro.connect(c.destination);
   const registro = { escena, maestro, cortar: null };
   actual = registro;
@@ -311,7 +455,7 @@ export async function tocar(escena, opts = {}) {
   if (buffer) {
     const fuente = c.createBufferSource();
     fuente.buffer = buffer;
-    fuente.loop = LOOPEA.has(escena);
+    fuente.loop = LOOPEA.has(escena) || esPropia(escena);
     fuente.connect(maestro);
     fuente.onended = alTerminar;
     fuente.start();

@@ -134,6 +134,32 @@ export class Diario {
     this.hoy(fecha).pasos += cantidad;
   }
 
+  /** La entrada de un dia (clave "AAAA-MM-DD"), sin crearla. */
+  entradaDe(clave) {
+    return this.entradas.find((e) => e.fecha === clave) || null;
+  }
+
+  /**
+   * v22: los pasos que ella anota de la app Salud para un dia. Cuenta el
+   * numero mas alto entre lo anotado y lo que conto el modo Walk (asi no
+   * se suma dos veces). Devuelve cuantos pasos nuevos se sumaron.
+   */
+  anotarPasosDelDia(clave, cantidad) {
+    const e = this.entradaDe(clave) || (clave === claveDelDia() ? this.hoy() : null);
+    if (!e) return 0;
+    const n = Math.max(0, Math.floor(cantidad) || 0);
+    e.pasosAnotados = Math.max(n, e.pasosAnotados || 0);
+    const nuevos = Math.max(0, n - e.pasos);
+    e.pasos += nuevos;
+    return nuevos;
+  }
+
+  /** true si ese dia ya se anotaron los pasos. */
+  pasosAnotados(clave) {
+    const e = this.entradaDe(clave);
+    return !!e && e.pasosAnotados != null;
+  }
+
   anotarLugar(idLugar, fecha = new Date()) {
     const e = this.hoy(fecha);
     if (!e.lugares.includes(idLugar)) e.lugares.push(idLugar);

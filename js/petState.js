@@ -303,13 +303,15 @@ export class PetState {
     this.registrarEventoRasgo("sociable", 1.0, ahoraMs);
   }
 
-  registrarPasos(pasosNuevos, ahoraMs = null) {
+  registrarPasos(pasosNuevos, ahoraMs = null, { anotados = false } = {}) {
     // Devuelve true si con estos pasos se cruzo un nuevo hito de 1000
     // pasos totales — esa es la señal para disparar la especial "Orgulloso".
+    // v22: los pasos anotados de la app Salud (ya caminados, de una vez) no
+    // cansan y alegran menos por paso: 7.000 pasos no pueden dejarlo rendido.
     const pasosAntes = this.pasosTotales;
     this.pasosTotales += pasosNuevos;
-    this.stats.energia = clamp(this.stats.energia - pasosNuevos * 0.004); // v21: 3000 pasos = -12 (antes -30)
-    this.stats.felicidad = clamp(this.stats.felicidad + pasosNuevos * 0.01);
+    if (!anotados) this.stats.energia = clamp(this.stats.energia - pasosNuevos * 0.004); // v21: 3000 pasos = -12 (antes -30)
+    this.stats.felicidad = clamp(this.stats.felicidad + pasosNuevos * (anotados ? 0.003 : 0.01));
     this.registrarEventoRasgo("explorador", pasosNuevos * 0.02, ahoraMs);
 
     const hitoAntes = Math.floor(pasosAntes / HITO_PASOS);

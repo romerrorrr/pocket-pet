@@ -182,6 +182,17 @@ const VOCES = {
   impresora: (t) => {
     for (let i = 0; i < 6; i++) nota(i % 2 ? 180 : 240, t + i * 0.09, 0.05, { forma: "square", vol: 0.035 });
   },
+  // v23: una moneda (el "cling" de siempre: si-mi agudos)
+  moneda: (t) => {
+    nota(988, t, 0.06, { forma: "square", vol: 0.07 });
+    nota(1319, t + 0.06, 0.16, { forma: "square", vol: 0.07 });
+  },
+  // v23: compra en la tienda
+  compra: (t) => {
+    nota(784, t, 0.07, { forma: "square", vol: 0.08 });
+    nota(988, t + 0.07, 0.07, { forma: "square", vol: 0.08 });
+    nota(1319, t + 0.14, 0.2, { forma: "triangle", vol: 0.12 });
+  },
   guardado: (t) => {
     nota(784, t, 0.07, { forma: "triangle", vol: 0.14 });
     nota(1175, t + 0.08, 0.14, { forma: "triangle", vol: 0.14 });

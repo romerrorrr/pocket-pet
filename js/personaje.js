@@ -15,6 +15,7 @@
  */
 
 import { FIGURAS } from "./personajes_datos.js";
+import { ACCESORIOS_TIENDA } from "./tienda.js";
 
 const CLAVE = "baozi_personaje";
 export const IDS = ["baozi", "mantou"];
@@ -99,7 +100,7 @@ export function caraMantou(estado) {
  */
 export function capas(archivoOjo, archivoBoca, pose = "parado", quien = id) {
   const lista = capasBase(archivoOjo, archivoBoca, pose, quien);
-  if (accesorio && quien === id) lista.push({ src: `amigos/acc_${accesorio}.png`, tipo: "accesorio" });
+  if (accesorio && quien === id) lista.push({ src: ACCESORIOS_TIENDA[accesorio] || `amigos/acc_${accesorio}.png`, tipo: "accesorio" });
   return lista;
 }
 

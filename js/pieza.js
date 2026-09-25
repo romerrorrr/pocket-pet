@@ -239,7 +239,7 @@ function brillo(clave, fuerza, noche) {
 const ETIQUETAS = {
   heladera: "Fridge: food and water",
   botiquin: "First aid: medicine",
-  radio: "Radio: sound on or off",
+  radio: "Radio: change the station",
   reloj: "Clock",
   calendario: "Calendar",
   camara: "Camera: Baozi's Lens",
@@ -269,7 +269,57 @@ const DECORACIONES = {
   ovni: [311, 65], // arriba de la tele
   cuadro: [222, 60], // en la pared de listones, al costado de donde se sienta
   te: [83, 107], // en la mesita
+  // v23: lo que se compra en la tienda (tienda.js)
+  luces: [258, 12], // dos guirnaldas colgando del borde de arriba del mapa de corcho
+  farolitos: [86, 10], // colgando de la barra de la cortina, en la ventana
+  poster: [212, 21], // entre el calendario y el farol
+  pecera: [194, 42], // en el estante de la camara
+  bonsai: [270, 68], // arriba de la tele, a la izquierda de las antenas
+  peluche: [146, 110], // en el tatami, al lado de la mesita
 };
+const DECOS_TIENDA = new Set(["luces", "farolitos", "poster", "pecera", "bonsai", "peluche"]);
+const MARCO = [158, 64]; // la foto del anillo, en la pared de listones (despues del si)
+
+function srcDeco(id, e) {
+  if (id === "cuadro") return `amigos/deco_cuadro_${Personaje.actual()}.png`;
+  if (id === "peluche") return `tienda/deco_peluche_${e.peluche === "mantou" ? "mantou" : "baozi"}.png`;
+  return DECOS_TIENDA.has(id) ? `tienda/deco_${id}.png` : `amigos/deco_${id}.png`;
+}
+
+// la foto del anillo, achicada una vez a 14x11 (se ve como una fotito de verdad)
+const fotosChicas = new Map();
+function fotoChica(dataUrl) {
+  if (!dataUrl) return null;
+  if (fotosChicas.has(dataUrl)) return fotosChicas.get(dataUrl);
+  const reg = { listo: false, c: null };
+  fotosChicas.set(dataUrl, reg);
+  const i = new Image();
+  i.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = 14;
+    c.height = 11;
+    const x = c.getContext("2d");
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = "high";
+    const r = 14 / 11;
+    let sw = i.naturalWidth;
+    let sh = sw / r;
+    if (sh > i.naturalHeight) {
+      sh = i.naturalHeight;
+      sw = sh * r;
+    }
+    x.drawImage(i, (i.naturalWidth - sw) / 2, (i.naturalHeight - sh) / 2, sw, sh, 0, 0, 14, 11);
+    reg.c = c;
+    reg.listo = true;
+  };
+  i.src = dataUrl;
+  return reg;
+}
+
+// las lamparitas de las lucecitas y los farolitos (para que brillen de noche)
+const FOCOS_LUCES = [];
+for (let x = 0; x < 70; x++) if (x % 6 === 3) FOCOS_LUCES.push([x, Math.round(1 + 5 * Math.sin((Math.PI * (x % 35)) / 34)) + 1]);
+const FOCOS_FAROLITOS = [8, 22, 36, 50].map((lx) => [lx, Math.round(1 + 3 * Math.sin((Math.PI * lx) / 57)) + 7]);
 
 /**
  * crearPieza(contenedor, { estado: () => {...}, alTocar: (id) => {} })
@@ -699,7 +749,13 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     // los regalos de los amigos (amigos.js), con la misma luz que el resto
     for (const id of e.decoraciones || []) {
       const d = DECORACIONES[id];
-      if (d) sprite(id === "cuadro" ? `amigos/deco_cuadro_${Personaje.actual()}.png` : `amigos/deco_${id}.png`, d[0], d[1]);
+      if (d) sprite(srcDeco(id, e), d[0], d[1]);
+    }
+    // v23: despues del si, la foto del anillo enmarcada
+    if (e.fotoAnillo) {
+      const f = fotoChica(e.fotoAnillo);
+      sprite("tienda/deco_marco.png", MARCO[0], MARCO[1]);
+      if (f && f.listo) m.drawImage(f.c, MARCO[0] + 2, MARCO[1] + 2);
     }
     // agujas del reloj
     const ahoraFecha = new Date();
@@ -791,6 +847,35 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     m.globalCompositeOperation = "screen";
     if (clave !== "dia") m.drawImage(brillo(`${clave}|${lamparas}`, lamparas, clave === "noche" || clave === "atardecer"), 0, 0);
     m.restore();
+    // v23: los farolitos y las lucecitas de la tienda se prenden cuando oscurece
+    if (clave !== "dia" && clave !== "dormido") {
+      const decos = e.decoraciones || [];
+      const halo = (x, y, rgb, a) => {
+        m.save();
+        m.globalCompositeOperation = "screen";
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const dd = Math.hypot(dx, dy * 1.1);
+            if (dd > 3.2) continue;
+            m.fillStyle = `rgba(${rgb},${(a * (dd < 1.6 ? 1 : 0.45)).toFixed(3)})`;
+            m.fillRect(Math.round(x + dx), Math.round(y + dy), 1, 1);
+          }
+        }
+        m.restore();
+      };
+      if (decos.includes("farolitos")) {
+        const [fx, fy] = DECORACIONES.farolitos;
+        sprite("tienda/deco_farolitos.png", fx, fy);
+        for (const [lx, ly] of FOCOS_FAROLITOS) halo(fx + lx, fy + ly, "255,130,90", 0.22);
+      }
+      if (decos.includes("luces")) {
+        const [lx0, ly0] = DECORACIONES.luces;
+        sprite("tienda/deco_luces.png", lx0, ly0);
+        FOCOS_LUCES.forEach(([x, y], i) => {
+          if (Math.floor(ahora / 700 + i * 1.7) % 5 !== 0) halo(lx0 + x, ly0 + y + 1, "255,220,150", 0.16);
+        });
+      }
+    }
     // el rayo: un fogonazo en todo el cuarto
     if (clima === "tormenta") {
       if (!rayo.prox) rayo.prox = ahora + 5000 + Math.random() * 12000;

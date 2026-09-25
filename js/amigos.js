@@ -24,6 +24,12 @@ import { LUGARES, NPCS, distanciaLugar } from "./mundo.js";
 
 export const MAX_CORAZONES = 5;
 
+// v23: los accesorios comprados en la tienda tambien se pueden poner (main.js registra de donde salen)
+let accesoriosExtra = () => [];
+export function registrarAccesoriosExtra(fn) {
+  accesoriosExtra = typeof fn === "function" ? fn : () => [];
+}
+
 export const REGALOS = {
   "sticker:usagi": { tipo: "sticker", npc: "usagi", nombre: "Usagi sticker", arte: "npcs/npc_usagi.png" },
   "sticker:mimi": { tipo: "sticker", npc: "mimi", nombre: "Mimi sticker", arte: "npcs/npc_mimi.png" },
@@ -55,7 +61,7 @@ export const AMIGOS = {
       { corazones: 4, lugar: "huanglong", texto: "Want a secret? Yellow Dragon Cave. There's music, and a dragon that spits water. I put it on your map." },
     ],
     misiones: [
-      { id: "usagi_pasos", tipo: "pasos", meta: 3000, resumen: "Walk 3,000 steps in one day", pide: "Let's walk together today. 3,000 steps? I'll count them with you.", gracias: "3,000 steps! My paws are tired. Here, a sticker of me.", regalo: "sticker:usagi" },
+      { id: "usagi_pasos", tipo: "pasos", meta: 3000, resumen: "Walk 3,000 steps in one day", pide: "Let's walk together today. 3,000 steps? Tell Baozi tonight how many you did!", gracias: "3,000 steps! My paws are tired. Here, a sticker of me.", regalo: "sticker:usagi" },
       { id: "usagi_jiuxi", tipo: "lugar", lugar: "jiuxi", resumen: "Visit Nine Creeks in Misty Forest", pide: "Take me to Nine Creeks? I heard the water sings.", gracias: "The creeks really sang. These are for you… bunny ears!", regalo: "acc:orejas" },
       { id: "usagi_amanecer", tipo: "foto", categoria: "lake", momento: "amanecer", resumen: "A photo at the lake at sunrise (6–9 am)", pide: "Could you take a photo of the lake at sunrise? I always sleep through it.", gracias: "The lake at sunrise… so pink. I grew this carrot for your room.", regalo: "deco:maceta" },
     ],
@@ -265,7 +271,7 @@ export class RegistroAmigos {
   }
 
   poner(accesorio) {
-    this.puesto = accesorio && this.accesorios().includes(accesorio) ? accesorio : null;
+    this.puesto = accesorio && (this.accesorios().includes(accesorio) || accesoriosExtra().includes(accesorio)) ? accesorio : null;
   }
 
   /** La linea de siempre de un amigo (si tiene una mision activa, se la recuerda). */
@@ -301,7 +307,7 @@ export class RegistroAmigos {
     r.revelados = new Set((datos.revelados || []).filter((id) => LUGARES_SECRETOS.has(id)));
     r.premios = new Set((datos.premios || []).filter((k) => REGALOS[k]));
     r.puesto = typeof datos.puesto === "string" ? datos.puesto : null;
-    if (r.puesto && !r.accesorios().includes(r.puesto)) r.puesto = null;
+    if (r.puesto && !r.accesorios().includes(r.puesto) && !accesoriosExtra().includes(r.puesto)) r.puesto = null;
     return r;
   }
 }

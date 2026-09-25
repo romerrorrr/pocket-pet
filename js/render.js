@@ -35,6 +35,7 @@ import { buscarCarta } from "./cartas.js";
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
 import { RECORTES_MENU } from "./recortes.js";
 import { AMIGOS, REGALOS, MAX_CORAZONES } from "./amigos.js";
+import { CATALOGO } from "./tienda.js";
 
 // Boca abierta: rom confirmo que la boca de "sorprendido" ES la boca
 // abierta del set. Comer y atrapar usan ese sprite real.
@@ -178,17 +179,17 @@ export function renderElegir(container) {
 export const TUTORIAL = [
   {
     titulo: "This is your room",
-    texto: "Tap anything to use it: the fridge to eat and drink, the bucket for a bath, the TV to play, the camera for photos. Keep Baozi happy!",
+    texto: "Tap anything to use it: the fridge to eat and drink, the bucket for a bath, the TV to play, the camera for photos, the radio for music. Keep Baozi happy!",
     arte: ["pieza/heladera.png", "pieza/balde.png", "pieza/tele.png", "pieza/camara.png"],
   },
   {
     titulo: "Your notebook",
-    texto: "The notebook on the little table is your diary. Write a page every night. Your friends, gifts and settings live there too.",
+    texto: "The notebook on the little table is your diary. Write a page every night. Your friends, the shop and your settings live there too.",
     arte: ["pieza/mesita.png"],
   },
   {
     titulo: "Go out together",
-    texto: "Open the app when you're out in Hangzhou: places stamp themselves on the map on the wall. Photos can be saved to your phone.",
+    texto: "Open the app when you're out in Hangzhou: places stamp themselves on the map on the wall. In the evening, tell Baozi your steps from the Health app.",
     arte: ["pieza/corcho.png", "pieza/sello_pagoda.png"],
   },
   {
@@ -374,8 +375,20 @@ export const HELADERA = [
   { src: "comida/comida_naranja.png", accion: "feed", x: 128, y: 76, nombre: "Watermelon" },
 ];
 
-export function renderHeladera(container) {
-  const items = HELADERA.map(
+export function renderHeladera(container, especiales = []) {
+  // v23: la comida comprada en la tienda, en el cajon de abajo, con cuantas quedan
+  const deLaTienda = especiales
+    .map(
+      (it, i) => `
+      <button class="item-heladera item-tienda" data-comida-tienda="${esc(it.id)}"
+        style="left:${((76 + i * 24) / 200) * 100}%;top:${(98 / 112) * 100}%" aria-label="${esc(it.nombre)} (${it.n})">
+        <img src="${arte(it.arte)}" alt="" draggable="false" />
+        <span class="cuantos-tienda">×${it.n}</span>
+        <span class="etiqueta-item">${esc(it.nombre)}</span>
+      </button>`,
+    )
+    .join("");
+  const items = deLaTienda + HELADERA.map(
     (it, i) => `
       <button class="item-heladera" data-comida="${it.accion}" data-item="${it.src}" ${i === 0 ? 'id="btn-heladera-feed"' : it.src.endsWith("agua.png") ? 'id="btn-heladera-water"' : ""}
         style="left:${(it.x / 200) * 100}%;top:${(it.y / 112) * 100}%" aria-label="${esc(it.nombre)}">
@@ -536,6 +549,7 @@ export const PESTANAS_CUADERNO = [
   ["diary", "Days"],
   ["npcs", "Friends"],
   ["closet", "Closet"],
+  ["shop", "Shop"],
   ["stats", "Baozi"],
   ["traits", "Traits"],
   ["ajustes", "Settings"],
@@ -944,7 +958,7 @@ export function renderNpcs(container, npcsReg, amigos = null, ctx = {}) {
 }
 
 /** El ropero: los regalos de los amigos. Los accesorios se tocan para ponerlos. */
-export function renderCloset(container, amigos) {
+export function renderCloset(container, amigos, accTienda = []) {
   const acc = amigos.accesorios();
   const tarjetasAcc = ["orejas", "antenas", "boina", "corona"].map((id) => {
     const clave = `acc:${id}`;
@@ -959,6 +973,17 @@ export function renderCloset(container, amigos) {
       <button class="tarjeta-regalo ${puesto ? "puesto" : ""}" data-accesorio="${id}" aria-pressed="${puesto}">
         <span class="acc-vista"><img src="${arte(r.arte)}" alt="" draggable="false" /></span>
         <span class="nombre-regalo">${esc(r.nombre)}</span>
+        <small>${puesto ? "Wearing it · tap to take off" : "Tap to wear"}</small>
+      </button>`;
+  }).join("") + accTienda.map((id) => {
+    // v23: lo que compro en la tienda
+    const c = CATALOGO.find((x) => x.tipo === "accesorio" && (x.acc || x.id) === id);
+    if (!c) return "";
+    const puesto = amigos.puesto === id;
+    return `
+      <button class="tarjeta-regalo ${puesto ? "puesto" : ""}" data-accesorio="${id}" aria-pressed="${puesto}">
+        <span class="acc-vista"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>
+        <span class="nombre-regalo">${esc(c.nombre)}</span>
         <small>${puesto ? "Wearing it · tap to take off" : "Tap to wear"}</small>
       </button>`;
   }).join("");
@@ -976,6 +1001,83 @@ export function renderCloset(container, amigos) {
       ${lista}
     </div>
   `;
+}
+
+// ------------------------------------------------------------------
+// v23: la tienda (pestaña "Shop" del cuaderno)
+// ------------------------------------------------------------------
+
+// tamaño del arte de las cosas del cuarto y los stickers (para agrandarlas en pixel entero)
+const TAM_ARTE_TIENDA = { farolitos: [58, 17], pecera: [17, 15], bonsai: [15, 14], poster: [18, 24], luces: [70, 9], peluche: [18, 18], loto: [13, 13], corazones: [13, 13] };
+
+function vistaTienda(c, peluche) {
+  if (c.tipo === "accesorio") return `<span class="acc-vista"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
+  if (c.tipo === "comida") return `<span class="vista-tienda vista-comida"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
+  const src = c.id === "peluche" ? `tienda/deco_peluche_${peluche}.png` : c.arte;
+  const [w, h] = TAM_ARTE_TIENDA[c.id] || [16, 16];
+  const k = Math.max(1, Math.min(Math.floor(92 / w), Math.floor(52 / h)));
+  return `<span class="vista-tienda"><img src="${arte(src)}" alt="" draggable="false" style="width:${w * k}px;height:${h * k}px" /></span>`;
+}
+
+function estadoTienda(c, tienda, puesto) {
+  if (c.tipo === "comida") return tienda.cantidadComida(c.id) ? `×${tienda.cantidadComida(c.id)} in the fridge` : "";
+  if (!tienda.tiene(c.id)) return "";
+  if (c.tipo === "accesorio") return puesto === (c.acc || c.id) ? "Wearing it ✓" : "In your closet ✓";
+  if (c.tipo === "sticker") return "In your camera ✓";
+  return "In your room ✓";
+}
+
+function tarjetaTienda(c, tienda, { nuevas, confirmar, recien, puesto, peluche, falta }) {
+  const tiene = c.tipo !== "comida" && tienda.tiene(c.id);
+  const estado = estadoTienda(c, tienda, puesto);
+  const moneda = `<img class="moneda-mini" src="${arte("tienda/moneda.png")}" alt="coins" draggable="false" />`;
+  let pie;
+  if (confirmar === c.id) {
+    pie = `<span class="tienda-pregunta">Buy for ${c.precio}?</span>
+      <span class="fila-tienda"><button class="boton boton-fantasma chico" data-cancelar-compra>No</button><button class="boton chico" data-confirmar-compra="${esc(c.id)}">Buy</button></span>`;
+  } else if (tiene) {
+    pie = `<span class="estado-tienda">${esc(estado)}</span>`;
+  } else {
+    const caro = tienda.monedas < c.precio;
+    pie = `<button class="precio-tienda ${caro ? "caro" : ""}" data-comprar="${esc(c.id)}" aria-label="Buy ${esc(c.nombre)} for ${c.precio} coins">${moneda}${c.precio}</button>
+      ${estado ? `<span class="estado-tienda">${esc(estado)}</span>` : ""}
+      ${falta === c.id ? `<span class="falta-tienda">You need ${c.precio - tienda.monedas} more</span>` : ""}`;
+  }
+  return `
+    <div class="tarjeta-tienda ${tiene ? "tengo" : ""} ${recien === c.id ? "recien" : ""}" data-producto="${esc(c.id)}">
+      ${nuevas.has(c.id) ? `<span class="nuevo-tienda">NEW</span>` : ""}
+      ${vistaTienda(c, peluche)}
+      <span class="nombre-tienda">${esc(c.nombre)}</span>
+      <span class="texto-tienda">${esc(c.texto)}</span>
+      ${recien === c.id ? `<span class="recien-tienda">${c.tipo === "comida" ? "In the fridge! ♥" : "It's yours! ♥"}</span>` : ""}
+      ${pie}
+    </div>`;
+}
+
+/**
+ * opts: { nuevas: Set(ids), confirmar: id|null, recien: id|null, falta: id|null,
+ *         puesto: id del accesorio puesto, peluche: "baozi"|"mantou", ahora }
+ */
+export function renderTienda(container, tienda, opts = {}) {
+  const o = { nuevas: new Set(), confirmar: null, recien: null, falta: null, puesto: null, peluche: "baozi", ...opts };
+  const ahora = opts.ahora || Date.now();
+  const todas = tienda.disponibles(ahora);
+  const semana = tienda.deEstaSemana(ahora).filter((c) => todas.includes(c));
+  const hayNuevasSemana = tienda.semanaActual(ahora) > 0 && semana.length;
+  const resto = hayNuevasSemana ? todas.filter((c) => !semana.includes(c)) : todas;
+  const faltan = tienda.semanaActual(ahora) < 3;
+  container.innerHTML = `
+    ${encabezado("Shop", "btn-volver-consulta")}
+    <div class="lista-journal tienda">
+      <div class="tienda-cabeza">
+        <div class="billetera" aria-label="${tienda.monedas} coins"><img src="${arte("tienda/moneda.png")}" alt="" draggable="false" /><b id="monedas-tienda">${tienda.monedas}</b></div>
+        <div class="tienda-ayuda">Earn coins by caring for Baozi, writing your diary, telling Baozi your steps, playing and taking photos.</div>
+      </div>
+      ${hayNuevasSemana ? `<div class="subtitulo-lista">New this week</div><div class="grilla-tienda">${semana.map((c) => tarjetaTienda(c, tienda, o)).join("")}</div>` : ""}
+      <div class="subtitulo-lista">${hayNuevasSemana ? "Everything else" : "Everything"}</div>
+      <div class="grilla-tienda">${resto.map((c) => tarjetaTienda(c, tienda, o)).join("")}</div>
+      ${faltan ? `<div class="vacio-suave">New things arrive every week ♥</div>` : ""}
+    </div>`;
 }
 
 export function renderProgress(container, mascota, lugaresReg) {
@@ -1060,6 +1162,7 @@ export function renderCaminar(container, mascota, pasosSesion, opts = {}) {
         <div class="estado-sensores" id="estado-sensores">${esc(estadoSensores)}</div>
         <div class="acciones-caminar">
           ${hayLugaresPendientes ? `<button class="boton boton-fantasma" id="btn-wheretogo-manual">${glifo("pin")} Where to?</button>` : ""}
+          <button class="boton boton-fantasma" id="btn-anotar-pasos">${glifo("pie")} From Health</button>
           <button class="boton ${podometroActivo ? "boton-fantasma chico" : ""}" id="btn-paso">${podometroActivo ? "+1" : `${glifo("pie")} Step`}</button>
         </div>
       </div>
@@ -1449,6 +1552,32 @@ export function siguienteFotoPolaroid(figura) {
 // ------------------------------------------------------------------
 // Carta: papel crema, como el final. Se lee, no se mira.
 // ------------------------------------------------------------------
+
+/**
+ * v22: Baozi pregunta los pasos del dia (la app no puede leer la app Salud:
+ * ella los mira y los anota). Mismo papel que la hoja del diario.
+ */
+export function renderPreguntaPasos(container, { clave, cuando = "today", contados = 0, anotados = null } = {}) {
+  const ya = anotados != null ? anotados : 0;
+  container.innerHTML = `
+    <div class="pantalla-escribir con-cuarto pantalla-pasos">
+      <div class="escribir-personaje">${spriteCara("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
+      <div class="hoja-escribir papel">
+        <div class="hoja-fecha">${esc(fechaLegible(clave))}</div>
+        <div class="hoja-pregunta">How many steps did we walk ${cuando === "yesterday" ? "yesterday" : "today"}?</div>
+        <div class="pasos-ayuda">${glifo("pie")} Look in the Health app on your phone ♥</div>
+        <label class="fila-pasos">
+          <input id="input-pasos" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="${Math.max(contados, ya) || "0"}" aria-label="Steps" />
+          <span>steps</span>
+        </label>
+        <div class="pasos-ayuda tenue" id="pasos-nota">${contados > 0 ? `I counted ${contados.toLocaleString("en-US")} while we walked together.` : ""}</div>
+        <div class="hoja-botones">
+          <button class="boton boton-fantasma" id="btn-pasos-luego">Not now</button>
+          <button class="boton" id="btn-pasos-guardar">${glifo("check")} Save</button>
+        </div>
+      </div>
+    </div>`;
+}
 
 export function renderCarta(container, carta) {
   if (!carta) return;

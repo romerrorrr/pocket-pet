@@ -100,6 +100,13 @@ export const MUSICA_CLIPS = [
   // "propuesta",
 ];
 
+// v22: la radio del cuarto. Tocarla cambia de estacion: primero las 4
+// chiptune originales de Baozi, despues las canciones de rom (si hay) y
+// despues "Off". Para sumar una cancion tuya como estacion: el archivo en
+// assets/musica/<archivo>.mp3 y una linea aca, por ejemplo:
+//   { archivo: "casa", nombre: "Our song" },
+export const ESTACIONES_PROPIAS = [];
+
 // -------------------------------------------------------------------
 // LOS LUGARES DE USTEDES (sellos de Hangzhou)
 //   Cuando ella abre Baozi cerca de uno de estos lugares, cae un sello

@@ -35,7 +35,8 @@ import { arte } from "./arte.js";
 import { FINAL, FECHAS } from "./config.js";
 import { crearPieza, posicionEnMapa } from "./pieza.js";
 import * as Clima from "./clima.js";
-import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progresoDe } from "./amigos.js";
+import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progresoDe, registrarAccesoriosExtra } from "./amigos.js";
+import { Tienda, porId as productoTienda } from "./tienda.js";
 import { leerRecord } from "./juego.js";
 import * as Galeria from "./galeria.js";
 import * as Grabacion from "./grabacion.js";
@@ -60,7 +61,7 @@ const marcoEl = document.querySelector(".marco-manito");
 // telefono entero. Todo lo demas vive adentro del aparato.
 const VISTAS_PANTALLA_COMPLETA = new Set(["descubrimiento", "lugarcerca", "encuentro", "carta", "final"]);
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -82,7 +83,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto() });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto() });
 }
 
 function registrarServiceWorker() {
@@ -124,6 +125,8 @@ function conTransicion(fn) {
 
 let mascota, npcsReg, lugaresReg, diario;
 let amigos = new RegistroAmigos(); // amistad, secretos, misiones y regalos (amigos.js)
+let tienda = new Tienda(); // v23: las monedas y lo comprado (tienda.js)
+registrarAccesoriosExtra(() => tienda.accesorios());
 let cartasEntregadas = [];
 let cartaActual = null;
 const controller = new ControladorVistas();
@@ -209,6 +212,128 @@ const CLAVE_PEDIDO_DIARIO = "baozi_pedido_diario";
 function esHoraDeEscribir(h = new Date().getHours()) {
   return h >= 19 || h < 3;
 }
+// ------------------------------------------------------------------
+// v22: los pasos del dia. La app no puede leer la app Salud ni contar con
+// la app cerrada, asi que Baozi pregunta: una vez por dia, desde las 18 h
+// (y a la manana siguiente, si ayer no se anoto).
+// ------------------------------------------------------------------
+
+const HORA_PASOS = 18;
+const CLAVE_PASOS_LUEGO = "baozi_pasos_luego";
+const MAX_PASOS_DIA = 80000;
+let preguntaPasos = null; // { clave, cuando, volverA }
+
+function diaParaPreguntarPasos(ahora = new Date()) {
+  if (!diario) return null;
+  const hoy = claveDelDia(ahora);
+  if (ahora.getHours() >= HORA_PASOS) return diario.pasosAnotados(hoy) ? null : { clave: hoy, cuando: "today" };
+  const ayer = claveDelDia(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - 1));
+  return diario.entradaDe(ayer) && !diario.pasosAnotados(ayer) ? { clave: ayer, cuando: "yesterday" } : null;
+}
+
+function talVezPreguntarPasos() {
+  if (!mascota || !diario || controller.vista !== "cara" || visita || !puedeComentar()) return false;
+  if (["armado", "pedido", "en_curso"].includes(Final.fase())) return false;
+  const dia = diaParaPreguntarPasos();
+  if (!dia) return false;
+  try {
+    const luego = JSON.parse(localStorage.getItem(CLAVE_PASOS_LUEGO) || "null");
+    if (luego && luego.clave === dia.clave && Date.now() < luego.hasta) return false;
+  } catch (e) {
+    return false;
+  }
+  abrirPreguntaPasos(dia);
+  return true;
+}
+
+function abrirPreguntaPasos(dia, { volverA = "cara" } = {}) {
+  // el dia queda en el diario: si hoy dice "Not now", manana pregunta por "ayer"
+  if (dia.cuando === "today") diario.hoy();
+  preguntaPasos = { ...dia, volverA };
+  Sonido.sonar("tocar");
+  conTransicion(() => {
+    controller.vista = "pasos";
+    renderVistaActual();
+  });
+}
+
+function wirePreguntaPasos() {
+  const p = preguntaPasos;
+  const input = document.getElementById("input-pasos");
+  const nota = document.getElementById("pasos-nota");
+  const salir = () => {
+    preguntaPasos = null;
+    if (p.volverA === "caminar") {
+      conTransicion(volverACaminar);
+    } else conTransicion(irACasa);
+  };
+  input.addEventListener("input", () => {
+    const limpio = input.value.replace(/[^0-9]/g, "").slice(0, 6);
+    if (limpio !== input.value) input.value = limpio;
+  });
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") document.getElementById("btn-pasos-guardar").click();
+  });
+  document.getElementById("btn-pasos-luego").addEventListener("click", () => {
+    try {
+      localStorage.setItem(CLAVE_PASOS_LUEGO, JSON.stringify({ clave: p.clave, hasta: Date.now() + 3 * 3600000 }));
+    } catch (e) {
+      /* nada */
+    }
+    salir();
+  });
+  document.getElementById("btn-pasos-guardar").addEventListener("click", () => {
+    const n = Number(input.value.replace(/[^0-9]/g, ""));
+    if (!input.value || !Number.isFinite(n)) {
+      nota.textContent = "Write the number of steps ♥";
+      input.focus();
+      return;
+    }
+    if (n > MAX_PASOS_DIA) {
+      nota.textContent = `${n.toLocaleString("en-US")}?! That's too many for one day. Check it again?`;
+      input.focus();
+      return;
+    }
+    input.blur();
+    guardarPasosAnotados(p, n);
+  });
+}
+
+function volverACaminar() {
+  controller.vista = "caminar";
+  if (permisoMotionEstado === "granted") activarPedometro();
+  renderVistaActual();
+  iniciarSensoresCaminar();
+}
+
+function guardarPasosAnotados(p, n) {
+  const nuevos = diario.anotarPasosDelDia(p.clave, n);
+  let hito = false;
+  if (nuevos > 0) hito = mascota.registrarPasos(nuevos, Date.now(), { anotados: true });
+  if (hito) diario.anotarHito(`${mascota.pasosTotales.toLocaleString("en-US")} steps`);
+  // las misiones de "X pasos en un dia" miran el dia que se anoto
+  const e = diario.entradaDe(p.clave);
+  const delDia = e ? e.pasos : n;
+  eventoAmigos({ ...estadoParaAmigos(), pasosHoy: Math.max(diario.hoy().pasos, delDia) }, { sinVisita: true });
+  const monedas = tienda.ganarPorPasos(p.clave, delDia);
+  guardarTodo();
+  if (monedas) setTimeout(() => mostrarMonedas(monedas), 500);
+  preguntaPasos = null;
+  vibrar([20, 40, 20]);
+  Sonido.sonar(nuevos > 0 ? "hito" : "tocar");
+  const titulo = `${Math.max(n, delDia).toLocaleString("en-US")} steps!`;
+  const sub = n >= 8000 ? "We walked so much together!" : n >= 3000 ? "Thank you for walking with me ♥" : "Every step counts ♥";
+  controller.vista = "feedback";
+  conTransicion(() => R.renderFeedback(screenEl, titulo, { icono: "pie", sub }));
+  setTimeout(() => {
+    if (controller.vista !== "feedback") return;
+    if (mostrarCartaSiCorresponde({ pasosTotales: mascota.pasosTotales })) return;
+    if (p.volverA === "caminar") {
+      conTransicion(volverACaminar);
+    } else conTransicion(irACasa);
+  }, DURACION_FEEDBACK_MS + 300);
+}
+
 function talVezPedirDiario() {
   if (!mascota || !diario || controller.vista !== "cara" || mascota.dormida || !puedeComentar()) return;
   if (!esHoraDeEscribir() || diario.hoyEscrito()) return;
@@ -266,6 +391,7 @@ function arrancar() {
     ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
     Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final);
     Personaje.restaurar(guardado.extras && guardado.extras.personaje);
+    tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
     cargarAmigos(guardado.extras && guardado.extras.amigos);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
@@ -390,6 +516,7 @@ function confirmarNombre() {
   mascota = new PetState(nombre, Date.now());
   npcsReg = new RegistroNPCs();
   lugaresReg = new RegistroLugares();
+  tienda = new Tienda();
   cargarAmigos(null);
   diario = diario || new Diario();
   cartasEntregadas = [];
@@ -433,13 +560,18 @@ function irACasa() {
   renderVistaActual();
 }
 
-/** v21.1: la musica de fondo del cuarto (si rom puso casa.mp3): suena en el cuarto, se va al salir. */
+/**
+ * v22: la radio del cuarto. Suena la estacion elegida mientras ella esta en
+ * el cuarto; se va al salir. Si suena otra musica (una carta, un sello), la
+ * radio espera a que termine y vuelve sola.
+ */
 function musicaDeFondo() {
-  if (!Musica.hayMusicaDeCasa()) return;
+  const est = Musica.estacionActual();
   const enCasa = controller.vista === "cara" && !finalOcupado() && Sonido.sonidoHabilitado();
   const sonando = Musica.escenaSonando();
-  if (enCasa && !sonando) Musica.tocar("casa");
-  else if (!enCasa && sonando === "casa") Musica.detener(0.8);
+  const esRadio = Musica.esEstacion(sonando);
+  if (enCasa && est && (!sonando || (esRadio && sonando !== est.id))) Musica.tocar(est.id);
+  else if (esRadio && (!enCasa || !est)) Musica.detener(0.8);
 }
 
 function renderVistaActual() {
@@ -469,7 +601,13 @@ function renderVistaActual() {
       else pieza = crearPieza(screenEl, { estado: estadoPieza, alTocar: tocarObjeto, alRayo });
       break;
     case "heladera":
-      R.renderHeladera(screenEl);
+      R.renderHeladera(
+        screenEl,
+        Object.keys(tienda.comida)
+          .map((id) => productoTienda(id))
+          .filter(Boolean)
+          .map((c) => ({ id: c.id, arte: c.arte, nombre: c.nombre, n: tienda.cantidadComida(c.id) })),
+      );
       wireHeladera();
       break;
     case "mapa":
@@ -504,6 +642,20 @@ function renderVistaActual() {
       break;
     case "encuentro":
       renderEncuentro();
+      break;
+    case "pasos":
+      if (!preguntaPasos) {
+        controller.vista = "cara";
+        renderVistaActual();
+        break;
+      }
+      R.renderPreguntaPasos(screenEl, {
+        clave: preguntaPasos.clave,
+        cuando: preguntaPasos.cuando,
+        contados: (diario.entradaDe(preguntaPasos.clave) || { pasos: 0 }).pasos,
+        anotados: (diario.entradaDe(preguntaPasos.clave) || {}).pasosAnotados ?? null,
+      });
+      wirePreguntaPasos();
       break;
     case "carta":
       R.renderCarta(screenEl, cartaActual);
@@ -552,7 +704,7 @@ function estadoPieza() {
     momento: momentoActual || "dia",
     dormido,
     farol: !dormido,
-    sonido: Sonido.sonidoHabilitado(),
+    sonido: Sonido.sonidoHabilitado() && !!Musica.estacionActual(),
     ojos,
     boca,
     parpadea: !dormido && !especialActiva && !fotoPedida && (estado.tipo === "base" || estado.tipo === "aburrido"),
@@ -571,14 +723,25 @@ function estadoPieza() {
             ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() ? ["mesita"] : []),
             // un amigo trae un regalo: "!" sobre la ventana
             ...(visita && visita.regalo ? ["ventana"] : []),
+            // v23: cosas nuevas en la tienda (en el cuaderno): "!" sobre la mesita
+            ...(puedeComentar() && !["armado", "pedido", "en_curso"].includes(Final.fase()) && tienda.nuevas().length ? ["mesita"] : []),
           ]),
         ],
     npc: visita ? visita.npc.id : null,
-    decoraciones: amigos.decoraciones(),
+    decoraciones: [...amigos.decoraciones(), ...tienda.decoraciones()],
+    // v23: el peluche es del OTRO personaje; y despues del si, la foto del anillo enmarcada
+    peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi",
+    fotoAnillo: Final.dijoQueSi() ? fotoDelAnillo() : null,
     clima: Clima.tipo(),
     globo: globo.texto,
     globoRosa: globo.rosa,
   };
+}
+
+/** La foto del anillo (la ultima foto del final), para el marco del cuarto. */
+function fotoDelAnillo() {
+  const finales = Camara.todasLasFotos().filter((f) => f.tipo === "final" && f.dataUrl);
+  return finales.length ? finales[finales.length - 1].dataUrl : null;
 }
 
 function decir(texto, ms = 2600) {
@@ -623,13 +786,18 @@ function tocarObjeto(id) {
     case "camara":
       manejarTapItem("lens");
       break;
-    case "radio":
-      Sonido.alternarSonido();
-      if (!Sonido.sonidoHabilitado()) Musica.detener(0.1);
-      else musicaDeFondo();
+    case "radio": {
+      // v22: la perilla de la radio: cada toque, la estacion siguiente (y "Off")
+      let est;
+      if (!Sonido.sonidoHabilitado()) {
+        Sonido.alternarSonido(); // con el sonido apagado, el primer toque solo la prende
+        est = Musica.estacionActual() || Musica.siguienteEstacion();
+      } else est = Musica.siguienteEstacion();
       Sonido.sonar("tocar");
-      decir(Sonido.sonidoHabilitado() ? "Music on ♪" : "Shh… quiet mode.");
+      musicaDeFondo();
+      decir(est ? `♪ ${est.nombre} (${Musica.numeroDeEstacion(est)})` : "Radio off. Shh…", 3200);
       break;
+    }
     case "mesita":
       Sonido.sonar("tocar");
       abrirCuaderno("diary");
@@ -700,6 +868,47 @@ function tocarReloj() {
 // Los amigos (amigos.js): misiones que se cumplen solas con lo que ella hace
 // ------------------------------------------------------------------
 
+// ------------------------------------------------------------------
+// v23: las monedas (tienda.js). Se ganan con lo de todos los dias, con
+// tope por dia, y sale una monedita "+N" cada vez.
+// ------------------------------------------------------------------
+
+function mostrarMonedas(n) {
+  if (!n) return;
+  const app = document.getElementById("app");
+  if (!app) return;
+  const el = document.createElement("div");
+  el.className = "pop-monedas";
+  el.setAttribute("aria-live", "polite");
+  el.innerHTML = `<img src="${arte("tienda/moneda.png")}" alt="" draggable="false" /><span>+${n}</span>`;
+  app.appendChild(el);
+  Sonido.sonar("moneda");
+  setTimeout(() => el.remove(), 2000);
+}
+
+/** Suma monedas de una fuente (con su tope del dia). Devuelve cuantas. */
+function ganarMonedas(fuente, cantidad) {
+  if (!mascota) return 0;
+  const n = tienda.ganar(fuente, cantidad);
+  if (n) {
+    guardarTodo();
+    mostrarMonedas(n);
+  }
+  return n;
+}
+
+/** Baozi avisa una vez por entrega que hay cosas nuevas en la tienda. */
+function talVezAvisarTienda() {
+  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
+  if (["armado", "pedido", "en_curso"].includes(Final.fase())) return false;
+  const semana = tienda.semanaActual();
+  if (semana <= tienda.avisoSemana || !tienda.nuevas().length) return false;
+  tienda.avisoSemana = semana;
+  guardarTodo();
+  decir(semana === 0 ? "I opened a little shop in the notebook! ♪" : "New things at the shop! ♪", 5000);
+  return true;
+}
+
 function cargarAmigos(datos) {
   amigos = RegistroAmigos.desdeObjeto(datos);
   Personaje.ponerAccesorio(amigos.puesto);
@@ -737,10 +946,12 @@ function alSellar(idLugar) {
   if (LUGARES_SECRETOS.has(idLugar)) amigos.revelar(idLugar);
   eventoAmigos({ tipo: "sello", lugar: idLugar });
   eventoAmigos(estadoParaAmigos());
+  ganarMonedas("sello");
 }
 
 /** Una foto guardada: donde se saco (el lugar del sello, o el GPS) y a que hora. */
 function fotoParaAmigos(foto) {
+  ganarMonedas("foto");
   const base = { tipo: "foto", filtro: foto.filtro, stickers: foto.stickers || [], momento: momentoActual };
   if (foto.lugar) {
     eventoAmigos({ ...base, lugar: foto.lugar });
@@ -900,6 +1111,20 @@ function sonidoDelClima() {
 
 function wireHeladera() {
   document.getElementById("btn-volver-heladera").addEventListener("click", () => conTransicion(irACasa));
+  // v23: la comida especial de la tienda: como la de siempre, mas su efecto
+  for (const b of screenEl.querySelectorAll("[data-comida-tienda]")) {
+    b.addEventListener("click", () => {
+      const c = productoTienda(b.dataset.comidaTienda);
+      if (!c || !tienda.cantidadComida(c.id)) return;
+      const ok = manejarTapItem(c.accion, { item: c.arte });
+      if (!ok) return;
+      tienda.usarComida(c.id);
+      for (const [stat, v] of Object.entries(c.efecto || {})) {
+        if (stat in mascota.stats) mascota.stats[stat] = Math.max(0, Math.min(100, mascota.stats[stat] + v));
+      }
+      guardarTodo();
+    });
+  }
   for (const b of screenEl.querySelectorAll("[data-comida]")) {
     b.addEventListener("click", () => {
       if ((b.dataset.item || "").endsWith("bebida_te.png")) eventoAmigos({ tipo: "comer", item: "te" });
@@ -1163,6 +1388,18 @@ function abrirDirector() {
       conTransicion(() => Final.abrirPedido());
     },
     empezarYa: () => Final.empezar({}),
+    tienda: {
+      sumar: (n) => {
+        tienda.monedas += n;
+        guardarTodo();
+        return tienda.monedas;
+      },
+      todo: () => tienda.todoDesbloqueado,
+      alternarTodo: () => {
+        tienda.todoDesbloqueado = !tienda.todoDesbloqueado;
+        guardarTodo();
+      },
+    },
   });
 }
 
@@ -1293,6 +1530,8 @@ function catalogoStickers() {
     ["destello", "final/destello.png"],
     ["estrella", "ui/g_estrella@4.png"],
     ...(Final.dijoQueSi() ? [["anillo", "final/anillo.png"]] : []),
+    // v23: los stickers comprados en la tienda
+    ...tienda.stickers().map((id) => [`tienda-${id}`, `tienda/sticker_${id}.png`]),
   ];
   for (const [id, src] of extras) {
     stickers.push({ id: `extra-${id}`, nombre: id, grupo: "extras", html: `<img class="sticker-extra" src="${arte(src)}" alt="" draggable="false" />`, capas: [arte(src)] });
@@ -1414,11 +1653,13 @@ function wireMenu() {
 
 function manejarTapItem(itemId, opts = {}) {
   const resultado = ejecutarItemMenu(itemId, mascota, Date.now());
-  if (!resultado) return;
+  if (!resultado) return false;
 
   if (resultado.tipo === "accion") {
     if (resultado.ok) {
       mostrarFeedbackAccion(itemId, opts);
+      guardarTodo();
+      return true;
     } else {
       const [titulo, subtitulo] = MOTIVOS_ACCION_FALLIDA[itemId] || ["Not now", ""];
       Sonido.sonar("no");
@@ -1461,6 +1702,7 @@ const SONIDO_POR_ACCION = { feed: "comer", water: "beber", clean: "limpiar", med
 function mostrarFeedbackAccion(itemId, opts = {}) {
   Sonido.sonar(itemId === "sleep" ? (mascota.dormida ? "dormir" : "despertar") : SONIDO_POR_ACCION[itemId] || "mimo");
   diario.anotarCuidado();
+  ganarMonedas("cuidar");
 
   if (itemId === "feed") {
     const comida = opts.item || COMIDA_REL[Math.floor(Math.random() * COMIDA_REL.length)];
@@ -1510,12 +1752,22 @@ function renderConsulta() {
   else if (tipo === "stats") R.renderStats(tmp, mascota);
   else if (tipo === "traits") R.renderTraits(tmp, mascota);
   else if (tipo === "npcs") R.renderNpcs(tmp, npcsReg, amigos, { progreso: (m) => progresoDe(m, contextoAmigos()) });
-  else if (tipo === "closet") R.renderCloset(tmp, amigos);
+  else if (tipo === "closet") R.renderCloset(tmp, amigos, tienda.accesorios());
+  else if (tipo === "shop") {
+    // lo nuevo se marca como visto al abrir la tienda (el "NEW" queda mientras ella este aca)
+    if (!estadoTiendaUI.nuevas) estadoTiendaUI.nuevas = new Set(tienda.nuevas().map((c) => c.id));
+    tienda.marcarVistas();
+    R.renderTienda(tmp, tienda, { ...estadoTiendaUI, puesto: amigos.puesto, peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi" });
+  }
   else if (tipo === "ajustes" || tipo === "backup") tmp.innerHTML = R.htmlAjustes(Sonido.sonidoHabilitado());
   else R.renderProgress(tmp, mascota, lugaresReg);
   const cabecera = tmp.querySelector(".encabezado-vista");
   if (cabecera) cabecera.remove();
   R.renderCuaderno(screenEl, tipo === "backup" ? "ajustes" : tipo, tmp.innerHTML);
+  if (tipo !== "shop") estadoTiendaUI = {};
+  if (tipo === "shop") wireTienda();
+  const pestanaTienda = screenEl.querySelector('.cuaderno-pestanas [data-pestana="shop"]');
+  if (pestanaTienda && tienda.nuevas().length) pestanaTienda.classList.add("con-novedad");
 
   if (tipo === "diary") wireDiario();
   if (tipo === "closet") {
@@ -1554,7 +1806,61 @@ function renderConsulta() {
       renderConsulta();
     });
   }
-  document.getElementById("btn-volver-consulta").addEventListener("click", () => conTransicion(irACasa));
+  document.getElementById("btn-volver-consulta").addEventListener("click", () => {
+    estadoTiendaUI = {};
+    conTransicion(irACasa);
+  });
+}
+
+// v23: la tienda del cuaderno
+let estadoTiendaUI = {}; // { nuevas, confirmar, recien, falta } mientras la tienda esta abierta
+
+function wireTienda() {
+  const repintar = (cambios) => {
+    estadoTiendaUI = { ...estadoTiendaUI, ...cambios };
+    const scroll = screenEl.querySelector(".cuaderno-contenido");
+    const y = scroll ? scroll.scrollTop : 0;
+    renderConsulta();
+    const scroll2 = screenEl.querySelector(".cuaderno-contenido");
+    if (scroll2) scroll2.scrollTop = y;
+  };
+  for (const b of screenEl.querySelectorAll("[data-comprar]")) {
+    b.addEventListener("click", () => {
+      const c = productoTienda(b.dataset.comprar);
+      if (!c) return;
+      if (tienda.monedas < c.precio) {
+        Sonido.sonar("no");
+        repintar({ falta: c.id, confirmar: null, recien: null });
+        return;
+      }
+      Sonido.sonar("tocar");
+      repintar({ confirmar: c.id, falta: null, recien: null });
+    });
+  }
+  const cancelar = screenEl.querySelector("[data-cancelar-compra]");
+  if (cancelar) cancelar.addEventListener("click", () => repintar({ confirmar: null }));
+  const confirmar = screenEl.querySelector("[data-confirmar-compra]");
+  if (confirmar) {
+    confirmar.addEventListener("click", () => {
+      const c = productoTienda(confirmar.dataset.confirmarCompra);
+      if (!c || tienda.comprar(c.id) !== "ok") {
+        Sonido.sonar("no");
+        repintar({ confirmar: null });
+        return;
+      }
+      // lo que se pone, se pone enseguida (como los regalos de los amigos)
+      if (c.tipo === "accesorio") {
+        amigos.poner(c.acc || c.id);
+        Personaje.ponerAccesorio(amigos.puesto);
+      }
+      guardarTodo();
+      Sonido.sonar("compra");
+      vibrar([15, 30, 15]);
+      if (diario) diario.anotarHito(`Bought: ${c.nombre}`);
+      guardarTodo();
+      repintar({ confirmar: null, recien: c.id, falta: null });
+    });
+  }
 }
 
 function wireDiario() {
@@ -1667,9 +1973,11 @@ function abrirEscribir() {
     borradorHoy = null;
     eventoAmigos(estadoParaAmigos());
     if (mascota) mascota._marcarInteraccion?.(Date.now());
+    const racha = diario.racha();
+    const monedasDiario = tienda.ganar("diario") + tienda.ganarPorRacha(racha);
     guardarTodo();
     Sonido.sonar("guardado");
-    const racha = diario.racha();
+    if (monedasDiario) setTimeout(() => mostrarMonedas(monedasDiario), 700);
     const frases = {
       genial: "Best kind of day!",
       bien: "A good one.",
@@ -1701,6 +2009,7 @@ function wireBackup() {
       ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
       Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final, { forzar: true });
       Personaje.restaurar(guardado.extras && guardado.extras.personaje);
+      tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
       cargarAmigos(guardado.extras && guardado.extras.amigos);
       if (pieza) pieza.destruir();
       pieza = null;
@@ -1894,6 +2203,11 @@ function wireCaminar() {
     conTransicion(irACasa);
   });
   document.getElementById("btn-paso").addEventListener("click", () => registrarPasoDetectado());
+  // v22: anotar los pasos de hoy desde la app Salud cuando ella quiera
+  document.getElementById("btn-anotar-pasos").addEventListener("click", () => {
+    detenerSensoresCaminar();
+    abrirPreguntaPasos({ clave: claveDelDia(), cuando: "today" }, { volverA: "caminar" });
+  });
   const btnManual = document.getElementById("btn-wheretogo-manual");
   if (btnManual) {
     btnManual.addEventListener("click", () => {
@@ -2045,6 +2359,7 @@ function seguirEncuentro() {
   let siguiente = "despedida";
   if (amigos.estado(npc.id) === "lista") {
     encuentro.entregado = amigos.entregar(npc.id);
+    if (encuentro.entregado) ganarMonedas("mision");
     Personaje.ponerAccesorio(amigos.puesto);
     if (pieza) pieza.refrescar();
     diario.anotarHito(`${npc.nombre}: ${encuentro.entregado.regalo.nombre}`);
@@ -2070,6 +2385,7 @@ function manejarEleccionEncuentro(eleccion) {
   const huboEnamorado = npcsReg.procesarEncuentro(mascota, encuentro.npc, eleccion, Date.now());
   encuentro.paso = eleccion === "saludar" ? "dialogo" : "despedida";
   if (eleccion !== "saludar") encuentro.desairado = true;
+  else ganarMonedas("saludo");
   if (huboEnamorado) encuentro.pendienteEnamorado = true;
   guardarTodo();
   conTransicion(renderVistaActual);
@@ -2153,7 +2469,9 @@ function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord 
   mascota.resultadoMinijuego(atrapadas, Date.now());
   diario.anotarJuego(puntos);
   eventoAmigos({ tipo: "juego", puntos });
+  const monedasJuego = tienda.ganar("juego", Math.floor(puntos / 10)) + (nuevoRecord && puntos > 0 ? tienda.ganar("record") : 0);
   guardarTodo();
+  if (monedasJuego) setTimeout(() => mostrarMonedas(monedasJuego), 600);
   vibrar(puntos > 0 ? [20, 40, 20, 40, 20] : 20);
   Sonido.sonar(puntos > 0 ? "hito" : "mimo");
   controller.vista = "feedback";
@@ -2276,8 +2594,11 @@ function tick() {
       decir("Aw… they left.", 3000);
     }
   }
-  talVezVisita();
-  talVezPedirDiario();
+  // v22: la pregunta de los pasos va antes que una visita al azar (la visita puede esperar)
+  if (!talVezPreguntarPasos() && !talVezAvisarTienda()) {
+    talVezVisita();
+    talVezPedirDiario();
+  }
   revisarLugares();
   revisarClima();
   sonidoDelClima();
@@ -2353,6 +2674,16 @@ window.__mochi = {
     renderVistaActual();
   },
   guardar: () => guardarTodo(),
+  // v22
+  diario: () => diario,
+  tick: () => tick(),
+  tienda: () => tienda,
+  sinVisita: () => {
+    visita = null;
+  },
+  estadoPasos: () => ({ vista: controller.vista, dormida: mascota && mascota.dormida, visita: !!visita, fase: Final.fase(), dia: diaParaPreguntarPasos() }),
+  musica: () => Musica.escenaSonando(),
+  caminar: () => conTransicion(iniciarCaminar),
   clima: (t) => {
     Clima.forzar(t);
     if (t && Clima.esMalo(t)) {
