@@ -612,17 +612,22 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     if (!caja) return;
     let cx = Math.round((caja[0] + caja[2]) / 2);
     let y = caja[1] - 9 + (Math.floor(ahora / 400) % 2);
+    let lado = "abajo"; // hacia donde apunta la colita del globo (el objeto)
     if (y < 2) {
       // lo que cuelga del techo: el aviso va al costado
       cx = caja[2] + 7;
       y = Math.round((caja[1] + caja[3]) / 2) - 4 + (Math.floor(ahora / 400) % 2);
+      lado = "izquierda";
     }
     m.fillStyle = TINTA;
     m.fillRect(cx - 4, y - 1, 9, 9);
     m.fillStyle = "rgb(252,248,238)";
     m.fillRect(cx - 3, y, 7, 7);
     m.fillStyle = TINTA;
-    m.fillRect(cx - 1, y + 3, 1, 1); // colita del globo
+    // la colita va afuera del globo, apuntando al objeto (antes quedaba
+    // adentro, pegada al "!" y se veia como un pedacito roto en la marca)
+    if (lado === "abajo") m.fillRect(cx - 1, y + 8, 2, 1);
+    else m.fillRect(cx - 5, y + 3, 1, 2);
     m.fillStyle = "rgb(214,70,80)";
     m.fillRect(cx, y + 1, 1, 3);
     m.fillRect(cx, y + 5, 1, 1);
@@ -1100,7 +1105,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       else if (k >= pasos.length) parpadeo.t = ahora + 2200 + Math.random() * 3800;
     }
     const pose = e.dormido ? "dormido" : actor.pose;
-    const volteado = actor.dir < 0 && actor.pose === "parado";
+    const volteado = actor.dir > 0 && actor.pose === "parado";
     // estirarse: se alarga para arriba y se afina un poquito
     const ey = actor.estira ? 1 + 0.12 * actor.estira : 1;
     const ex = actor.estira ? 1 - 0.06 * actor.estira : 1;
@@ -1129,12 +1134,15 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
         if (listo(boca)) act.drawImage(boca, 0, 0);
       } else if (capasP[1]) {
         // Mantou: una capa de cara; arriba de la fila 39 van los ojos
-        // (miran y parpadean), abajo la boca queda quieta
+        // (parpadean), abajo la boca queda quieta. Sin desplazamiento
+        // horizontal/vertical por mirada: algunas bocas ('sonrisa', 'abierta',
+        // 'o') tienen puntos que llegan a la fila 38 (dentro de esta franja) y
+        // un corrimiento ahi las partia en dos, dejando la boca con un hueco.
         const cara = img(capasP[1].src);
         if (listo(cara)) {
           const CORTE = 39;
           const h = Math.max(1, Math.round(CORTE * alto));
-          act.drawImage(cara, 0, 0, 96, CORTE, mx, my + 34 - Math.round(34 * alto), 96, h);
+          act.drawImage(cara, 0, 0, 96, CORTE, 0, 34 - Math.round(34 * alto), 96, h);
           act.drawImage(cara, 0, CORTE, 96, 96 - CORTE, 0, CORTE, 96, 96 - CORTE);
         }
       }
