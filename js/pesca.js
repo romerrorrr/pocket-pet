@@ -2,8 +2,7 @@
  * pesca.js
  * =========
  * v24: el segundo minijuego de la tele, LAKE FISHING. El personaje pesca
- * desde un muelle en el West Lake (de dia o de noche, segun la hora), de
- * cara al lago.
+ * desde un muelle en el West Lake (de dia o de noche, segun la hora).
  *
  *   1. tocar: tira la caña (el corcho cae en el agua)
  *   2. cuando el corcho se hunde y sale "!", tocar rapido
@@ -15,7 +14,7 @@
  *
  * La partida dura 60 s. Hay un record por dificultad. El arte sale de
  * tools/pesca_arte.py; el personaje se dibuja con sus capas (y su ropa),
- * dado vuelta para que mire al lago.
+ * sentado en la punta del muelle.
  */
 
 const DURACION_MS = 60000;
@@ -25,9 +24,9 @@ const MW = 360;
 const MH = 160;
 
 export const DIFICULTADES_PESCA = {
-  easy: { nombre: "EASY", ventana: 1000, vel: 0.75, zona: 1.3, intentos: 2 },
-  normal: { nombre: "NORMAL", ventana: 700, vel: 1.1, zona: 1, intentos: 1 },
-  hard: { nombre: "HARD", ventana: 500, vel: 1.45, zona: 0.8, intentos: 1 },
+  easy: { nombre: "EASY", ventana: 1200, vel: 0.6, zona: 1.6, intentos: 3 },
+  normal: { nombre: "NORMAL", ventana: 900, vel: 0.85, zona: 1.3, intentos: 2 },
+  hard: { nombre: "HARD", ventana: 600, vel: 1.15, zona: 1, intentos: 1 },
 };
 
 export const PECES = [
@@ -127,7 +126,7 @@ export function iniciarPesca(contenedor, opts) {
   const capasImg = capas.map((src) => img(src));
   for (const p of PECES) img(arte(`pesca/pez_${p.id}.png`));
 
-  // el personaje se arma una vez en su lienzo de 96x96, dado vuelta (mira al lago)
+  // el personaje se arma una vez en su lienzo de 96x96
   const pj = document.createElement("canvas");
   pj.width = 96;
   pj.height = 96;
@@ -136,11 +135,7 @@ export function iniciarPesca(contenedor, opts) {
   const armarPersonaje = () => {
     if (pjListo || !capasImg.every(listo)) return;
     pjx.clearRect(0, 0, 96, 96);
-    pjx.save();
-    pjx.translate(96, 0);
-    pjx.scale(-1, 1);
     for (const c of capasImg) pjx.drawImage(c, 0, 0);
-    pjx.restore();
     pjListo = true;
   };
 
