@@ -1630,6 +1630,19 @@ img { -webkit-user-drag: none; }
 html[data-momento="amanecer"] .pantalla-encuentro { background-image: url("../assets/pieza/vista_amanecer.png"); }
 html[data-momento="atardecer"] .pantalla-encuentro { background-image: url("../assets/pieza/vista_atardecer.png"); }
 html[data-momento="noche"] .pantalla-encuentro { background-image: url("../assets/pieza/vista_noche.png"); }
+/* v25: la ventana de cada cuarto */
+html[data-cuarto="te"] .pantalla-encuentro { background-image: url("../assets/pieza/te/vista_dia.png"); }
+html[data-cuarto="te"][data-momento="amanecer"] .pantalla-encuentro { background-image: url("../assets/pieza/te/vista_amanecer.png"); }
+html[data-cuarto="te"][data-momento="atardecer"] .pantalla-encuentro { background-image: url("../assets/pieza/te/vista_atardecer.png"); }
+html[data-cuarto="te"][data-momento="noche"] .pantalla-encuentro { background-image: url("../assets/pieza/te/vista_noche.png"); }
+html[data-cuarto="bote"] .pantalla-encuentro { background-image: url("../assets/pieza/bote/vista_dia.png"); }
+html[data-cuarto="bote"][data-momento="amanecer"] .pantalla-encuentro { background-image: url("../assets/pieza/bote/vista_amanecer.png"); }
+html[data-cuarto="bote"][data-momento="atardecer"] .pantalla-encuentro { background-image: url("../assets/pieza/bote/vista_atardecer.png"); }
+html[data-cuarto="bote"][data-momento="noche"] .pantalla-encuentro { background-image: url("../assets/pieza/bote/vista_noche.png"); }
+html[data-cuarto="cabana"] .pantalla-encuentro { background-image: url("../assets/pieza/cabana/vista_dia.png"); }
+html[data-cuarto="cabana"][data-momento="amanecer"] .pantalla-encuentro { background-image: url("../assets/pieza/cabana/vista_amanecer.png"); }
+html[data-cuarto="cabana"][data-momento="atardecer"] .pantalla-encuentro { background-image: url("../assets/pieza/cabana/vista_atardecer.png"); }
+html[data-cuarto="cabana"][data-momento="noche"] .pantalla-encuentro { background-image: url("../assets/pieza/cabana/vista_noche.png"); }
 
 .pantalla-encuentro::before {
   content: "";
@@ -3370,6 +3383,10 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   transform: scale(1.06);
 }
 
+/* v25: el fondo borroso de las pantallas, segun el cuarto */
+:root[data-cuarto="te"] .con-cuarto::before { background-image: url("../assets/pieza/te/fondo.png"); }
+:root[data-cuarto="bote"] .con-cuarto::before { background-image: url("../assets/pieza/bote/fondo.png"); }
+:root[data-cuarto="cabana"] .con-cuarto::before { background-image: url("../assets/pieza/cabana/fondo.png"); }
 :root[data-momento="noche"] .con-cuarto::before { filter: blur(3px) brightness(0.32) saturate(0.8) hue-rotate(-8deg); }
 :root[data-momento="atardecer"] .con-cuarto::before { filter: blur(3px) brightness(0.42) sepia(0.2); }
 
@@ -4557,6 +4574,26 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .precio-tienda.caro { background: rgb(150, 142, 138); }
 .precio-tienda:focus-visible, .tarjeta-tienda .boton:focus-visible { outline: 2px solid rgb(232, 170, 52); outline-offset: 2px; }
 .moneda-mini { width: 14px; height: 14px; image-rendering: pixelated; }
+/* v25: elegir el cuarto y la mascota */
+.fila-elegir { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+.chip-elegir {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: none;
+  font-family: var(--fuente-cuerpo);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tinta);
+  background: rgb(255, 253, 247);
+  box-shadow: 0 0 0 2px var(--tinta);
+  cursor: pointer;
+}
+.chip-elegir img { width: 22px; height: 21px; image-rendering: pixelated; }
+.chip-elegir.puesto { background: rgb(236, 244, 230); color: rgb(54, 96, 48); }
+.chip-elegir:focus-visible { outline: 2px solid rgb(232, 170, 52); outline-offset: 2px; }
 .estado-tienda { font-size: 12px; font-weight: 600; color: rgb(84, 128, 74); }
 .falta-tienda { font-size: 11px; color: var(--rosa-oscuro); }
 .recien-tienda { font-family: var(--fuente-display); font-size: 8px; color: var(--rosa-oscuro); }
