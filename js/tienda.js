@@ -19,7 +19,11 @@ export const SEMANA_MS = 7 * 86400000;
 
 /**
  * El catalogo. semana: en que entrega llega (0 = el primer dia).
- * tipo: "comida" | "sticker" | "accesorio" | "decoracion".
+ * tipo: "comida" | "sticker" | "accesorio" | "decoracion" | "cuarto" | "mascota".
+ *
+ * v25: los cuartos (otro estilo para el cuarto entero; el depto japones es
+ * el de siempre y es gratis) y las mascotas de compania (una sola afuera a la
+ * vez, sin necesidades). Llegan de a poco, semanas 2 a 5.
  */
 export const CATALOGO = [
   { id: "osmanto", tipo: "comida", nombre: "Osmanthus cake", precio: 15, semana: 0, arte: "tienda/comida_osmanto.png", accion: "feed", efecto: { felicidad: 15 }, texto: "Sweet osmanthus jelly. Hangzhou's flower!" },
@@ -37,7 +41,17 @@ export const CATALOGO = [
   { id: "osmanto_corona", tipo: "accesorio", acc: "osmanto", nombre: "Osmanthus crown", precio: 130, semana: 3, arte: "tienda/acc_osmanto.png", texto: "A crown of tiny osmanthus flowers." },
   { id: "luces", tipo: "decoracion", nombre: "Fairy lights", precio: 160, semana: 3, arte: "tienda/deco_luces.png", texto: "Little lights over the map. They twinkle at night." },
   { id: "peluche", tipo: "decoracion", nombre: "Plushie", precio: 250, semana: 3, arte: "tienda/deco_peluche_baozi.png", texto: "A soft plushie to keep you company." },
+  // v25
+  { id: "gato", tipo: "mascota", nombre: "Black cat", precio: 300, semana: 2, arte: "mascotas/gato_sentado.png", texto: "A little black cat. Naps a lot." },
+  { id: "te", tipo: "cuarto", nombre: "Tea house", precio: 600, semana: 3, arte: "tienda/cuarto_te.png", texto: "A Hangzhou tea house with a moon window over the lake." },
+  { id: "perro", tipo: "mascota", nombre: "Shiba", precio: 300, semana: 4, arte: "mascotas/perro_sentado.png", texto: "A happy shiba. Follows you around the room." },
+  { id: "bote", tipo: "cuarto", nombre: "Houseboat", precio: 800, semana: 4, arte: "tienda/cuarto_bote.png", texto: "A little houseboat floating on West Lake." },
+  { id: "serpiente", tipo: "mascota", nombre: "White snake", precio: 300, semana: 5, arte: "mascotas/serpiente_enroscada.png", texto: "A white snake, like the one in the West Lake legend." },
+  { id: "cabana", tipo: "cuarto", nombre: "Winter cabin", precio: 1000, semana: 5, arte: "tienda/cuarto_cabana.png", texto: "A log cabin with a crackling fireplace and snow outside." },
 ];
+
+/** La ultima entrega (para saber si todavia llegan cosas). */
+export const ULTIMA_SEMANA = Math.max(...CATALOGO.map((c) => c.semana));
 
 /** Los accesorios de la tienda (id del accesorio -> archivo). */
 export const ACCESORIOS_TIENDA = Object.fromEntries(CATALOGO.filter((c) => c.tipo === "accesorio").map((c) => [c.acc || c.id, c.arte]));
@@ -66,6 +80,34 @@ export class Tienda {
     this.rachaPremiada = 0; // la ultima racha de 7 que ya se premio
     this.avisoSemana = -1; // la ultima entrega que Baozi ya anuncio
     this.todoDesbloqueado = false; // modo director: ver todas las semanas
+    this.cuarto = "depto"; // v25: el cuarto puesto ("depto" = el de siempre)
+    this.mascota = null; // v25: la mascota que esta afuera (o ninguna)
+  }
+
+  /** v25: los cuartos que tiene (sin contar el depto, que es de todos). */
+  cuartos() {
+    return CATALOGO.filter((c) => c.tipo === "cuarto" && this.tiene(c.id)).map((c) => c.id);
+  }
+
+  /** v25: las mascotas que tiene. */
+  mascotas() {
+    return CATALOGO.filter((c) => c.tipo === "mascota" && this.tiene(c.id)).map((c) => c.id);
+  }
+
+  /** v25: pone un cuarto que tiene (o el depto). true si cambio. */
+  ponerCuarto(id) {
+    if (id !== "depto" && !(porId(id) && porId(id).tipo === "cuarto" && this.tiene(id))) return false;
+    if (this.cuarto === id) return false;
+    this.cuarto = id;
+    return true;
+  }
+
+  /** v25: saca una mascota que tiene, o la guarda (null). true si cambio. */
+  ponerMascota(id) {
+    if (id !== null && !(porId(id) && porId(id).tipo === "mascota" && this.tiene(id))) return false;
+    if (this.mascota === id) return false;
+    this.mascota = id;
+    return true;
   }
 
   semanaActual(ahora = Date.now()) {
@@ -197,6 +239,8 @@ export class Tienda {
       rachaPremiada: this.rachaPremiada,
       avisoSemana: this.avisoSemana,
       todoDesbloqueado: this.todoDesbloqueado,
+      cuarto: this.cuarto,
+      mascota: this.mascota,
     };
   }
 
@@ -220,6 +264,9 @@ export class Tienda {
     t.rachaPremiada = entero(datos.rachaPremiada);
     t.avisoSemana = Number.isInteger(datos.avisoSemana) ? datos.avisoSemana : -1;
     t.todoDesbloqueado = datos.todoDesbloqueado === true;
+    // v25: solo lo que de verdad tiene (si no, el depto y sin mascota)
+    if (typeof datos.cuarto === "string") t.ponerCuarto(datos.cuarto);
+    if (typeof datos.mascota === "string") t.ponerMascota(datos.mascota);
     return t;
   }
 }

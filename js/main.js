@@ -34,7 +34,7 @@ import { escribir, conNombre } from "./dialogo.js";
 import { arte } from "./arte.js";
 import { FINAL, FECHAS, DESEOS_PROPIOS, MUDANZA } from "./config.js";
 import { Deseos } from "./deseos.js";
-import { crearPieza, posicionEnMapa } from "./pieza.js";
+import { crearPieza, posicionEnMapa, ponerCuarto } from "./pieza.js";
 import * as Clima from "./clima.js";
 import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progresoDe, registrarAccesoriosExtra } from "./amigos.js";
 import { Tienda, porId as productoTienda } from "./tienda.js";
@@ -411,6 +411,7 @@ function arrancar() {
     Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final);
     Personaje.restaurar(guardado.extras && guardado.extras.personaje);
     tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
+    aplicarCuarto();
     deseos = Deseos.desdeObjeto(guardado.extras && guardado.extras.deseos, DESEOS_PROPIOS);
     cargarPesca(guardado.extras && guardado.extras.pesca);
     cargarMudanza(guardado.extras && guardado.extras.mudanza);
@@ -539,6 +540,7 @@ function confirmarNombre() {
   npcsReg = new RegistroNPCs();
   lugaresReg = new RegistroLugares();
   tienda = new Tienda();
+  aplicarCuarto();
   deseos = Deseos.desdeObjeto(null, DESEOS_PROPIOS);
   cargarPesca(null);
   cargarMudanza(null);
@@ -767,6 +769,8 @@ function estadoPieza() {
     pines: LUGARES.filter((l) => lugaresReg.desbloqueados.has(l.id)).map((l) => ({ lat: l.lat, lon: l.lon, color: l.color })),
     dia: new Date().getDate(),
     anillo: Final.dijoQueSi(),
+    cuarto: tienda.cuarto || "depto", // v25
+    mascota: tienda.mascota || null, // v25
     avisos: fotoPedida
       ? []
       : [
@@ -820,6 +824,11 @@ function tocarObjeto(id) {
       break;
     case "companero":
       tocarCompanero();
+      break;
+    case "mascota":
+      // v25: la mascota de compania: un corazon (lo dibuja pieza.js) y un sonidito
+      Sonido.sonar("mimo");
+      vibrar(12);
       break;
     case "reloj":
       tocarReloj();
@@ -1123,6 +1132,12 @@ function tocarCompanero() {
   decirCompanero(frases[i], 4200);
 }
 
+/** v25: el cuarto puesto, para el dibujo del cuarto y las pantallas (CSS). */
+function aplicarCuarto() {
+  const id = ponerCuarto(tienda.cuarto);
+  document.documentElement.dataset.cuarto = id;
+}
+
 /** Baozi avisa una vez por entrega que hay cosas nuevas en la tienda. */
 function talVezAvisarTienda() {
   if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
@@ -1131,7 +1146,15 @@ function talVezAvisarTienda() {
   if (semana <= tienda.avisoSemana || !tienda.nuevas().length) return false;
   tienda.avisoSemana = semana;
   guardarTodo();
-  decir(semana === 0 ? "I opened a little shop in the notebook! ♪" : "New things at the shop! ♪", 5000);
+  const nuevas = tienda.nuevas();
+  const texto = semana === 0
+    ? "I opened a little shop in the notebook! ♪"
+    : nuevas.some((c) => c.tipo === "cuarto")
+      ? "A whole new room at the shop! ♪"
+      : nuevas.some((c) => c.tipo === "mascota")
+        ? "There's a little friend waiting at the shop! ♪"
+        : "New things at the shop! ♪";
+  decir(texto, 5000);
   return true;
 }
 
@@ -2093,6 +2116,24 @@ function wireTienda() {
       repintar({ confirmar: c.id, falta: null, recien: null });
     });
   }
+  // v25: elegir el cuarto y la mascota
+  for (const b of screenEl.querySelectorAll("[data-poner-cuarto]")) {
+    b.addEventListener("click", () => {
+      if (!tienda.ponerCuarto(b.dataset.ponerCuarto)) return;
+      aplicarCuarto();
+      guardarTodo();
+      Sonido.sonar("guardado");
+      repintar({ confirmar: null, recien: null, falta: null });
+    });
+  }
+  for (const b of screenEl.querySelectorAll("[data-poner-mascota]")) {
+    b.addEventListener("click", () => {
+      if (!tienda.ponerMascota(b.dataset.ponerMascota || null)) return;
+      guardarTodo();
+      Sonido.sonar(tienda.mascota ? "guardado" : "tocar");
+      repintar({ confirmar: null, recien: null, falta: null });
+    });
+  }
   const cancelar = screenEl.querySelector("[data-cancelar-compra]");
   if (cancelar) cancelar.addEventListener("click", () => repintar({ confirmar: null }));
   const confirmar = screenEl.querySelector("[data-confirmar-compra]");
@@ -2109,6 +2150,11 @@ function wireTienda() {
         amigos.poner(c.acc || c.id);
         Personaje.ponerAccesorio(amigos.puesto);
       }
+      if (c.tipo === "cuarto") {
+        tienda.ponerCuarto(c.id);
+        aplicarCuarto();
+      }
+      if (c.tipo === "mascota") tienda.ponerMascota(c.id);
       guardarTodo();
       Sonido.sonar("compra");
       vibrar([15, 30, 15]);
@@ -2267,6 +2313,7 @@ function wireBackup() {
       Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final, { forzar: true });
       Personaje.restaurar(guardado.extras && guardado.extras.personaje);
       tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
+      aplicarCuarto();
       deseos = Deseos.desdeObjeto(guardado.extras && guardado.extras.deseos, DESEOS_PROPIOS);
       cargarPesca(guardado.extras && guardado.extras.pesca);
       cargarMudanza(guardado.extras && guardado.extras.mudanza);

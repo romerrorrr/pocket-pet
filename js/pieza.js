@@ -56,6 +56,27 @@ const AMBIENTES = {
   dormido: { amb: [30, 32, 66], ventana: [96, 118, 196], haz: 0.55, lamparas: 0 },
 };
 const [VX0, VY0, VX1, VY1] = PIEZA.vidrio;
+
+// v25: los cuartos alternativos (tools/cuartos.py). La misma distribucion
+// (cada objeto en su caja); cambian el arte y algunas luces. Lo compartido
+// (mapa, sellos, recuerdos) sigue en assets/pieza/.
+//   luces: se suman/pisan a PIEZA.luces. fuego: [x0, x1] de la boca de la chimenea.
+export const CUARTOS = {
+  depto: {},
+  te: { luces: { farol: [246, 26, 92, [255, 178, 130]] } },
+  bote: { luces: { farol: [246, 26, 92, [255, 210, 140]] } },
+  cabana: { luces: { chimenea: [196, 102, 78, [255, 158, 88]] }, fuego: [172, 220] },
+};
+let cuarto = "depto";
+/** El cuarto que esta puesto (main.js lo avisa al cargar y al cambiarlo). */
+export function ponerCuarto(id) {
+  cuarto = cuartoValido(id);
+  return cuarto;
+}
+export const cuartoValido = (id) => (Object.prototype.hasOwnProperty.call(CUARTOS, id) ? id : "depto");
+/** La ruta del arte del cuarto que esta puesto (lo compartido va sin carpeta). */
+export const rutaCuarto = (n, id = cuarto) => (cuartoValido(id) === "depto" ? `pieza/${n}` : `pieza/${cuartoValido(id)}/${n}`);
+const lucesDelCuarto = () => ({ ...(PIEZA.luces || {}), ...(CUARTOS[cuarto].luces || {}) });
 const PISO = PIEZA.piso || 118;
 const LUCES = PIEZA.luces || {};
 const PANTALLA_TELE = (() => {
@@ -71,10 +92,10 @@ function dentroHaz(x, y) {
 }
 
 /** Donde se ve el cielo de verdad (vidrio sin marco, cortina ni lampara delante). */
-let hueco = null;
+const huecos = new Map();
 function huecoVentana() {
-  if (hueco) return hueco;
-  const capas = [img("pieza/fondo.png"), img("pieza/cortinas.png")];
+  if (huecos.has(cuarto)) return huecos.get(cuarto);
+  const capas = [img(rutaCuarto("fondo.png")), img(rutaCuarto("cortinas.png"))];
   if (!capas.every(listo)) return null;
   const c = document.createElement("canvas");
   c.width = MW;
@@ -82,8 +103,9 @@ function huecoVentana() {
   const ctx = c.getContext("2d");
   for (const i of capas) ctx.drawImage(i, 0, 0);
   const a = ctx.getImageData(0, 0, MW, MH).data;
-  hueco = new Uint8Array(MW * MH);
+  const hueco = new Uint8Array(MW * MH);
   for (let y = VY0; y <= VY1; y++) for (let x = VX0; x <= VX1; x++) hueco[y * MW + x] = a[(y * MW + x) * 4 + 3] === 0 ? 1 : 0;
+  huecos.set(cuarto, hueco);
   return hueco;
 }
 
@@ -127,8 +149,10 @@ function amigoTenido(im, id, momento) {
 
 const mascaras = new Map();
 /** La mascara (se multiplica sobre el cuarto). Se calcula una vez por estado. */
-function mascara(clave, amb, lamparas, tele) {
+function mascara(clave, amb, lamparas, tele, fuego = 0) {
+  clave = `${cuarto}|${clave}|${fuego}`;
   if (mascaras.has(clave)) return mascaras.get(clave);
+  const LUCES = lucesDelCuarto();
   const h = huecoVentana();
   const c = document.createElement("canvas");
   c.width = MW;
@@ -141,6 +165,7 @@ function mascara(clave, amb, lamparas, tele) {
     for (const id of ["farol", "lampara"]) if (LUCES[id]) fuentes.push({ l: LUCES[id], f: lamparas });
   }
   if (tele && LUCES.tele) fuentes.push({ l: LUCES.tele, f: 0.8 });
+  if (fuego && LUCES.chimenea) fuentes.push({ l: LUCES.chimenea, f: fuego });
   for (let y = 0; y < MH; y++) {
     for (let x = 0; x < MW; x++) {
       const b = (BAYER[y % 4][x % 4] / 16 - 0.47) * 0.45;
@@ -192,12 +217,28 @@ function mascara(clave, amb, lamparas, tele) {
 
 const brillos = new Map();
 /** El resplandor (se suma con "screen"): halos tramados y el cono de la lampara. */
-function brillo(clave, fuerza, noche) {
+function brillo(clave, fuerza, noche, fuego = 0) {
+  clave = `${cuarto}|${clave}|${fuego}`;
   if (brillos.has(clave)) return brillos.get(clave);
+  const LUCES = lucesDelCuarto();
   const c = document.createElement("canvas");
   c.width = MW;
   c.height = MH;
   const ctx = c.getContext("2d");
+  if (fuego && LUCES.chimenea) {
+    const [fx, fy] = LUCES.chimenea;
+    for (let y = fy - 40; y <= fy + 30; y++) {
+      for (let x = fx - 56; x <= fx + 56; x++) {
+        const dd = Math.hypot(x - fx, (y - fy) * 1.3) / 56;
+        if (dd >= 1) continue;
+        const j = (BAYER[((y % 4) + 4) % 4][((x % 4) + 4) % 4] / 16 - 0.47) * 0.3;
+        const banda = Math.max(0, Math.min(3, Math.floor((1 - dd) * 3 + j + 0.15)));
+        if (!banda) continue;
+        ctx.fillStyle = `rgba(255,150,80,${(0.07 * banda * fuego).toFixed(3)})`;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
   if (fuerza > 0) {
     // halos en anillos solidos (pixel art: bandas, no ruido)
     const anillos = (cx, cy, radio, rgb, alfa, estirar = 1.1) => {
@@ -238,6 +279,7 @@ function brillo(clave, fuerza, noche) {
 
 const ETIQUETAS = {
   companero: "Your partner",
+  mascota: "Your pet",
   heladera: "Fridge: food and water",
   botiquin: "First aid: medicine",
   radio: "Radio: change the station",
@@ -359,6 +401,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   // v24: despues del si, el personaje de rom vive en el cuarto, en su almohadon (a la derecha)
   const COMP_X = bcx + 58;
   cajas.companero = [COMP_X - 22, bcy - 38, COMP_X + 22, bcy + 22];
+  cajas.mascota = [40, 126, 60, 147]; // v25: se mueve con la mascota
   const botones = {};
   for (const [id, caja] of Object.entries(cajas)) {
     const b = document.createElement("button");
@@ -374,6 +417,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     botones[id] = { el: b, caja };
   }
   botones.companero.el.hidden = true; // solo cuando vive aca
+  botones.mascota.el.hidden = true; // solo si hay una afuera
 
   let ultimoDibujo = 0;
   let personajeAlta = null;
@@ -571,6 +615,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
 
   function golpe(id) {
     golpes[id] = performance.now();
+    if (id === "mascota") mas.corazon = performance.now();
   }
 
   function offsetGolpe(id, ahora) {
@@ -742,6 +787,183 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     }
   }
 
+  // ------------------------------------------------------------------
+  // v25: la mascota de compania (gato negro, serpiente blanca o perro
+  // shiba; tools/mascotas.py). No tiene necesidades: anda por el piso de
+  // adelante, a veces duerme la siesta, duerme cuando duerme el personaje,
+  // y el perro lo sigue cuando camina. Si se la toca sale un corazon.
+  // ------------------------------------------------------------------
+  const LUGARES_MASCOTA = [152, 52, 306]; // junto a la mesita (su lugar), al lado de la heladera, frente a la tele
+  const PIE_MASCOTA = 147;
+  const VEL_MASCOTA = { gato: 20, perro: 26, serpiente: 8 };
+  const mas = { id: null, x: LUGARES_MASCOTA[0], dir: 1, pose: "quieta", destino: null, prox: 0, siesta: 0, corazon: 0, parpadeo: 0 };
+  // todos los cuadros (se cargan juntos al aparecer: si no, parpadea la primera vez que cambia)
+  const CUADROS_MASCOTA = {
+    gato: ["sentado", "sentado_b", "parpadeo", "dormido", "dormido_b", "camina", "camina_b"],
+    perro: ["sentado", "sentado_b", "parpadeo", "contento", "dormido", "dormido_b", "camina", "camina_b"],
+    serpiente: ["enroscada", "alta", "lengua", "dormida", "repta", "repta_b"],
+  };
+  let ultimoCuadro = null;
+  const masC = document.createElement("canvas");
+  masC.width = 22;
+  masC.height = 21;
+  const masX = masC.getContext("2d");
+
+  function moverMascota(e, ahora, dt) {
+    const id = e.mascota || null;
+    if (mas.id !== id) {
+      mas.id = id;
+      ultimoCuadro = null;
+      if (id && CUADROS_MASCOTA[id]) for (const c of CUADROS_MASCOTA[id]) img(`mascotas/${id}_${c}.png`);
+      mas.x = LUGARES_MASCOTA[0];
+      mas.pose = "quieta";
+      mas.destino = null;
+      mas.prox = ahora + 9000 + Math.random() * 9000;
+    }
+    if (!id) return;
+    if (e.dormido) {
+      mas.destino = null;
+      mas.pose = "dormida";
+      mas.siesta = ahora + 4000;
+      return;
+    }
+    if (mas.pose === "dormida" && ahora > mas.siesta) mas.pose = "quieta";
+    // el perro va atras del personaje cuando camina
+    if (id === "perro" && mas.pose !== "dormida" && actor.paso && actor.paso.tipo === "caminar") {
+      const obj = Math.max(40, Math.min(318, Math.round(actor.x - 30 * actor.dir)));
+      if (Math.abs(obj - mas.x) > 8) mas.destino = obj;
+    }
+    if (mas.destino == null && mas.pose !== "dormida" && ahora > mas.prox) {
+      const r = Math.random();
+      if (r < 0.5) {
+        const otros = LUGARES_MASCOTA.filter((l) => Math.abs(l - mas.x) > 20);
+        mas.destino = otros[Math.floor(Math.random() * otros.length)];
+      } else if (r < 0.75) {
+        mas.pose = "dormida";
+        mas.siesta = ahora + 18000 + Math.random() * 25000;
+      }
+      mas.prox = ahora + 22000 + Math.random() * 26000;
+    }
+    if (mas.destino != null) {
+      mas.pose = "camina";
+      const d = mas.destino - mas.x;
+      mas.dir = d < 0 ? -1 : 1;
+      const paso = ((VEL_MASCOTA[id] || 20) * dt) / 1000;
+      if (Math.abs(d) <= paso) {
+        mas.x = mas.destino;
+        mas.destino = null;
+        mas.pose = "quieta";
+      } else mas.x += Math.sign(d) * paso;
+    }
+  }
+
+  function cuadroMascota(id, ahora) {
+    const alt = (ms) => Math.floor(ahora / ms) % 2 === 1;
+    if (mas.pose === "dormida") return id === "serpiente" ? "serpiente_dormida" : `${id}_dormido${alt(1100) ? "_b" : ""}`;
+    if (mas.pose === "camina") return id === "serpiente" ? `serpiente_repta${alt(320) ? "_b" : ""}` : `${id}_camina${alt(170) ? "_b" : ""}`;
+    if (!mas.parpadeo) mas.parpadeo = ahora + 3000;
+    if (ahora > mas.parpadeo + 150) mas.parpadeo = ahora + 2500 + Math.random() * 3500;
+    const parpadea = ahora > mas.parpadeo;
+    if (id === "serpiente") {
+      if (ahora % 3600 < 360) return "serpiente_lengua";
+      return alt(1700) ? "serpiente_alta" : "serpiente_enroscada";
+    }
+    if (parpadea) return `${id}_parpadeo`;
+    if (id === "perro") {
+      if (mas.corazon && ahora - mas.corazon < 2000) return "perro_contento";
+      return `perro_sentado${alt(240) ? "_b" : ""}`;
+    }
+    return `gato_sentado${Math.floor(ahora / 650) % 4 === 0 ? "_b" : ""}`;
+  }
+
+  function dibujarMascota(e, ahora) {
+    const b = botones.mascota;
+    if (b) b.el.hidden = !mas.id;
+    if (!mas.id) return;
+    let sp = img(`mascotas/${cuadroMascota(mas.id, ahora)}.png`);
+    if (!listo(sp)) sp = ultimoCuadro;
+    if (!listo(sp)) return;
+    ultimoCuadro = sp;
+    const x = Math.round(mas.x);
+    // sombrita
+    for (let xx = x - 8; xx <= x + 8; xx++) {
+      for (let yy = PIE_MASCOTA - 1; yy <= PIE_MASCOTA + 1; yy++) {
+        if (((xx - x) / 8.5) ** 2 + ((yy - PIE_MASCOTA) / 1.6) ** 2 <= 1 && BAYER[((yy % 4) + 4) % 4][((xx % 4) + 4) % 4] < 10) pixel(xx, yy, "rgb(22,24,46)");
+      }
+    }
+    // toma la luz del cuarto (como un personaje claro)
+    masX.globalCompositeOperation = "source-over";
+    masX.clearRect(0, 0, 22, 21);
+    masX.drawImage(sp, 0, 0);
+    const luz = LUZ_CLARO[e.dormido ? "dormido" : e.momento];
+    if (luz) {
+      masX.globalCompositeOperation = "multiply";
+      masX.fillStyle = `rgb(${luz.join(",")})`;
+      masX.fillRect(0, 0, 22, 21);
+      masX.globalCompositeOperation = "destination-in";
+      masX.drawImage(sp, 0, 0);
+      masX.globalCompositeOperation = "source-over";
+    }
+    const y0 = PIE_MASCOTA - 20 + offsetGolpe("mascota", ahora);
+    m.save();
+    m.translate(x, 0);
+    m.scale(mas.dir < 0 ? -1 : 1, 1);
+    m.drawImage(masC, -11, y0);
+    m.restore();
+    if (b) {
+      b.caja = [x - 12, PIE_MASCOTA - 22, x + 12, PIE_MASCOTA + 2];
+      const [x0, yA, x1, yB] = b.caja;
+      b.el.style.left = `${T.ox + x0 * T.s}px`;
+      b.el.style.top = `${T.oy + yA * T.s}px`;
+      b.el.style.width = `${(x1 - x0 + 1) * T.s}px`;
+      b.el.style.height = `${(yB - yA + 1) * T.s}px`;
+    }
+    // el corazon al tocarla
+    if (mas.corazon && ahora - mas.corazon < 1600) {
+      const t = (ahora - mas.corazon) / 1600;
+      const hx = x - 3;
+      const hy = Math.round(PIE_MASCOTA - 30 - t * 10);
+      CORAZON_NUBE.forEach((fila, j) => {
+        for (let i = 0; i < fila.length; i++) {
+          if (fila[i] === "0") continue;
+          m.fillStyle = fila[i] === "2" ? `rgba(255,214,224,${1 - t})` : `rgba(232,64,96,${1 - t})`;
+          m.fillRect(hx + i, hy + j, 1, 1);
+        }
+      });
+    }
+  }
+
+  // v25: el fuego de la chimenea (cabana): llamitas que titilan, despues de la luz
+  function llamas([x0, x1], ahora, dormido) {
+    const base = PIEZA.piso - 11;
+    const n = Math.floor((x1 - x0 - 8) / 5);
+    for (let i = 0; i <= n; i++) {
+      const cx = x0 + 6 + i * 5;
+      const centro = 1 - Math.abs(i - n / 2) / (n / 2 + 1);
+      const t = ahora / 140 + i * 2.3;
+      let alto = Math.round((dormido ? 3 : 7 + 9 * centro) * (0.75 + 0.25 * Math.sin(t) + 0.12 * Math.sin(t * 2.7)));
+      if (alto < 2) alto = 2;
+      for (let k = 0; k < alto; k++) {
+        const ancho = Math.max(0, Math.round(2.4 * (1 - k / alto)));
+        const dx = Math.round(Math.sin(t * 1.3 + k * 0.5) * (k / alto) * 1.5);
+        for (let xx = cx - ancho; xx <= cx + ancho; xx++) {
+          const borde = Math.abs(xx - cx) >= ancho;
+          m.fillStyle = dormido ? "rgb(200,70,40)" : k < 2 || !borde ? (k > alto * 0.6 ? "rgb(255,170,70)" : "rgb(255,226,140)") : "rgb(236,104,48)";
+          m.fillRect(xx + dx, base - k, 1, 1);
+        }
+      }
+    }
+    // chispitas
+    if (!dormido) {
+      for (let i = 0; i < 3; i++) {
+        const t = ((ahora / 1100 + i * 0.37) % 1);
+        const x = x0 + 12 + ((i * 17 + Math.floor(ahora / 1100) * 7) % (x1 - x0 - 20));
+        m.fillStyle = `rgba(255,200,110,${(1 - t).toFixed(2)})`;
+        m.fillRect(Math.round(x + Math.sin(t * 9) * 2), Math.round(base - 18 - t * 20), 1, 1);
+      }
+    }
+  }
+
   // v24: la nubecita del deseo del dia (se mece un poquito)
   const CORAZON_NUBE = ["0110110", "1211111", "1111111", "0111110", "0011100", "0001000"];
   function nubeDeseo(x, y, ahora) {
@@ -851,6 +1073,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
 
   function dibujar(ahora) {
     const e = estado();
+    cuarto = cuartoValido(e.cuarto);
+    const datosCuarto = CUARTOS[cuarto];
     const clave = e.dormido ? "dormido" : e.momento;
     const clima = e.clima || "despejado";
     const gris = clima !== "despejado";
@@ -864,7 +1088,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     m.clearRect(0, 0, MW, MH);
 
     // 1. el cielo y la visita, detras del vidrio
-    sprite(`pieza/cielo_${e.momento}.png`, vx0, vy0);
+    sprite(rutaCuarto(`cielo_${e.momento}.png`), vx0, vy0);
     if (e.npc) {
       const n = img(e.npcArte || `npcs/npc_${e.npc}.png`);
       if (listo(n)) {
@@ -879,16 +1103,17 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       }
     }
     // 1b. el clima de afuera
-    if (gris) climaVentana(clima, ahora);
+    // en la cabana (nieve afuera) la lluvia cae como nieve
+    if (gris) climaVentana(cuarto === "cabana" && (clima === "lluvia" || clima === "llovizna") ? "nieve" : clima, ahora);
     // 2. el cuarto
-    sprite("pieza/fondo.png", 0, 0);
-    sprite("pieza/cortinas.png", 0, 0);
+    sprite(rutaCuarto("fondo.png"), 0, 0);
+    sprite(rutaCuarto("cortinas.png"), 0, 0);
 
     // 3. los objetos
     for (const [id, caja] of Object.entries(PIEZA.objetos)) {
-      let rel = `pieza/${id}.png`;
-      if (id === "farol" && !lamparas) rel = "pieza/farol_apagado.png";
-      if (id === "radio" && !e.sonido) rel = "pieza/radio_apagada.png";
+      let rel = rutaCuarto(`${id}.png`);
+      if (id === "farol" && !lamparas) rel = rutaCuarto("farol_apagado.png");
+      if (id === "radio" && !e.sonido) rel = rutaCuarto("radio_apagada.png");
       let dx = 0;
       if (id === "farol") dx = Math.floor(ahora / 1400) % 4 === 1 ? 1 : Math.floor(ahora / 1400) % 4 === 3 ? -1 : 0;
       sprite(rel, caja[0] + dx, caja[1] + offsetGolpe(id, ahora));
@@ -919,7 +1144,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     }
     // v24: el segundo almohadon (el del personaje de rom)
     if (e.companero) {
-      const f = img("pieza/fondo.png");
+      const f = img(rutaCuarto("fondo.png"));
       if (listo(f)) m.drawImage(f, 168, 120, 56, 19, COMP_X - 28, 120, 56, 19);
     }
     // y su valijita, los primeros dias
@@ -1016,10 +1241,13 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     // 4. LA LUZ: multiplica la mascara y suma el resplandor
     m.save();
     m.globalCompositeOperation = "multiply";
-    m.drawImage(mascara(`${clave}|${lamparas}|${teleViva}|${gris ? clima : ""}`, amb, lamparas, teleViva), 0, 0);
+    // la chimenea (cabana): siempre prendida; dormidos, solo brasas
+    const fuego = datosCuarto.fuego ? (e.dormido ? 0.45 : 1) : 0;
+    m.drawImage(mascara(`${clave}|${lamparas}|${teleViva}|${gris ? clima : ""}`, amb, lamparas, teleViva, fuego), 0, 0);
     m.globalCompositeOperation = "screen";
-    if (clave !== "dia") m.drawImage(brillo(`${clave}|${lamparas}`, lamparas, clave === "noche" || clave === "atardecer"), 0, 0);
+    if (clave !== "dia" || fuego) m.drawImage(brillo(`${clave}|${lamparas}`, clave === "dia" ? 0 : lamparas, clave === "noche" || clave === "atardecer", fuego), 0, 0);
     m.restore();
+    if (fuego) llamas(datosCuarto.fuego, ahora, e.dormido);
     // v23: los farolitos y las lucecitas de la tienda se prenden cuando oscurece
     if (clave !== "dia" && clave !== "dormido") {
       const decos = e.decoraciones || [];
@@ -1090,6 +1318,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     const dt = ultimoDibujo ? Math.min(250, ahora - ultimoDibujo) : 0;
     ultimoDibujo = ahora;
     moverActor(e, ahora, dt);
+    moverMascota(e, ahora, dt);
     ubicarCajaActor();
     ubicarGlobo();
     const respira = actor.pose === "sentado" && Math.floor(ahora / 700) % 3 === 0 ? -1 : 0;
@@ -1174,6 +1403,9 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       m.restore();
     }
     personajeAlta = !pixelado ? { x0, y0, pose, volteado, ex, ey, fig, alto } : null;
+
+    // v25: la mascota, adelante de todo en el piso
+    dibujarMascota(e, ahora);
 
     // 6. avisos de lo que necesita
     for (const id of e.avisos) aviso(id, ahora);

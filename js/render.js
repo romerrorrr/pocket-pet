@@ -35,7 +35,8 @@ import { buscarCarta } from "./cartas.js";
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
 import { RECORTES_MENU } from "./recortes.js";
 import { AMIGOS, REGALOS, MAX_CORAZONES } from "./amigos.js";
-import { CATALOGO } from "./tienda.js";
+import { CATALOGO, ULTIMA_SEMANA } from "./tienda.js";
+import { rutaCuarto } from "./pieza.js";
 
 // Boca abierta: rom confirmo que la boca de "sorprendido" ES la boca
 // abierta del set. Comer y atrapar usan ese sprite real.
@@ -399,7 +400,7 @@ export function renderHeladera(container, especiales = []) {
   container.innerHTML = `
     <div class="pantalla-heladera con-cuarto">
       <div class="heladera-caja">
-        <img class="heladera-fondo" src="${arte("pieza/heladera_adentro.png")}" alt="" draggable="false" />
+        <img class="heladera-fondo" src="${arte(rutaCuarto("heladera_adentro.png"))}" alt="" draggable="false" />
         ${items}
       </div>
       <div class="heladera-espia">${spriteCara("ojo_especial_hambriento.png", "boca_especial_hambriento.png")}</div>
@@ -1018,7 +1019,7 @@ export function renderCloset(container, amigos, accTienda = []) {
 // ------------------------------------------------------------------
 
 // tamaño del arte de las cosas del cuarto y los stickers (para agrandarlas en pixel entero)
-const TAM_ARTE_TIENDA = { farolitos: [58, 17], pecera: [17, 15], bonsai: [15, 14], poster: [18, 24], luces: [70, 9], peluche: [18, 18], loto: [13, 13], corazones: [13, 13] };
+const TAM_ARTE_TIENDA = { te: [92, 52], bote: [92, 52], cabana: [92, 52], gato: [22, 21], perro: [22, 21], serpiente: [22, 21], farolitos: [58, 17], pecera: [17, 15], bonsai: [15, 14], poster: [18, 24], luces: [70, 9], peluche: [18, 18], loto: [13, 13], corazones: [13, 13] };
 
 function vistaTienda(c, peluche) {
   if (c.tipo === "accesorio") return `<span class="acc-vista"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
@@ -1034,6 +1035,8 @@ function estadoTienda(c, tienda, puesto) {
   if (!tienda.tiene(c.id)) return "";
   if (c.tipo === "accesorio") return puesto === (c.acc || c.id) ? "Wearing it ✓" : "In your closet ✓";
   if (c.tipo === "sticker") return "In your camera ✓";
+  if (c.tipo === "cuarto") return "Yours ✓";
+  if (c.tipo === "mascota") return "Yours ✓";
   return "In your room ✓";
 }
 
@@ -1064,6 +1067,30 @@ function tarjetaTienda(c, tienda, { nuevas, confirmar, recien, puesto, peluche, 
     </div>`;
 }
 
+// v25: elegir el cuarto y la mascota (solo si ya tiene alguno)
+const NOMBRE_DEPTO = "Apartment";
+function elegirCasa(tienda) {
+  const cuartos = tienda.cuartos();
+  const mascotas = tienda.mascotas();
+  let html = "";
+  if (cuartos.length) {
+    const opciones = [{ id: "depto", nombre: NOMBRE_DEPTO }, ...cuartos.map((id) => CATALOGO.find((c) => c.id === id))];
+    html += `<div class="subtitulo-lista">Your room</div><div class="fila-elegir" role="group" aria-label="Your room">${opciones
+      .map((c) => `<button class="chip-elegir ${tienda.cuarto === c.id ? "puesto" : ""}" data-poner-cuarto="${esc(c.id)}" aria-pressed="${tienda.cuarto === c.id}">${esc(c.nombre)}${tienda.cuarto === c.id ? " ✓" : ""}</button>`)
+      .join("")}</div>`;
+  }
+  if (mascotas.length) {
+    const opciones = [...mascotas.map((id) => CATALOGO.find((c) => c.id === id)), { id: "", nombre: "None" }];
+    html += `<div class="subtitulo-lista">Your pet</div><div class="fila-elegir" role="group" aria-label="Your pet">${opciones
+      .map((c) => {
+        const puesto = (tienda.mascota || "") === c.id;
+        return `<button class="chip-elegir ${puesto ? "puesto" : ""}" data-poner-mascota="${esc(c.id)}" aria-pressed="${puesto}">${c.id ? `<img src="${arte(c.arte)}" alt="" draggable="false" />` : ""}${esc(c.nombre)}${puesto ? " ✓" : ""}</button>`;
+      })
+      .join("")}</div>`;
+  }
+  return html;
+}
+
 /**
  * opts: { nuevas: Set(ids), confirmar: id|null, recien: id|null, falta: id|null,
  *         puesto: id del accesorio puesto, peluche: "baozi"|"mantou", ahora }
@@ -1075,7 +1102,7 @@ export function renderTienda(container, tienda, opts = {}) {
   const semana = tienda.deEstaSemana(ahora).filter((c) => todas.includes(c));
   const hayNuevasSemana = tienda.semanaActual(ahora) > 0 && semana.length;
   const resto = hayNuevasSemana ? todas.filter((c) => !semana.includes(c)) : todas;
-  const faltan = tienda.semanaActual(ahora) < 3;
+  const faltan = tienda.semanaActual(ahora) < ULTIMA_SEMANA;
   container.innerHTML = `
     ${encabezado("Shop", "btn-volver-consulta")}
     <div class="lista-journal tienda">
@@ -1083,6 +1110,7 @@ export function renderTienda(container, tienda, opts = {}) {
         <div class="billetera" aria-label="${tienda.monedas} coins"><img src="${arte("tienda/moneda.png")}" alt="" draggable="false" /><b id="monedas-tienda">${tienda.monedas}</b></div>
         <div class="tienda-ayuda">Earn coins by caring for Baozi, writing your diary, telling Baozi your steps, playing and taking photos.</div>
       </div>
+      ${elegirCasa(tienda)}
       ${hayNuevasSemana ? `<div class="subtitulo-lista">New this week</div><div class="grilla-tienda">${semana.map((c) => tarjetaTienda(c, tienda, o)).join("")}</div>` : ""}
       <div class="subtitulo-lista">${hayNuevasSemana ? "Everything else" : "Everything"}</div>
       <div class="grilla-tienda">${resto.map((c) => tarjetaTienda(c, tienda, o)).join("")}</div>
