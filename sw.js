@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-dec3b1dda2"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-46aa0b3540"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -115,6 +115,10 @@ const ARTE = [
   ...["anillo", "destello", "corazon_rojo", "corazon_rosa", "huevo", "grieta"].map((n) => `final/${n}.png`),
   ...["lago", "bote", "bote_reflejo", "ojos_el", "ojos_ella_rosa", "ojos_ella_cafe", "boca_hablando"].map((n) => `final/${n}.png`),
   ...["balde.png", "botiquin.png", "calendario.png", "camara.png", "cielo_amanecer.png", "cielo_atardecer.png", "cielo_dia.png", "cielo_noche.png", "corcho.png", "cortinas.png", "vista_amanecer.png", "vista_dia.png", "vista_atardecer.png", "vista_noche.png", "farol.png", "farol_apagado.png", "fondo.png", "heladera.png", "heladera_adentro.png", "mapa.png", "mesita.png", "radio.png", "radio_apagada.png", "recuerdo_generico.png", "recuerdo_leifeng.png", "recuerdo_lingyin.png", "recuerdo_longjing.png", "recuerdo_westlake.png", "reloj.png", "sello_cafe.png", "sello_casa.png", "sello_corazon.png", "sello_estrella.png", "sello_hoja.png", "sello_pabellon.png", "sello_pagoda.png", "sello_templo.png", "tele.png"].map((n) => `pieza/${n}`),
+  // v25: los cuartos (tools/cuartos.py) y las mascotas (tools/mascotas.py)
+  ...["te", "bote", "cabana"].flatMap((t) => ["balde.png", "botiquin.png", "calendario.png", "camara.png", "cielo_amanecer.png", "cielo_atardecer.png", "cielo_dia.png", "cielo_noche.png", "corcho.png", "cortinas.png", "farol.png", "farol_apagado.png", "fondo.png", "heladera.png", "heladera_adentro.png", "mesita.png", "radio.png", "radio_apagada.png", "reloj.png", "tele.png", "vista_amanecer.png", "vista_atardecer.png", "vista_dia.png", "vista_noche.png"].map((n) => `pieza/${t}/${n}`)),
+  ...["te", "bote", "cabana"].map((t) => `tienda/cuarto_${t}.png`),
+  ...["gato_camina", "gato_camina_b", "gato_dormido", "gato_dormido_b", "gato_parpadeo", "gato_sentado", "gato_sentado_b", "perro_camina", "perro_camina_b", "perro_contento", "perro_dormido", "perro_dormido_b", "perro_parpadeo", "perro_sentado", "perro_sentado_b", "serpiente_alta", "serpiente_dormida", "serpiente_enroscada", "serpiente_lengua", "serpiente_repta", "serpiente_repta_b"].map((n) => `mascotas/${n}.png`),
   "final/despierto.mp4",
   "final/silencio.mp3",
   ...["libro", "pin", "exclama", "gota", "tenedor", "burbuja", "atras", "izq", "der", "camara", "candado", "check", "corazon", "estrella", "nota", "cerrar", "girar", "pie"]
