@@ -956,7 +956,7 @@ function pasoFin() {
         ? `<figure class="polaroid-final dorada fija"><img src="${foto}" alt="" draggable="false" /><figcaption>${esc(fecha)}</figcaption></figure>`
         : `<div class="final-cara">${cara("enamorado")}</div><div class="final-rotulo">${esc(fecha)}</div>`
     }
-    <div class="final-texto">Baozi will remember this day forever.</div>
+    <div class="final-texto">Let's remember this day forever.</div>
     <div class="fila-botones">
       <button class="boton boton-fantasma boton-galeria oculto" id="fin-video" type="button">Save our video</button>
       <button class="boton" id="fin-casa"><i class="glifo g-corazon"></i> Home</button>

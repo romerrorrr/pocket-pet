@@ -12,7 +12,7 @@
 export const FINAL = {
   // PIN del modo director (5 toques rapidos sobre el reloj de la
   // pantalla principal). CAMBIALO antes de instalarle la app a ella.
-  pin: "0000",
+  pin: "141401",
 
   // ---------------------------------------------------------------
   // COMO SE DISPARA (sin QR, sin nada que ella tenga que encontrar)
@@ -44,8 +44,8 @@ export const FINAL = {
   // Lo que dice Baozi al pedir la foto (voz de Baozi, sin pistas).
   // ---------------------------------------------------------------
   pedido: [
-    "We're on the lake!! Look how pretty it is…",
-    "{nombre}, take a photo of us two? For my album!",
+    "We're finally on the lake, it looks amazing ⊂(◉‿◉)つ",
+    "Let's take a picture, for the album :)",
   ],
 
   // ---------------------------------------------------------------
@@ -57,10 +57,10 @@ export const FINAL = {
 
   // Los ojos de los dos son los de Baozi. Los tuyos, tal cual (lavanda).
   // Los de ella, con otro iris: "rosa" o "cafe".
-  ojosDeElla: "rosa",
+  ojosDeElla: "cafe",
 
   // Tu nombre en la cajita de dialogo. "" = sin cartelito.
-  nombreDeEl: "",
+  nombreDeEl: "romerror",
 
   // TU DIALOGO. Una linea = una caja de texto; avanzan solas al ritmo
   // de lectura (y ella puede tocar para seguir). Mientras tanto pasan
@@ -69,17 +69,21 @@ export const FINAL = {
   // Las lineas que empiezan con "TODO" son de relleno: se ven SOLO en el
   // ensayo (para ver donde va cada cosa) y NUNCA en el de verdad.
   carta: [
-    "TODO: Line 1 — start here (how we met, the first thing you want to say).",
-    "TODO: Line 2 — a memory of the two of you.",
-    "TODO: Line 3 — what she means to you.",
-    "TODO: Line 4 — the last line before 'Look up.'",
+    "Since the day I saw you in Hong Kong, I knew we were going to be something special.",
+    "And it has been way more than just special.",
+    "Every second, every touch, every laugh, every fight even, has been absolutely incredible.",
+    "You've made every aspect of my life brighter, every moment unforgettable.",
+    "You've made me feel special, understood and most importantly, loved.",
+    "And what I want most in life, is to at least try to make you feel the same, hopefully for the rest of our lives.",
+    "Our life together is just starting, and I couldn't be more excited about it...",
+    "艺婷 would you marry me?",
   ],
 
   // Lo ultimo que dice la pantalla antes de que ella levante la vista.
   mirarArriba: "Look up.",
 
   // Despues del si (cuando ella toca el corazon).
-  celebracion: ["YES!!!", "Baozi knew it all along."],
+  celebracion: ["༼ つ ◕_◕ ༽つ", "Let's start our life together ༼ つ ◕_◕ ༽つ"],
   fotoConAnillo: "Now one with the ring?",
 
   // Si el sonido esta apagado en Journal → Sound, igual suena la
@@ -128,14 +132,14 @@ export const LUGARES_PROPIOS = [];
 // cuenta cuanto falta para la proxima. Vacio = solo dice la fecha de hoy.
 // Ejemplo: { nombre: "our anniversary", mes: 3, dia: 14 }   (mes 1..12)
 // ---------------------------------------------------------------------
-export const FECHAS = [];
+export const FECHAS = [{ nombre: "our anniversary", mes: 5, dia: 17 }];
 
 // ---------------------------------------------------------------------
 // v24: el deseo del dia. Deseos de la vida real que escribe rom: salen
 // mezclados con los de la app (y mas seguido), con un boton "Done ♥".
 // Ejemplo: "Give him a big hug today.", "Tell him your favorite memory of us."
 // ---------------------------------------------------------------------
-export const DESEOS_PROPIOS = [];
+export const DESEOS_PROPIOS = ["Give Juan a kisssssssss", "Give Juan a hug ༼ つ ◕_◕ ༽つ", "Buy Juan a bubble tea hehehe"];
 
 // ---------------------------------------------------------------------
 // v24: despues del si, el personaje de rom se muda al cuarto. Lo que dice

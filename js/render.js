@@ -309,7 +309,7 @@ export function renderCara(container, mascota, estado, opts = {}) {
   let linea = "";
   let claseLinea = "";
   if (fotoPedida) {
-    linea = "We're on the lake!! Tap me!";
+    linea = "Are we at the lake? Tap me for a little surprise :)";
     claseLinea = "rosa";
   } else if (mascota.dormida) {
     linea = "Zzz…";
@@ -354,7 +354,7 @@ export function archivosCara(mascota, estado, { especialActiva = null, fotoPedid
 
 /** Lo que dice el globito de Baozi en el cuarto. */
 export function globoCara(mascota, { fotoPedida = false, saludo = "" } = {}) {
-  if (fotoPedida) return { texto: "We're on the lake!! Tap me!", rosa: true };
+  if (fotoPedida) return { texto: "Are we at the lake? Tap me for a little surprise :)", rosa: true };
   if (saludo) return { texto: saludo, rosa: false };
   if (mascota.dormida) return { texto: "", rosa: false };
   const lista = necesidades(mascota);
