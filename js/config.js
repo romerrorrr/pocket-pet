@@ -76,8 +76,15 @@ export const FINAL = {
     "You've made me feel special, understood and most importantly, loved.",
     "And what I want most in life, is to at least try to make you feel the same, hopefully for the rest of our lives.",
     "Our life together is just starting, and I couldn't be more excited about it...",
-    "艺婷 would you marry me?",
   ],
+
+  // v26: LA PREGUNTA. No va en la caja de dialogo: se escribe en el cielo
+  // del lago, grande, despues de tu dialogo y antes de "Look up."
+  // Vacio = no hay paso de la pregunta.
+  pregunta: "艺婷, will you marry me?",
+  // Como aparece: "polvora" (fuegos artificiales), "farolitos" (farolitos
+  // de papel que suben del lago) o "estrellas" (una constelacion).
+  preguntaEstilo: "farolitos",
 
   // Lo ultimo que dice la pantalla antes de que ella levante la vista.
   mirarArriba: "Look up.",

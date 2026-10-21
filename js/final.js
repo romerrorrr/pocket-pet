@@ -51,6 +51,7 @@ import * as Grabacion from "./grabacion.js";
 import { guardarVideoEnGaleria } from "./galeria.js";
 import { arteDeLugar, spriteCara } from "./render.js";
 import * as Personaje from "./personaje.js";
+import { lanzarPregunta } from "./pregunta.js";
 
 const CLAVE = "mochi_final";
 
@@ -325,6 +326,7 @@ function construirPasos({ repeticion = false } = {}) {
     { tipo: "ella" },
     { tipo: "el" },
     { tipo: "dialogo" },
+    ...(String(FINAL.pregunta || "").trim() ? [{ tipo: "pregunta" }] : []),
     { tipo: "mirar" },
     { tipo: "corazon" },
     { tipo: "celebracion" },
@@ -357,6 +359,7 @@ export const secuenciaEnCurso = () => !!sesion;
 
 function cortarSesion() {
   if (!sesion) return;
+  if (sesion.efectoPregunta) sesion.efectoPregunta.destruir();
   for (const tm of sesion.timers) clearTimeout(tm);
   if (sesion.escritor) sesion.escritor.cancelar();
   soltarEscena();
@@ -388,6 +391,10 @@ function avanzar() {
   if (sesion.escritor) sesion.escritor.cancelar();
   sesion.escritor = null;
   if (sesion.escena) sesion.escena.hablar("el", false);
+  if (sesion.efectoPregunta) {
+    sesion.efectoPregunta.destruir();
+    sesion.efectoPregunta = null;
+  }
   sesion.i += 1;
   if (!sesion.ensayo) {
     estado.paso = sesion.i;
@@ -409,6 +416,7 @@ function mostrarPaso() {
     ella: () => pasoEnfoque("ella"),
     el: () => pasoEnfoque("el"),
     dialogo: pasoDialogo,
+    pregunta: pasoPregunta,
     mirar: pasoMirar,
     corazon: pasoCorazon,
     celebracion: pasoCelebracion,
@@ -805,6 +813,29 @@ function pasoDialogo() {
   }
 }
 
+// 3b. la pregunta, escrita en el cielo -----------------------------------
+
+function pasoPregunta() {
+  const { cine, escena } = escenaDelLago("pregunta");
+  escena.hablar("el", false);
+  escena.mover("general", 3600);
+  const c = capa(cine, `<div class="velo-cielo"></div>`);
+  let efecto = null;
+  const empezarEfecto = () => {
+    efecto = lanzarPregunta(c, t(FINAL.pregunta), {
+      estilo: FINAL.preguntaEstilo,
+      // ya escrita: queda en el cielo un rato largo (o hasta que ella toque)
+      alFormar: () => programar(avanzar, 9000),
+    });
+    sesion.efectoPregunta = efecto;
+  };
+  programar(empezarEfecto, 1400);
+  c.addEventListener("click", () => {
+    if (!sesion || performance.now() < sesion.bloqueadoHasta || !efecto) return;
+    efecto.completar();
+  });
+}
+
 // 4. look up -----------------------------------------------------------
 
 function pasoMirar() {
@@ -820,7 +851,9 @@ function pasoMirar() {
   if (lago && sesion.escena && sesion.escena.vivo()) {
     const { cine, escena } = escenaDelLago("mirar");
     escena.mover("general", 3600);
-    capa(cine, `<div class="velo-noche"></div><div class="texto-cine" id="texto-mirar"></div>`);
+    const anterior = sesion.pasos[sesion.i - 1];
+    // si venimos de la pregunta, el cielo ya esta de noche: el velo arranca oscuro (sin fogonazo)
+    capa(cine, `<div class="velo-noche ${anterior && anterior.tipo === "pregunta" ? "desde-noche" : ""}"></div><div class="texto-cine" id="texto-mirar"></div>`);
     programar(() => escribirMirar(cine), 3000);
     return;
   }
