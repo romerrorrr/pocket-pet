@@ -2801,6 +2801,22 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 
 .cine-dialogo .caja-dialogo-texto { font-size: 21px; }
 
+/* v26: la pregunta en el cielo: se hace de noche (sin apagar el lago) y encima el lienzo pixel */
+.velo-cielo {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 12, 34, 0.86) 0%, rgba(14, 16, 40, 0.72) 55%, rgba(8, 8, 20, 0.6) 100%);
+  animation: velo-noche 3s ease-in both;
+}
+.lienzo-pregunta {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
 /* "look up": la camara se aleja y el lago se apaga */
 .velo-noche {
   position: absolute;
@@ -2811,6 +2827,11 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 
 @keyframes velo-noche {
   from { opacity: 0; }
+  to { opacity: 1; }
+}
+.velo-noche.desde-noche { animation-name: velo-noche-desde; animation-delay: 0s; }
+@keyframes velo-noche-desde {
+  from { opacity: 0.8; }
   to { opacity: 1; }
 }
 
