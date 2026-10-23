@@ -3,8 +3,9 @@
  * =========
  * El minijuego de la tele: SNACK RAIN. Cae comida del techo y el
  * personaje la atrapa con la boca. Se mueve arrastrando el dedo (o con
- * las flechas); tocar una comida tambien la atrapa, y sacudir el
- * telefono atrapa la que esta mas abajo.
+ * las flechas) o inclinando el telefono (v29: como un volante; antes
+ * sacudir atrapaba sola la comida y tocarla tambien, y eso le quitaba la
+ * gracia: ahora solo cuenta lo que cae en la boca).
  *
  *   comida comun  +1 (por el combo: x2 a las 5 seguidas, x3 a las 10, x4 a las 16)
  *   bao dorado    +5, raro
@@ -98,7 +99,7 @@ export function iniciarJuego(contenedor, opts) {
       <div class="juego-cielo" id="juego-cielo"></div>
       <div class="juego-personaje" id="caja-cara-minijuego">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
       ${opts.bannerMotion || ""}
-      <div class="pista-minijuego" id="juego-pista">Drag to move · catch the snacks · avoid the chili!</div>
+      <div class="pista-minijuego" id="juego-pista">Drag or tilt to move · catch the snacks · avoid the chili!</div>
       <div class="juego-cuenta oculto" id="juego-cuenta">3</div>
       <div class="juego-dificultad" id="juego-dificultad">
         <div class="juego-dificultad-titulo">SNACK RAIN</div>
@@ -136,12 +137,17 @@ export function iniciarJuego(contenedor, opts) {
     const r = area.getBoundingClientRect();
     st.objetivo = Math.min(0.94, Math.max(0.06, (clientX - r.left) / r.width));
   };
+  let dedoHasta = 0; // mientras arrastra el dedo, la inclinacion no manda
   area.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".juego-item, button")) return;
+    if (e.target.closest("button")) return;
+    dedoHasta = performance.now() + 1200;
     mover(e.clientX);
   });
   area.addEventListener("pointermove", (e) => {
-    if (e.buttons || e.pointerType === "touch") mover(e.clientX);
+    if (e.buttons || e.pointerType === "touch") {
+      dedoHasta = performance.now() + 1200;
+      mover(e.clientX);
+    }
   });
   const teclas = (e) => {
     if (e.key === "ArrowLeft") st.objetivo = Math.max(0.06, st.objetivo - 0.12);
@@ -168,11 +174,6 @@ export function iniciarJuego(contenedor, opts) {
     el.alt = "";
     el.draggable = false;
     const item = { el, tipo, x: 0.08 + Math.random() * 0.84, y: -0.12, v: D.v0 + avance * D.dv + Math.random() * 0.08, giro: (Math.random() - 0.5) * 40 };
-    el.addEventListener("pointerdown", (e) => {
-      e.stopPropagation();
-      // tocar un chile tambien pica (si no, tocando se esquivan gratis)
-      atrapar(item);
-    });
     cielo.appendChild(el);
     st.items.push(item);
   }
@@ -224,10 +225,10 @@ export function iniciarJuego(contenedor, opts) {
     pintarHud();
   }
 
-  /** Para la sacudida: atrapa la comida (no chile) que esta mas abajo. */
-  function atraparPrimera() {
-    const buenas = st.items.filter((i) => i.tipo !== "chile").sort((a, b) => b.y - a.y);
-    if (buenas[0]) atrapar(buenas[0]);
+  /** v29: inclinar el telefono mueve al personaje (posicion 0..1), salvo mientras usa el dedo. */
+  function inclinar(objetivo) {
+    if (performance.now() < dedoHasta || !Number.isFinite(objetivo)) return;
+    st.objetivo = Math.min(0.94, Math.max(0.06, objetivo));
   }
 
   function pintarHud() {
@@ -346,5 +347,63 @@ export function iniciarJuego(contenedor, opts) {
   }
   requestAnimationFrame(cuadro);
 
-  return { detener, atraparPrimera, terminar, estado: () => st };
+  return { detener, inclinar, terminar, estado: () => st };
+}
+
+// ------------------------------------------------------------------
+// v29: el volante (inclinar el telefono)
+// ------------------------------------------------------------------
+
+/**
+ * Cuanto esta inclinado el telefono hacia la derecha de la PANTALLA, en g
+ * (+ = el borde derecho baja). ax/ay/az: accelerationIncludingGravity;
+ * angulo: screen.orientation.angle (0, 90, 180, 270).
+ * Devuelve { lateral, arriba }: arriba sirve para saber la convencion de
+ * signos del telefono (algunos la dan al reves).
+ */
+export function ejesDePantalla(ax, ay, az, angulo = 90) {
+  const g = 9.81;
+  const a = ((Math.round(angulo / 90) * 90) % 360 + 360) % 360;
+  const der = { 0: [1, 0], 90: [0, -1], 180: [-1, 0], 270: [0, 1] }[a];
+  const arr = { 0: [0, 1], 90: [1, 0], 180: [0, -1], 270: [-1, 0] }[a];
+  return { lateral: -(ax * der[0] + ay * der[1]) / g, arriba: (ax * arr[0] + ay * arr[1] + az) / g };
+}
+
+/**
+ * Convierte lecturas del acelerometro en una posicion 0..1. Las primeras
+ * lecturas calibran: como lo esta agarrando ella es "derecho", y de ahi se
+ * saca tambien el signo. ~25 grados de inclinacion = de punta a punta.
+ */
+export class Volante {
+  constructor({ rango = 0.42, calibrar = 8 } = {}) {
+    this.rango = rango;
+    this.faltan = calibrar;
+    this.suma = 0;
+    this.sumaArriba = 0;
+    this.n = 0;
+    this.base = 0;
+    this.signo = 1;
+    this.suave = null;
+  }
+
+  /** Devuelve la posicion (0..1) o null mientras calibra. */
+  leer(ax, ay, az, angulo) {
+    if (![ax, ay, az].every(Number.isFinite)) return null;
+    const { lateral, arriba } = ejesDePantalla(ax, ay, az, angulo);
+    if (this.faltan > 0) {
+      this.suma += lateral;
+      this.sumaArriba += arriba;
+      this.n++;
+      this.faltan--;
+      if (this.faltan === 0) {
+        this.signo = this.sumaArriba / this.n < -0.2 ? -1 : 1;
+        this.base = (this.suma / this.n) * this.signo;
+      }
+      return null;
+    }
+    const v = lateral * this.signo - this.base;
+    this.suave = this.suave === null ? v : this.suave + (v - this.suave) * 0.35;
+    const f = Math.max(-1, Math.min(1, this.suave / this.rango));
+    return 0.5 + f * 0.44;
+  }
 }

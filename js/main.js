@@ -15,7 +15,7 @@
 
 import { PetState, estadoCara, especialPorEstado } from "./petState.js";
 import * as Personaje from "./personaje.js";
-import { iniciarJuego } from "./juego.js";
+import { iniciarJuego, Volante } from "./juego.js";
 import { RegistroNPCs, RegistroLugares, LUGARES, NPCS } from "./mundo.js";
 import * as storage from "./storage.js";
 import { ejecutarItemMenu, ControladorVistas, MOTIVOS_ACCION_FALLIDA } from "./gameController.js";
@@ -203,7 +203,7 @@ let permisoMotionEstado = Sensores.motionRequierePermiso()
 let watchIdGPS = null;
 let detenerMotionCaminar = null;
 let detectorPasosGPS = null;
-let detectorSacudida = null;
+let volanteJuego = null;
 let detenerMotionMinijuego = null;
 let lugarCercaDetectado = null;
 let lugarDescubierto = null;
@@ -2935,7 +2935,7 @@ function iniciarMinijuego() {
   actualizarMarco();
   screenEl.classList.add("sin-margen");
   const banner =
-    permisoMotionEstado === "unknown" ? `<button class="banner-sensor" id="btn-habilitar-motion">Tap to shake your phone and catch</button>` : "";
+    permisoMotionEstado === "unknown" ? `<button class="banner-sensor" id="btn-habilitar-motion">Tap to steer by tilting your phone</button>` : "";
   minijuego = iniciarJuego(screenEl, {
     arte,
     sprite: (ojo, boca) => R.spriteCara(ojo, boca),
@@ -2946,7 +2946,7 @@ function iniciarMinijuego() {
     alTerminar: terminarMinijuego,
   });
   wireMinijuego();
-  if (permisoMotionEstado === "granted") activarDeteccionSacudida();
+  if (permisoMotionEstado === "granted") activarVolante();
 }
 
 function wireMinijuego() {
@@ -2956,17 +2956,28 @@ function wireMinijuego() {
       e.stopPropagation();
       permisoMotionEstado = await Sensores.pedirPermisoMotion();
       btnMotion.remove();
-      if (permisoMotionEstado === "granted" && minijuego) activarDeteccionSacudida();
+      if (permisoMotionEstado === "granted" && minijuego) activarVolante();
     });
   }
 }
 
-function activarDeteccionSacudida() {
+/** v29: inclinar el telefono mueve al personaje (antes: sacudir atrapaba sola la comida). */
+function anguloPantalla() {
+  try {
+    if (screen.orientation && Number.isFinite(screen.orientation.angle)) return screen.orientation.angle;
+  } catch (e) {
+    /* nada */
+  }
+  return Number.isFinite(window.orientation) ? (window.orientation + 360) % 360 : 90;
+}
+
+function activarVolante() {
   if (detenerMotionMinijuego) return;
-  detectorSacudida = new Sensores.DetectorSacudida();
-  detenerMotionMinijuego = Sensores.iniciarEscuchaMotion((x, y, z, ahoraSeg) => {
-    if (!minijuego) return;
-    if (detectorSacudida.procesarLectura(x, y, z, ahoraSeg)) minijuego.atraparPrimera();
+  volanteJuego = new Volante();
+  detenerMotionMinijuego = Sensores.iniciarEscuchaMotion((x, y, z) => {
+    if (!minijuego || !volanteJuego) return;
+    const pos = volanteJuego.leer(x, y, z, anguloPantalla());
+    if (pos !== null) minijuego.inclinar(pos);
   });
 }
 
@@ -2976,7 +2987,7 @@ function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord 
     detenerMotionMinijuego();
     detenerMotionMinijuego = null;
   }
-  detectorSacudida = null;
+  volanteJuego = null;
   mascota.resultadoMinijuego(atrapadas, Date.now());
   diario.anotarJuego(puntos);
   eventoAmigos({ tipo: "juego", puntos });
