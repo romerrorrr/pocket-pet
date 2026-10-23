@@ -40,6 +40,9 @@ import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progre
 import { Tienda, porId as productoTienda } from "./tienda.js";
 import { leerRecord } from "./juego.js";
 import { iniciarPesca, leerRecordPesca, PECES, pezPorId } from "./pesca.js";
+import { iniciarTorre, leerRecordTorre } from "./torre.js";
+import { iniciarRitmo } from "./ritmo.js";
+import { iniciarBote, leerRecordBote } from "./bote.js";
 import * as Galeria from "./galeria.js";
 import * as Grabacion from "./grabacion.js";
 import * as Donde from "./dondeEstuvimos.js";
@@ -65,7 +68,7 @@ const marcoEl = document.querySelector(".marco-manito");
 // telefono entero. Todo lo demas vive adentro del aparato.
 const VISTAS_PANTALLA_COMPLETA = new Set(["descubrimiento", "lugarcerca", "encuentro", "carta", "final"]);
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "bote"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -688,10 +691,15 @@ function renderVistaActual() {
       R.renderJuegos(screenEl, {
         recordSnack: leerRecord(),
         recordPesca: leerRecordPesca(),
+        recordTorre: leerRecordTorre(),
+        recordBote: leerRecordBote(),
         libro: PECES.map((p) => ({ id: p.id, nombre: p.nombre, n: pescaReg.libro[p.id] || 0 })),
       });
       document.getElementById("btn-juego-snack").addEventListener("click", () => conTransicion(iniciarMinijuego));
       document.getElementById("btn-juego-pesca").addEventListener("click", () => conTransicion(iniciarPescaJuego));
+      document.getElementById("btn-juego-torre").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("torre")));
+      document.getElementById("btn-juego-ritmo").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("ritmo")));
+      document.getElementById("btn-juego-bote").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("bote")));
       document.getElementById("btn-volver-juegos").addEventListener("click", () => conTransicion(irACasa));
       break;
     case "deseo": {
@@ -734,6 +742,9 @@ function renderVistaActual() {
       break;
     case "minijuego":
     case "pesca":
+    case "torre":
+    case "ritmo":
+    case "bote":
     case "lente":
     case "final":
     case "intro":
@@ -3005,6 +3016,69 @@ function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord 
 }
 
 // ------------------------------------------------------------------
+// v29: los juegos nuevos de la tele (Steamer Stack, Radio Beats, Boat Ride)
+// ------------------------------------------------------------------
+
+let juegoTele = null;
+
+function iniciarJuegoTele(cual) {
+  controller.vista = cual;
+  actualizarTabbar();
+  actualizarMarco();
+  screenEl.classList.add("sin-margen");
+  Musica.detener(0.3);
+  const comunes = {
+    arte,
+    sprite: (ojo, boca) => R.spriteCara(ojo, boca),
+    cambiarCara: (el, ojo, boca) => R.cambiarCara(el, ojo, boca),
+    sonar: (n) => Sonido.sonar(n),
+    vibrar,
+  };
+  const h = new Date().getHours();
+  if (cual === "torre") juegoTele = iniciarTorre(screenEl, { ...comunes, alTerminar: (r) => terminarJuegoTele("torre", r) });
+  else if (cual === "ritmo") juegoTele = iniciarRitmo(screenEl, { ...comunes, musica: Musica, alTerminar: (r) => terminarJuegoTele("ritmo", r) });
+  else juegoTele = iniciarBote(screenEl, { ...comunes, noche: h >= 19 || h < 6, alTerminar: (r) => terminarJuegoTele("bote", r) });
+}
+
+function terminarJuegoTele(cual, r) {
+  if (juegoTele) juegoTele.destruir();
+  juegoTele = null;
+  const puntos = r.puntos || 0;
+  let monedas = 0;
+  let titulo;
+  let sub;
+  let bien;
+  if (cual === "torre") {
+    bien = r.pisos > 0;
+    monedas = tienda.ganar("juego", Math.floor(puntos / 3));
+    titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos}!` : r.pisos ? `${r.pisos} steamers tall!` : "Oops!";
+    sub = `${puntos} points · best ${r.record}`;
+  } else if (cual === "ritmo") {
+    bien = r.perfectos + r.buenos > 0;
+    monedas = tienda.ganar("juego", Math.floor(puntos / 60));
+    const notas = r.total ? Math.round(((r.perfectos + r.buenos) / r.total) * 100) : 0;
+    titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos.toLocaleString("en-US")}!` : r.fallados === 0 && r.total ? "Full combo!" : `${notas}% of the notes!`;
+    sub = `${r.nombreCancion} · ${r.perfectos} perfect · best ${r.record.toLocaleString("en-US")}`;
+  } else {
+    bien = puntos > 0;
+    monedas = tienda.ganar("juego", Math.floor(r.faroles / 2) + Math.floor(puntos / 150));
+    titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos} m!` : `${puntos} m on the lake!`;
+    sub = `${r.faroles} lantern${r.faroles === 1 ? "" : "s"} · best ${r.record} m`;
+  }
+  if (r.nuevoRecord && puntos > 0) monedas += tienda.ganar("record");
+  mascota.resultadoMinijuego(bien ? 5 : 0, Date.now());
+  diario.anotarJuego(puntos);
+  eventoDeseo({ tipo: cual, puntos });
+  guardarTodo();
+  if (monedas) setTimeout(() => mostrarMonedas(monedas), 600);
+  vibrar(bien ? [20, 40, 20] : 20);
+  Sonido.sonar(bien ? "hito" : "mimo");
+  controller.vista = "feedback";
+  conTransicion(() => R.renderFeedback(screenEl, titulo, { especial: bien ? "euforico" : "decepcionado", sub }));
+  setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 1400);
+}
+
+// ------------------------------------------------------------------
 // Vida en la pantalla de casa: parpadeo + expresiones especiales
 // ------------------------------------------------------------------
 
@@ -3208,6 +3282,7 @@ window.__mochi = {
   tienda: () => tienda,
   deseos: () => deseos,
   pesca: () => pesca,
+  juegoTele: () => juegoTele,
   mudanza: () => mudanza,
   pescaReg: () => pescaReg,
   sinVisita: () => {

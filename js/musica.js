@@ -290,7 +290,7 @@ function tocarNota(c, destino, voz, frec, inicio, dur) {
   osc.stop(inicio + sosten + 0.02);
 }
 
-function tocarTema(c, tema, maestro, alTerminar) {
+function tocarTema(c, tema, maestro, alTerminar, t0Forzado = null) {
   const paso = 60 / tema.bpm / 2; // corchea
   // Todas las voces aplanadas en una sola lista de eventos ordenada por
   // paso de inicio. Un loop es "volver a recorrerla desde loopDesde".
@@ -307,7 +307,7 @@ function tocarTema(c, tema, maestro, alTerminar) {
   eventos.sort((x, y) => x.inicio - y.inicio);
   const loopDesde = tema.loopDesde || 0;
   const primerEventoLoop = Math.max(0, eventos.findIndex((e) => e.inicio >= loopDesde));
-  const t0 = c.currentTime + 0.08;
+  const t0 = t0Forzado !== null ? t0Forzado : c.currentTime + 0.08;
   let base = 0; // pasos absolutos agregados por cada vuelta del loop
   let k = 0;
   let vivo = true;
@@ -500,6 +500,67 @@ export function escenaSonando() {
 }
 
 export const ESCENAS_MUSICA = Object.keys(TEMAS);
+
+// ------------------------------------------------------------------
+// v29: RADIO BEATS (ritmo.js). Una estacion suena UNA vuelta y el juego
+// hace caer las notas de su melodia, con el mismo reloj que el audio.
+// ------------------------------------------------------------------
+
+/** Las estaciones que se pueden jugar (las que tienen notas: no los mp3 de rom). */
+export function estacionesParaJugar() {
+  return NOMBRES_ESTACIONES.filter((e) => ESTACIONES_TEMAS[e.id]);
+}
+
+/** La melodia de una estacion: [{ inicio, pasos, frec }] en corcheas, y el largo total. */
+export function melodiaDe(escena) {
+  const tema = ESTACIONES_TEMAS[escena];
+  if (!tema) return null;
+  const melodia = [];
+  let pos = 0;
+  for (const n of parsear(tema.voces[0].notas)) {
+    if (n.frec) melodia.push({ inicio: pos, pasos: n.pasos, frec: n.frec });
+    pos += n.pasos;
+  }
+  const largo = Math.max(...tema.voces.map((v) => parsear(v.notas).reduce((a, n) => a + n.pasos, 0)));
+  return { melodia, largo, paso: 60 / tema.bpm / 2, bpm: tema.bpm };
+}
+
+/**
+ * Toca la estacion una vez, empezando en `adelanto` segundos. Devuelve
+ * { reloj(), t0, paso, melodia, duracion, latencia, conAudio, detener() }.
+ * Sin sonido (apagado en Settings) el juego anda igual, con el reloj de
+ * la pagina.
+ */
+export function tocarParaJuego(escena, { adelanto = 2 } = {}) {
+  const m = melodiaDe(escena);
+  if (!m) return null;
+  detener(0.2);
+  const c = contexto();
+  const conAudio = !!c && sonidoHabilitado();
+  const base = { paso: m.paso, melodia: m.melodia, duracion: m.largo * m.paso, conAudio };
+  if (!conAudio) {
+    const t0 = performance.now() / 1000 + adelanto;
+    return { ...base, reloj: () => performance.now() / 1000, t0, latencia: 0, detener: () => {} };
+  }
+  if (c.state !== "running") c.resume().catch(() => {});
+  const maestro = c.createGain();
+  maestro.gain.value = 1.8 * (VOLUMEN[escena] || 1);
+  maestro.connect(c.destination);
+  const t0 = c.currentTime + adelanto;
+  const parar = tocarTema(c, { ...ESTACIONES_TEMAS[escena], loop: false }, maestro, null, t0);
+  const registro = { escena: `juego_${escena}`, maestro, cortar: parar };
+  actual = registro;
+  return {
+    ...base,
+    reloj: () => c.currentTime,
+    t0,
+    latencia: Number.isFinite(c.outputLatency) ? c.outputLatency : Number.isFinite(c.baseLatency) ? c.baseLatency : 0,
+    detener: () => {
+      if (actual === registro) detener(0.3);
+      else parar();
+    },
+  };
+}
 
 /** Solo para tests: pasos totales de cada voz de cada tema (tienen que coincidir). */
 export function _duracionesDeVoces() {

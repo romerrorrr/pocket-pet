@@ -1685,7 +1685,7 @@ export function renderMudanza(container, { quien = "baozi", texto = "" } = {}) {
 }
 
 /** v24: la tele tiene dos juegos: se elige cual (con el libro de peces). */
-export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, libro = [] } = {}) {
+export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, recordTorre = 0, recordBote = 0, libro = [] } = {}) {
   const pescados = libro.filter((p) => p.n > 0).length;
   container.innerHTML = `
     <div class="pantalla-juegos con-cuarto">
@@ -1701,6 +1701,21 @@ export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, libr
           <span class="juego-arte pez"><img src="${arte("pesca/pez_koi.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Lake Fishing</span>
           <span class="juego-best">Best ${recordPesca}</span>
+        </button>
+        <button class="tarjeta-juego" id="btn-juego-torre">
+          <span class="juego-arte icono"><img src="${arte("juegos/icono_torre.png")}" alt="" draggable="false" /></span>
+          <span class="juego-nombre">Steamer Stack</span>
+          <span class="juego-best">Best ${recordTorre}</span>
+        </button>
+        <button class="tarjeta-juego" id="btn-juego-ritmo">
+          <span class="juego-arte icono"><img src="${arte("juegos/icono_ritmo.png")}" alt="" draggable="false" /></span>
+          <span class="juego-nombre">Radio Beats</span>
+          <span class="juego-best">4 songs</span>
+        </button>
+        <button class="tarjeta-juego" id="btn-juego-bote">
+          <span class="juego-arte icono"><img src="${arte("juegos/icono_bote.png")}" alt="" draggable="false" /></span>
+          <span class="juego-nombre">Boat Ride</span>
+          <span class="juego-best">Best ${recordBote} m</span>
         </button>
       </div>
       <div class="libro-peces" aria-label="Fish book: ${pescados} of ${libro.length}">
