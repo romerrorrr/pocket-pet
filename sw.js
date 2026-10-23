@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-e53d0ae90c"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-af73ab6446"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -30,6 +30,10 @@ const SHELL = [
   "./js/pregunta.js",
   "./js/dondeEstuvimos.js",
   "./js/mapaDia.js",
+  "./js/juegoComun.js",
+  "./js/torre.js",
+  "./js/ritmo.js",
+  "./js/bote.js",
   "./js/petState.js",
   "./js/mundo.js",
   "./js/storage.js",
@@ -109,6 +113,8 @@ const ARTE = [
   ...["acc_orejas", "acc_antenas", "acc_boina", "acc_corona", "deco_maceta", "deco_ovni", "deco_te", "deco_cuadro_baozi", "deco_cuadro_mantou"].map((n) => `amigos/${n}.png`),
   // v24: la pesca
   ...["fondo_dia", "fondo_noche", "pez_carpa", "pez_dorado", "pez_koi", "pez_koi_dorado", "pez_sandalia", "pez_hoja"].map((n) => `pesca/${n}.png`),
+  // v29: los juegos nuevos de la tele
+  ...["lago_cielo_dia", "lago_cielo_noche", "lago_agua_dia", "lago_agua_noche", "bote_atras", "bote_adelante", "farol", "farol_oro", "loto", "loto_hoja", "icono_torre", "icono_ritmo", "icono_bote"].map((n) => `juegos/${n}.png`),
   // v23: la tienda
   ...["moneda", "comida_osmanto", "comida_longjing", "comida_luna", "sticker_loto", "sticker_hoja_loto", "sticker_corazones", "sticker_brillos", "acc_mono", "acc_lentes", "acc_sombrero", "acc_osmanto", "deco_farolitos", "deco_pecera", "deco_bonsai", "deco_poster", "deco_luces", "deco_peluche_baozi", "deco_peluche_mantou", "deco_marco", "valija"].map((n) => `tienda/${n}.png`),
   ...["bote_mascotas", "bote_ella", "bote_reflejo_mascotas", "bote_reflejo_ella", "ventana_baozi", "ventana_mantou"].map((n) => `final/${n}.png`),
