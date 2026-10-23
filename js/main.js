@@ -42,6 +42,8 @@ import { leerRecord } from "./juego.js";
 import { iniciarPesca, leerRecordPesca, PECES, pezPorId } from "./pesca.js";
 import * as Galeria from "./galeria.js";
 import * as Grabacion from "./grabacion.js";
+import * as Donde from "./dondeEstuvimos.js";
+import * as MapaDia from "./mapaDia.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -63,7 +65,7 @@ const marcoEl = document.querySelector(".marco-manito");
 // telefono entero. Todo lo demas vive adentro del aparato.
 const VISTAS_PANTALLA_COMPLETA = new Set(["descubrimiento", "lugarcerca", "encuentro", "carta", "final"]);
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -388,6 +390,9 @@ function arrancar() {
   registrarServiceWorker();
   storage.pedirAlmacenamientoPersistente();
   const fotosListas = Camara.precargarFotos();
+  MapaDia.precargarMapas().then(() => {
+    if (controller.vista === "consulta" && controller.consultaActual === "diary") renderVistaActual();
+  });
   fotosListas.then(() => {
     // si el diario ya estaba abierto, que aparezcan las fotos reales
     if (controller.vista === "consulta" && controller.consultaActual === "diary") renderVistaActual();
@@ -641,6 +646,9 @@ function renderVistaActual() {
       break;
     case "mapa":
       renderMapaActual();
+      break;
+    case "mapadia":
+      renderMapaDiaActual();
       break;
     case "menu":
       renderMenuActual();
@@ -1220,6 +1228,7 @@ function fotoParaAmigos(foto) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: Date.now() };
+        anotarDondeEstamos(pos);
         conPosicion(pos.coords.latitude, pos.coords.longitude);
       },
       () => eventoAmigos({ ...base, lugar: null }),
@@ -1447,6 +1456,14 @@ function finalOcupado() {
   return ["armado", "pedido", "en_curso"].includes(Final.fase());
 }
 
+/** v28: cada lectura de ubicacion puede dejar un punto en el mapa del dia. */
+function anotarDondeEstamos(pos) {
+  if (!pos || !pos.coords || !diario) return;
+  if (!Donde.anotar(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy)) return;
+  diario.hoy(); // que el dia tenga su pagina (y su polaroid)
+  guardarTodo();
+}
+
 /** Con la app abierta en el cuarto, cada ~2 min se fija si estan en un lugar nuevo. */
 async function revisarLugares(forzar = false) {
   if (!mascota || controller.vista !== "cara" || finalOcupado()) return;
@@ -1457,6 +1474,7 @@ async function revisarLugares(forzar = false) {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: Date.now() };
+      anotarDondeEstamos(pos);
       eventoAmigos({ tipo: "posicion", lat: pos.coords.latitude, lon: pos.coords.longitude });
       const lugar = lugaresReg.lugarEnRango(pos.coords.latitude, pos.coords.longitude, Date.now());
       if (lugar && controller.vista === "cara" && !finalOcupado()) abrirSello(lugar);
@@ -1507,6 +1525,7 @@ function renderMapaActual() {
           } catch (e) {}
           estadoUbicacion = "ok";
           ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: Date.now() };
+          anotarDondeEstamos(pos);
           eventoAmigos({ tipo: "posicion", lat: pos.coords.latitude, lon: pos.coords.longitude });
           const lugar = lugaresReg.lugarEnRango(pos.coords.latitude, pos.coords.longitude, Date.now());
           if (lugar) abrirSello(lugar);
@@ -1676,7 +1695,7 @@ let watchFinal = null;
 let pedidoPendiente = false;
 // Baozi espera a que ella termine lo que esta haciendo (una foto, el
 // minijuego, un encuentro) para no cortarle nada a la mitad.
-const VISTAS_INTERRUMPIBLES = new Set(["cara", "menu", "consulta", "caminar", "heladera", "mapa"]);
+const VISTAS_INTERRUMPIBLES = new Set(["cara", "menu", "consulta", "caminar", "heladera", "mapa", "mapadia"]);
 
 function dejarDeVigilar() {
   if (watchFinal !== null) {
@@ -2034,7 +2053,7 @@ function renderConsulta() {
     tienda.marcarVistas();
     R.renderTienda(tmp, tienda, { ...estadoTiendaUI, puesto: amigos.puesto, peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi" });
   }
-  else if (tipo === "ajustes" || tipo === "backup") tmp.innerHTML = R.htmlAjustes(Sonido.sonidoHabilitado());
+  else if (tipo === "ajustes" || tipo === "backup") tmp.innerHTML = R.htmlAjustes(Sonido.sonidoHabilitado(), Donde.activo());
   else R.renderProgress(tmp, mascota, lugaresReg);
   const cabecera = tmp.querySelector(".encabezado-vista");
   if (cabecera) cabecera.remove();
@@ -2071,6 +2090,11 @@ function renderConsulta() {
         }),
       ),
     );
+    document.getElementById("btn-ajuste-lugares").addEventListener("click", () => {
+      Donde.ponerActivo(!Donde.activo());
+      Sonido.sonar("tocar");
+      renderConsulta();
+    });
     document.getElementById("btn-ajuste-sonido").addEventListener("click", () => {
       Sonido.alternarSonido();
       if (!Sonido.sonidoHabilitado()) Musica.detener(0.1);
@@ -2185,24 +2209,156 @@ function wireDiario() {
   }
   const escribirBtn = document.getElementById("btn-escribir-hoy");
   if (escribirBtn) escribirBtn.addEventListener("click", () => conTransicion(abrirEscribir));
-  for (const fig of screenEl.querySelectorAll(".polaroid")) {
-    fig.addEventListener("click", (e) => {
-      if (e.target.closest("[data-guardar-foto]")) {
-        // la foto que se esta viendo en la polaroid, a la galeria del telefono
-        const img = fig.querySelector("img.imagen-polaroid.foto-real");
-        if (img) Galeria.guardarFotoEnGaleria(img.src, "baozi-" + fig.dataset.dia);
-        return;
-      }
-      if (e.target.closest("[data-repetir-final]")) {
-        conTransicion(() => Final.repetir());
-        return;
-      }
-      if (Number(fig.dataset.total) > 1) {
-        Sonido.sonar("tocar");
-        R.siguienteFotoPolaroid(fig);
-      }
-    });
+  for (const fig of screenEl.querySelectorAll(".polaroid")) wirePolaroid(fig);
+  // v28: los mapas de "donde estuvimos" que falten se hacen de a poco y
+  // aparecen en su polaroid cuando estan listos
+  const dias = [...screenEl.querySelectorAll(".polaroid")].map((f) => f.dataset.dia).filter((d) => Donde.hayMapa(d));
+  MapaDia.hacerPendientes(dias, refrescarPolaroid);
+}
+
+function wirePolaroid(fig) {
+  fig.addEventListener("click", (e) => {
+    if (e.target.closest("[data-ver-mapa]")) {
+      Sonido.sonar("tocar");
+      abrirMapaDia(fig.dataset.dia);
+      return;
+    }
+    if (e.target.closest("[data-guardar-foto]")) {
+      // lo que se esta viendo en la polaroid (foto o mapa), a la galeria del telefono
+      const img = fig.querySelector("img.imagen-polaroid");
+      if (img && img.classList.contains("mapa-polaroid")) {
+        const m = MapaDia.mapaDe(fig.dataset.dia);
+        if (m) Galeria.guardarFotoEnGaleria(m.grande, "baozi-mapa-" + fig.dataset.dia);
+      } else if (img && img.classList.contains("foto-real")) Galeria.guardarFotoEnGaleria(img.src, "baozi-" + fig.dataset.dia);
+      return;
+    }
+    if (e.target.closest("[data-repetir-final]")) {
+      conTransicion(() => Final.repetir());
+      return;
+    }
+    if (Number(fig.dataset.total) > 1) {
+      Sonido.sonar("tocar");
+      R.siguienteFotoPolaroid(fig);
+    }
+  });
+}
+
+/** Un mapa quedo listo: si el diario esta abierto, su polaroid se rehace. */
+function refrescarPolaroid(dia) {
+  if (controller.vista !== "consulta" || controller.consultaActual !== "diary") return;
+  const vieja = screenEl.querySelector(`.polaroid[data-dia="${dia}"]`);
+  const e = diario && diario.entradaDe(dia);
+  if (!vieja || !e) return;
+  const caja = document.createElement("div");
+  caja.innerHTML = R.htmlPolaroid(e, { puedeRepetirFinal: Final.dijoQueSi() });
+  const nueva = caja.firstElementChild;
+  vieja.replaceWith(nueva);
+  wirePolaroid(nueva);
+}
+
+// ------------------------------------------------------------------
+// v28: el mapa grande de "donde estuvimos"
+// ------------------------------------------------------------------
+
+let mapaDiaAbierto = null;
+let relojesMapaDia = [];
+
+function abrirMapaDia(dia) {
+  if (!MapaDia.mapaDe(dia)) return;
+  mapaDiaAbierto = dia;
+  conTransicion(() => {
+    prepararVista("mapadia");
+    renderVistaActual();
+  });
+}
+
+function volverAlDiario() {
+  relojesMapaDia.forEach(clearTimeout);
+  relojesMapaDia = [];
+  mapaDiaAbierto = null;
+  conTransicion(() => {
+    controller.abrirConsulta("diary");
+    renderVistaActual();
+  });
+}
+
+function renderMapaDiaActual() {
+  relojesMapaDia.forEach(clearTimeout);
+  relojesMapaDia = [];
+  const dia = mapaDiaAbierto;
+  const mapa = dia && MapaDia.mapaDe(dia);
+  if (!mapa) {
+    controller.abrirConsulta("diary");
+    renderVistaActual();
+    return;
   }
+  const { pines, orden } = Donde.pinesDe(dia);
+  R.renderMapaDia(screenEl, { dia, mapa, pines, puntos: Donde.puntosDe(dia), fotos: Camara.fotosDelDia(dia).length });
+  document.getElementById("btn-volver-mapa-dia").addEventListener("click", volverAlDiario);
+  acomodarMapaDia(mapa, orden);
+}
+
+/** Tamaño del mapa (2x si entra), las horas al lado de cada pin y el personaje que pasea. */
+function acomodarMapaDia(mapa, orden) {
+  const marco = document.getElementById("mapa-dia-marco");
+  const hoja = screenEl.querySelector(".mapa-dia-hoja");
+  if (!marco || !hoja) return;
+  const W = MapaDia.GRANDE.w, H = MapaDia.GRANDE.h;
+  const libreAncho = screenEl.clientWidth - hoja.offsetWidth - 52;
+  const libreAlto = screenEl.clientHeight - 28;
+  let k = Math.min(2, libreAncho / W, libreAlto / H);
+  if (k >= 2) k = 2;
+  k = Math.max(1, k);
+  marco.style.width = `${Math.round(W * k)}px`;
+  marco.style.height = `${Math.round(H * k)}px`;
+  const pos = (mapa.pos || []).map(([x, y]) => [x * k, y * k]);
+  // las horas: abajo del pin; si choca con otra o se sale, arriba
+  const puestas = [];
+  for (const chip of marco.querySelectorAll(".chip-hora")) {
+    const p = pos[Number(chip.dataset.pin)];
+    if (!p) continue;
+    const w = chip.offsetWidth, h = chip.offsetHeight;
+    const x = Math.max(2, Math.min(W * k - w - 2, p[0] - w / 2));
+    const opciones = [p[1] + 4, p[1] - 16 - h, p[1] - h / 2];
+    let y = opciones[0];
+    for (const yy of opciones) {
+      const dentro = yy >= 2 && yy + h <= H * k - 2;
+      const choca = puestas.some((q) => x < q.x + q.w + 2 && q.x < x + w + 2 && yy < q.y + q.h + 2 && q.y < yy + h + 2);
+      if (dentro && !choca) {
+        y = yy;
+        break;
+      }
+    }
+    y = Math.max(2, Math.min(H * k - h - 2, y));
+    puestas.push({ x, y, w, h });
+    chip.style.left = `${Math.round(x)}px`;
+    chip.style.top = `${Math.round(y)}px`;
+  }
+  // el personaje va de pin en pin, en el orden del dia
+  const pj = document.getElementById("mapa-dia-personaje");
+  if (!pj || !orden.length) return;
+  const lado = pj.offsetWidth || 44;
+  const ponerEn = (i, mirarA) => {
+    const p = pos[i];
+    if (!p) return;
+    pj.style.left = `${Math.round(p[0] - lado / 2)}px`;
+    pj.style.top = `${Math.round(p[1] - lado + 4)}px`;
+    if (mirarA !== undefined && pos[mirarA]) pj.classList.toggle("al-reves", pos[mirarA][0] < p[0]);
+  };
+  pj.classList.add("sin-transicion");
+  ponerEn(orden[0], orden[1]);
+  void pj.offsetWidth;
+  pj.classList.remove("sin-transicion");
+  orden.slice(1).forEach((i, n) => {
+    relojesMapaDia.push(
+      setTimeout(() => {
+        if (controller.vista !== "mapadia") return;
+        const antes = orden[n];
+        pj.classList.toggle("al-reves", pos[i] && pos[antes] && pos[i][0] < pos[antes][0]);
+        ponerEn(i);
+      }, 700 + n * 1100),
+    );
+  });
 }
 
 // ------------------------------------------------------------------
@@ -3034,6 +3190,9 @@ window.__mochi = {
   guardar: () => guardarTodo(),
   // v22
   diario: () => diario,
+  donde: Donde,
+  lugares: () => lugaresReg,
+  mapaDia: MapaDia,
   tick: () => tick(),
   tienda: () => tienda,
   deseos: () => deseos,

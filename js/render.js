@@ -37,6 +37,8 @@ import { RECORTES_MENU } from "./recortes.js";
 import { AMIGOS, REGALOS, MAX_CORAZONES } from "./amigos.js";
 import { CATALOGO, ULTIMA_SEMANA } from "./tienda.js";
 import { rutaCuarto } from "./pieza.js";
+import { mapaDe } from "./mapaDia.js";
+import * as Donde from "./dondeEstuvimos.js";
 
 // Boca abierta: rom confirmo que la boca de "sorprendido" ES la boca
 // abierta del set. Comer y atrapar usan ese sprite real.
@@ -571,12 +573,17 @@ export function renderCuaderno(container, pestana, contenido) {
     </div>`;
 }
 
-export function htmlAjustes(sonidoOn) {
+export function htmlAjustes(sonidoOn, lugaresOn = true) {
   return `
     <div class="lista-journal">
       <div class="subtitulo-lista">Sound</div>
       <div class="fila-botones">
         <button class="boton ${sonidoOn ? "" : "boton-fantasma"}" id="btn-ajuste-sonido">${glifo("nota")} Sound ${sonidoOn ? "ON" : "OFF"}</button>
+      </div>
+      <div class="subtitulo-lista">Diary map</div>
+      <div class="cuerpo-backup">Baozi remembers the places where you open the app and draws the map of your day. It stays only on this phone.</div>
+      <div class="fila-botones">
+        <button class="boton ${lugaresOn ? "" : "boton-fantasma"}" id="btn-ajuste-lugares">${glifo("pin")} Places ${lugaresOn ? "ON" : "OFF"}</button>
       </div>
       <div class="subtitulo-lista">Help</div>
       <div class="fila-botones">
@@ -1487,43 +1494,62 @@ function cabezaDiario(diario) {
     </div>`;
 }
 
+/**
+ * v28: lo que se ve en la polaroid de un dia, en orden: la foto del final
+ * (si la hay), el mapa de "donde estuvimos" (si estuvieron en 2+ lugares) y
+ * las fotos reales.
+ */
+export function itemsDelDia(dia) {
+  const fotos = fotosDelDia(dia);
+  const final = fotos.find((f) => f.tipo === "final");
+  const resto = fotos.filter((f) => f !== final);
+  const m = mapaDe(dia);
+  const mapa = m ? [{ tipo: "mapa", dataUrl: m.mini }] : [];
+  return final ? [final, ...mapa, ...resto] : [...mapa, ...resto];
+}
+
+function imagenDeItem(item, i = 0) {
+  if (item.tipo === "mapa") return `<img class="imagen-polaroid mapa-polaroid" src="${item.dataUrl}" alt="" draggable="false" data-item="${i}" />`;
+  return `<img class="imagen-polaroid foto-real ${esLisa(item) ? "lisa" : ""}" src="${item.dataUrl}" alt="" draggable="false" data-item="${i}" />`;
+}
+
+export function htmlPolaroid(e, { puedeRepetirFinal = false } = {}) {
+  const items = itemsDelDia(e.fecha);
+  const hayMapa = items.some((x) => x.tipo === "mapa");
+  const dorada = items.some((x) => x.tipo === "final") || e.hitos.some((h) => h.startsWith("The day you said yes"));
+  const notas = e.cartas
+    .map((id) => buscarCarta(id))
+    .filter(Boolean)
+    .map((c) => `<div class="nota-polaroid">${glifo("corazon")} ${esc(c.titulo)}</div>`)
+    .join("");
+  const hitos = e.hitos.slice(-2).map((h) => `<div class="hito-polaroid">${glifo("estrella")} ${esc(h)}</div>`).join("");
+  const imagen = items.length ? imagenDeItem(items[0]) : fotoArteDelDia(e);
+  const lugares = Donde.pinesDe(e.fecha).pines.length;
+  return `
+    <figure class="polaroid ${dorada ? "dorada" : ""}" data-dia="${e.fecha}" data-indice="0" data-total="${items.length}">
+      <div class="marco-imagen">
+        ${imagen}
+        ${items.length > 1 ? `<span class="contador-fotos">1/${items.length}</span>` : ""}
+        ${dorada && puedeRepetirFinal ? `<button class="boton chico repetir-final" data-repetir-final="1">${glifo("corazon")} Relive</button>` : ""}
+      </div>
+      <figcaption>
+        <div class="fecha-polaroid">${esc(fechaPolaroid(e.fecha))} ${e.animo ? caraAnimo(e.animo, "mini") : ""}</div>
+        ${e.texto ? `<div class="escrito-polaroid" data-sin-nombre>${esc(e.texto)}</div>` : ""}
+        <div class="texto-polaroid ${e.texto ? "chico" : ""}">${esc(resumenDelDia(e, lugares))}</div>
+        ${hitos}${notas}
+        <div class="botones-polaroid">
+          ${hayMapa ? `<button class="boton-mapa-dia" data-ver-mapa="1" type="button">${glifo("pin")} Our day's map</button>` : ""}
+          ${items.length ? `<button class="boton chico boton-fantasma boton-galeria" data-guardar-foto="1" type="button">Save to Photos</button>` : ""}
+        </div>
+      </figcaption>
+    </figure>`;
+}
+
 export function renderDiario(container, diario, opts = {}) {
-  const { puedeRepetirFinal = false } = opts;
   const entradas = diario ? diario.entradasRecientes(60) : [];
 
   const cuerpo = entradas.length
-    ? `<div class="tira-diario">${entradas
-        .map((e) => {
-          const fotos = fotosDelDia(e.fecha);
-          const final = fotos.find((f) => f.tipo === "final");
-          const ordenadas = final ? [final, ...fotos.filter((f) => f !== final)] : fotos;
-          const dorada = !!final || e.hitos.some((h) => h.startsWith("The day you said yes"));
-          const notas = e.cartas
-            .map((id) => buscarCarta(id))
-            .filter(Boolean)
-            .map((c) => `<div class="nota-polaroid">${glifo("corazon")} ${esc(c.titulo)}</div>`)
-            .join("");
-          const hitos = e.hitos.slice(-2).map((h) => `<div class="hito-polaroid">${glifo("estrella")} ${esc(h)}</div>`).join("");
-          const imagen = ordenadas.length
-            ? `<img class="imagen-polaroid foto-real ${esLisa(ordenadas[0]) ? "lisa" : ""}" src="${ordenadas[0].dataUrl}" alt="" draggable="false" />`
-            : fotoArteDelDia(e);
-          return `
-            <figure class="polaroid ${dorada ? "dorada" : ""}" data-dia="${e.fecha}" data-indice="0" data-total="${ordenadas.length}">
-              <div class="marco-imagen">
-                ${imagen}
-                ${ordenadas.length > 1 ? `<span class="contador-fotos">1/${ordenadas.length}</span>` : ""}
-                ${dorada && puedeRepetirFinal ? `<button class="boton chico repetir-final" data-repetir-final="1">${glifo("corazon")} Relive</button>` : ""}
-              </div>
-              <figcaption>
-                <div class="fecha-polaroid">${esc(fechaPolaroid(e.fecha))} ${e.animo ? caraAnimo(e.animo, "mini") : ""}</div>
-                ${e.texto ? `<div class="escrito-polaroid" data-sin-nombre>${esc(e.texto)}</div>` : ""}
-                <div class="texto-polaroid ${e.texto ? "chico" : ""}">${esc(resumenDelDia(e))}</div>
-                ${hitos}${notas}
-                ${ordenadas.length ? `<button class="boton chico boton-fantasma boton-galeria" data-guardar-foto="1" type="button">Save to Photos</button>` : ""}
-              </figcaption>
-            </figure>`;
-        })
-        .join("")}</div>`
+    ? `<div class="tira-diario">${entradas.map((e) => htmlPolaroid(e, opts)).join("")}</div>`
     : `<div class="vacio-suave">No pages yet. Take care of Baozi and go places together — this notebook writes itself.</div>`;
 
   container.innerHTML = `
@@ -1569,22 +1595,47 @@ function fechaPolaroid(clave) {
   return `${DIAS_CORTOS[new Date(y, m - 1, d).getDay()]} ${MESES_CORTOS[m - 1]} ${d}`;
 }
 
-/** Pasa a la siguiente foto del dia dentro de una polaroid. */
+/** Pasa a la siguiente foto del dia (o al mapa) dentro de una polaroid. */
 export function siguienteFotoPolaroid(figura) {
-  const dia = figura.dataset.dia;
-  const fotos = fotosDelDia(dia);
-  const final = fotos.find((f) => f.tipo === "final");
-  const ordenadas = final ? [final, ...fotos.filter((f) => f !== final)] : fotos;
-  if (ordenadas.length < 2) return;
-  const i = (Number(figura.dataset.indice) + 1) % ordenadas.length;
+  const items = itemsDelDia(figura.dataset.dia);
+  if (items.length < 2) return;
+  const i = (Number(figura.dataset.indice) + 1) % items.length;
   figura.dataset.indice = String(i);
   const img = figura.querySelector(".imagen-polaroid");
-  if (img) {
-    img.src = ordenadas[i].dataUrl;
-    img.classList.toggle("lisa", esLisa(ordenadas[i]));
-  }
+  if (img) img.outerHTML = imagenDeItem(items[i], i);
   const c = figura.querySelector(".contador-fotos");
-  if (c) c.textContent = `${i + 1}/${ordenadas.length}`;
+  if (c) c.textContent = `${i + 1}/${items.length}`;
+}
+
+/**
+ * v28: el mapa grande de "donde estuvimos" un dia: el mapa a la izquierda
+ * (con la hora de cada pin y el personaje que va de pin en pin) y la lista
+ * de horas a la derecha. Las posiciones las acomoda main.js al medir.
+ */
+export function renderMapaDia(container, { dia, mapa, pines, puntos, fotos = 0 }) {
+  const chips = pines
+    .map((p, i) => `<span class="chip-hora" data-pin="${i}">${esc(p.horas.map(Donde.hora).join(" · "))}</span>`)
+    .join("");
+  const lista = puntos
+    .map((p) => `<li>${glifo("pin")} ${esc(Donde.hora(p.min))}</li>`)
+    .join("");
+  container.innerHTML = `
+    <div class="pantalla-mapa-dia">
+      <div class="mapa-dia-marco" id="mapa-dia-marco">
+        <img class="mapa-dia-img" src="${mapa.grande}" alt="" draggable="false" />
+        ${chips}
+        <div class="mapa-dia-personaje" id="mapa-dia-personaje">${spriteCara("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
+        ${mapa.real ? `<span class="mapa-dia-credito">© OpenStreetMap</span>` : ""}
+      </div>
+      <div class="mapa-dia-hoja">
+        <div class="mapa-dia-fecha">${esc(fechaPolaroid(dia))}</div>
+        <div class="mapa-dia-titulo">Our day</div>
+        <ol class="mapa-dia-horas">${lista}</ol>
+        ${fotos ? `<div class="mapa-dia-extra">${glifo("camara")} ${fotos} photo${fotos === 1 ? "" : "s"}</div>` : ""}
+        ${mapa.real ? "" : `<div class="mapa-dia-extra tenue">The real map shows up when there's internet.</div>`}
+        <button class="boton chico" id="btn-volver-mapa-dia">${glifo("atras")} Back</button>
+      </div>
+    </div>`;
 }
 
 // ------------------------------------------------------------------

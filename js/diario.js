@@ -287,8 +287,11 @@ function unirEnIngles(lista) {
  * cuanto importa: primero lo irrepetible (un lugar nuevo), despues a
  * quien vimos, despues lo cotidiano (pasos, juegos, cuidados).
  */
-export function resumenDelDia(entrada) {
+export function resumenDelDia(entrada, lugaresDelDia = 0) {
   const partes = [];
+
+  // v28: los lugares donde abrieron la app ese dia (el mapa del diario)
+  if (lugaresDelDia >= 2) partes.push(`we went to ${lugaresDelDia} places`);
 
   if (entrada.lugares.length > 0) {
     partes.push(`we found ${unirEnIngles(entrada.lugares.map(nombreLugar))}`);
