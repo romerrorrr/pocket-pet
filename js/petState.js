@@ -351,7 +351,13 @@ export class PetState {
 
   static desdeObjeto(datos) {
     const obj = new PetState(datos.nombre, datos.creadoEn);
-    Object.assign(obj, datos);
+    const { stats, traitsHistorico, traitsReciente, ...resto } = datos;
+    Object.assign(obj, resto);
+    // un guardado viejo puede no traer todos los campos: lo que falta queda
+    // con su valor inicial (si no, una stat undefined contagia NaN a todo)
+    obj.stats = { ...obj.stats, ...(stats || {}) };
+    obj.traitsHistorico = { ...obj.traitsHistorico, ...(traitsHistorico || {}) };
+    obj.traitsReciente = { ...obj.traitsReciente, ...(traitsReciente || {}) };
     return obj;
   }
 }

@@ -7,63 +7,61 @@
  * para que la voz de rom aparezca de a poco durante las semanas previas
  * en vez de toda junta el ultimo dia.
  *
- * ============================================================
- *  TODO (rom): el TEXTO de estas cartas lo escribis vos.
- *  Lo que esta abajo son marcadores neutros y deliberadamente
- *  genericos — NO son texto final y no pretenden sonar como vos.
- *  Cambiar solo el campo `texto`: los id y las condiciones ya
- *  estan cableados y probados, no hace falta tocar nada mas.
- * ============================================================
+ * El texto es de rom (en ingles, como toda la app). Se puede cambiar
+ * cuando quiera: los id y las condiciones ya estan cableados y
+ * probados, no hace falta tocar nada mas. El texto no pasa por el
+ * cambio Baozi -> Mantou (data-sin-nombre): por eso no nombra a la
+ * mascota. Entra comodo en la pantalla hasta ~300 letras.
  */
 
 export const CARTAS = [
   {
     id: "pasos_5k",
     condicion: { tipo: "pasos", valor: 5000 },
-    titulo: "A note from Baozi",
-    texto: "TODO: primera carta — 5.000 pasos juntos.",
+    titulo: "5,000 steps together",
+    texto: "Hi, my love. Our little friend asked me to write you something, so here it is: thank you for walking with me. 5,000 steps already, and every single one was better because you were next to me. Let's keep going? — Juan",
   },
   {
     id: "pasos_15k",
     condicion: { tipo: "pasos", valor: 15000 },
-    titulo: "A note from Baozi",
-    texto: "TODO: segunda carta — 15.000 pasos.",
+    titulo: "15,000 steps together",
+    texto: "15,000 steps! Honestly, I don't always notice where we're going, because I'm too busy looking at you. Thank you for every walk: the long ones, the lazy ones, the ones with snacks and the ones with no plan at all. — Juan",
   },
   {
     id: "pasos_30k",
     condicion: { tipo: "pasos", valor: 30000 },
-    titulo: "A note from Baozi",
-    texto: "TODO: tercera carta — 30.000 pasos.",
+    titulo: "30,000 steps together",
+    texto: "30,000 steps. That's a lot of Hangzhou! I hope you know that the best part of any place is that you're in it. Wherever we go next, near or far, I want to get there walking next to you. — Juan",
   },
   {
     id: "pasos_60k",
     condicion: { tipo: "pasos", valor: 60000 },
-    titulo: "A note from Baozi",
-    texto: "TODO: cuarta carta — 60.000 pasos.",
+    titulo: "60,000 steps together",
+    texto: "60,000 steps together! If I could, I would walk every single one of them again, the same way, next to the same person. Thank you for letting me walk beside you. I'm not planning on stopping anytime soon. — Juan",
   },
   {
     id: "lugar_westlake",
     condicion: { tipo: "lugar", valor: "westlake" },
     titulo: "About West Lake",
-    texto: "TODO: que significa West Lake para ustedes dos.",
+    texto: "They say that a long time ago, two people met by this lake in the rain, shared an umbrella, and that was it: love for a thousand years. I don't need the legend. I already know exactly how that feels. — Juan",
   },
   {
     id: "lugar_longjing",
     condicion: { tipo: "lugar", valor: "longjing" },
     titulo: "About Longjing",
-    texto: "TODO: que significa Longjing para ustedes dos.",
+    texto: "Here they pick the tea leaf by leaf, by hand, and the first leaves of spring are the most precious ones. I think the best things are like that: they take patience and care. That's how I want to love you, every day. — Juan",
   },
   {
     id: "lugar_lingyin",
     condicion: { tipo: "lugar", valor: "lingyin" },
     titulo: "About Lingyin",
-    texto: "TODO: que significa Lingyin para ustedes dos.",
+    texto: "People come to Lingyin to light incense and make a wish. Can I tell you a secret? I don't know what to wish for anymore, because the thing I wanted most already found me. (Okay, maybe more dumplings.) — Juan",
   },
   {
     id: "primer_enamorado",
     condicion: { tipo: "enamorado" },
     titulo: "Baozi is in love",
-    texto: "TODO: la carta del primer 'In Love'.",
+    texto: "Look at that, our little friend fell in love! Big eyes, silly smile, can't stop thinking about someone… I know that feeling very well. I've had it every single day since Hong Kong. — Juan",
   },
 ];
 

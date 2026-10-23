@@ -25,7 +25,6 @@
 import { arte } from "./arte.js";
 import { PIEZA } from "./pieza_datos.js";
 import * as Personaje from "./personaje.js";
-import { FIGURAS } from "./personajes_datos.js";
 
 const [MW, MH] = PIEZA.mundo;
 const [SX0, SY0, SX1, SY1] = PIEZA.segura;
@@ -77,7 +76,6 @@ export const cuartoValido = (id) => (Object.prototype.hasOwnProperty.call(CUARTO
 /** La ruta del arte del cuarto que esta puesto (lo compartido va sin carpeta). */
 export const rutaCuarto = (n, id = cuarto) => (cuartoValido(id) === "depto" ? `pieza/${n}` : `pieza/${cuartoValido(id)}/${n}`);
 const lucesDelCuarto = () => ({ ...(PIEZA.luces || {}), ...(CUARTOS[cuarto].luces || {}) });
-const PISO = PIEZA.piso || 118;
 const LUCES = PIEZA.luces || {};
 const PANTALLA_TELE = (() => {
   const [tx0, ty0, tx1] = PIEZA.objetos.tele;

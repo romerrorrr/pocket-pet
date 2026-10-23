@@ -36,7 +36,7 @@ import { FINAL, FECHAS, DESEOS_PROPIOS, MUDANZA } from "./config.js";
 import { Deseos } from "./deseos.js";
 import { crearPieza, posicionEnMapa, ponerCuarto } from "./pieza.js";
 import * as Clima from "./clima.js";
-import { RegistroAmigos, AMIGOS, REGALOS, LUGARES_SECRETOS, lugarCercano, progresoDe, registrarAccesoriosExtra } from "./amigos.js";
+import { RegistroAmigos, LUGARES_SECRETOS, lugarCercano, progresoDe, registrarAccesoriosExtra } from "./amigos.js";
 import { Tienda, porId as productoTienda } from "./tienda.js";
 import { leerRecord } from "./juego.js";
 import { iniciarPesca, leerRecordPesca, PECES, pezPorId } from "./pesca.js";
@@ -64,9 +64,6 @@ const screenEl = document.getElementById("screen");
 const tabbarEl = document.getElementById("tabbar");
 const marcoEl = document.querySelector(".marco-manito");
 
-// Momentos narrativos grandes: rompen el marco del aparato y ocupan el
-// telefono entero. Todo lo demas vive adentro del aparato.
-const VISTAS_PANTALLA_COMPLETA = new Set(["descubrimiento", "lugarcerca", "encuentro", "carta", "final"]);
 // Vistas que llegan hasta el borde de la pantalla del aparato.
 const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "bote"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
@@ -164,8 +161,7 @@ let especialActiva = null;
 let especialHastaMs = 0;
 let proximoEspecialPermitidoMs = 0;
 
-let parpadeando = false;
-let pieza = null;             // el cuarto (pieza.js), vivo mientras la vista es "cara"
+let pieza = null;            // el cuarto (pieza.js), vivo mientras la vista es "cara"
 let globoTemporal = "";       // lo que Baozi dice un ratito (radio, calendario...)
 let timeoutGlobo = null;
 let visita = null;            // { npc, hastaMs }: un amigo golpeando la ventana
@@ -1017,12 +1013,13 @@ function elegirDeseo() {
   if (deseos.elegir(claveDelDia(), contextoDeseos())) guardarTodo();
 }
 
-/** Algo paso en el juego: ¿se cumplio el deseo? */
+/** Algo paso en el juego: ¿se cumplio el deseo? (solo guarda si cambio algo) */
 function eventoDeseo(ev) {
   if (!mascota) return;
   elegirDeseo();
+  const antes = deseos.progreso;
   if (deseos.evento({ hora: new Date().getHours(), ...ev })) cumplirDeseo();
-  else guardarTodo();
+  else if (deseos.progreso !== antes) guardarTodo();
 }
 
 function cumplirDeseo() {
@@ -3091,10 +3088,8 @@ function programarProximoParpadeo() {
     if (controller.vista === "cara" && !especialActiva && caraViva) {
       const spriteEl = screenEl.querySelector(".sprite-cara");
       if (spriteEl) {
-        parpadeando = true;
         spriteEl.classList.add("parpadeando");
         setTimeout(() => {
-          parpadeando = false;
           spriteEl.classList.remove("parpadeando");
         }, 250);
       }

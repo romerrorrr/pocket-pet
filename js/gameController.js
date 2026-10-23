@@ -11,8 +11,6 @@
  * (MENU_CATEGORIAS) es la misma que pt.MENU_CATEGORIAS.
  */
 
-import { LUGARES } from "./mundo.js";
-
 // Mismos id/nombre/tipo que pt.MENU_CATEGORIAS en pantalla.py. El
 // despacho sigue siendo por "id" (string), nunca por indice.
 export const MENU_CATEGORIAS = [
