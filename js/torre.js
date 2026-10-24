@@ -12,7 +12,7 @@
  * Record por dificultad (EASY / NORMAL / HARD: lo rapido que va y cuanto
  * perdona el PERFECT).
  */
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_torre";
 const ALTO = 195; // pixeles de arte de alto (en un telefono, ~2 px de pantalla cada uno)
@@ -89,14 +89,15 @@ function baos(ctx, x, y, w, t) {
 
 /**
  * opts: arte, sprite(ojo, boca), cambiarCara(el, ojo, boca), sonar, vibrar,
- *       alTerminar({ puntos, pisos, record, nuevoRecord, dificultad })
+ *       alTerminar({ puntos, pisos, record, nuevoRecord, dificultad }), alSalir() (volvio sin jugar)
  */
 export function iniciarTorre(contenedor, opts) {
-  const { sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, alTerminar = () => {} } = opts;
+  const { sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, alTerminar = () => {}, alSalir = () => {} } = opts;
   let dif = leerDificultadDe(CLAVE);
   let D = DIFICULTADES_TORRE[dif];
   contenedor.innerHTML = `
     <div class="pantalla-juego pantalla-torre con-cuarto" id="area-torre">
+      ${HTML_VOLVER}
       <div class="juego-hud">
         <span class="juego-chip" id="torre-puntos">0</span>
         <span class="juego-chip juego-combo oculto" id="torre-combo">PERFECT x2</span>
@@ -159,6 +160,11 @@ export function iniciarTorre(contenedor, opts) {
     nuevoMovil();
   }
   cablearDificultad(contenedor, CLAVE, empezar);
+  cablearVolver(contenedor, () => {
+    if (!st.vivo) return;
+    if (st.estado === "eligiendo") alSalir();
+    else terminar();
+  });
 
   function soltar() {
     if (st.estado !== "moviendo") return;

@@ -11,7 +11,7 @@
  *
  * El bote es nuevo (tools/juegos_arte.py), no el del final.
  */
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, imagen, lista, flotante } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, imagen, lista, flotante, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_bote";
 const ALTO = 160;
@@ -33,15 +33,16 @@ export const leerRecordBote = (dif = null) => leerRecordDe(CLAVE, dif);
 
 /**
  * opts: arte, sprite(ojo, boca), cambiarCara, sonar, vibrar, noche,
- *       alTerminar({ puntos (metros), faroles, record, nuevoRecord, dificultad })
+ *       alTerminar({ puntos (metros), faroles, record, nuevoRecord, dificultad }), alSalir() (volvio sin jugar)
  */
 export function iniciarBote(contenedor, opts) {
-  const { arte, sprite, cambiarCara, noche = false, sonar = () => {}, vibrar = () => {}, alTerminar = () => {} } = opts;
+  const { arte, sprite, cambiarCara, noche = false, sonar = () => {}, vibrar = () => {}, alTerminar = () => {}, alSalir = () => {} } = opts;
   let dif = leerDificultadDe(CLAVE);
   let D = DIFICULTADES_BOTE[dif];
   const momento = noche ? "noche" : "dia";
   contenedor.innerHTML = `
     <div class="pantalla-juego pantalla-bote ${noche ? "de-noche" : ""}" id="area-bote">
+      ${HTML_VOLVER}
       <div class="juego-hud">
         <span class="juego-chip bote-chip-farol"><img src="${arte("juegos/farol.png")}" alt="" draggable="false" /><b id="bote-faroles">0</b></span>
         <span class="juego-corazones" id="bote-corazones">${"<i></i>".repeat(CORAZONES)}</span>
@@ -109,6 +110,12 @@ export function iniciarBote(contenedor, opts) {
       const p = $("bote-pista");
       if (p) p.classList.add("oculto");
     }, 5000);
+  });
+
+  cablearVolver(contenedor, () => {
+    if (!st.vivo) return;
+    if (st.estado === "eligiendo") alSalir();
+    else terminar();
   });
 
   function remar(dir) {

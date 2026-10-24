@@ -269,7 +269,8 @@ export class Diario {
 // ------------------------------------------------------------------
 
 function nombreLugar(id) {
-  return LUGARES.find((l) => l.id === id)?.nombre || id;
+  // (un lugar de ustedes que despues se borro del mapa queda en el diario sin nombre)
+  return LUGARES.find((l) => l.id === id)?.nombre || (String(id).startsWith("propio_") ? "a special place" : id);
 }
 
 function nombreNpc(id) {

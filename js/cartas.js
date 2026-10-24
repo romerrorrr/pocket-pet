@@ -87,6 +87,23 @@ export function cartaEscrita(carta) {
   return t.length > 0 && !/^TODO/i.test(t);
 }
 
+/**
+ * v30: una carta de lugar o de "In Love" cuyo momento ya paso sin que se
+ * entregara (el lugar se sello antes de que la carta estuviera escrita, por
+ * ejemplo). La trae la mascota la proxima vez que ella esta en el cuarto.
+ * Las de pasos no: esas llegan solas la proxima vez que se anotan pasos.
+ * pasado = { sellados: Set de ids, enamorado: bool }
+ */
+export function cartaAtrasada(entregadas, { sellados = new Set(), enamorado = false } = {}) {
+  for (const carta of CARTAS) {
+    if (entregadas.includes(carta.id) || !cartaEscrita(carta)) continue;
+    const c = carta.condicion;
+    if (c.tipo === "lugar" && sellados.has(c.valor)) return carta;
+    if (c.tipo === "enamorado" && enamorado) return carta;
+  }
+  return null;
+}
+
 export function cartaPendiente(contexto, entregadas) {
   const yaEsta = (id) => entregadas.includes(id);
 

@@ -17,6 +17,8 @@
  * sentado en la punta del muelle.
  */
 
+import { HTML_VOLVER, cablearVolver } from "./juegoComun.js";
+
 const DURACION_MS = 60000;
 const CLAVE_RECORD = "baozi_record_pesca_";
 const CLAVE_DIFICULTAD = "baozi_dificultad_pesca";
@@ -79,15 +81,16 @@ function elegirPez(noche, azar = Math.random) {
  * contenedor: donde se arma. opts:
  *   arte(rel), capas: [src] del personaje sentado (con su ropa), pies (fila de los pies)
  *   noche: bool, sonar(n), vibrar(ms)
- *   alTerminar({ puntos, peces, record, nuevoRecord, dificultad })
+ *   alTerminar({ puntos, peces, record, nuevoRecord, dificultad }), alSalir() (volvio sin jugar)
  */
 export function iniciarPesca(contenedor, opts) {
-  const { arte, capas = [], pies = 62, noche = false, sonar = () => {}, vibrar = () => {}, alTerminar = () => {} } = opts;
+  const { arte, capas = [], pies = 62, noche = false, sonar = () => {}, vibrar = () => {}, alTerminar = () => {}, alSalir = () => {} } = opts;
   let dif = leerDificultad();
   let D = DIFICULTADES_PESCA[dif];
   contenedor.innerHTML = `
     <div class="pantalla-pesca" id="area-pesca">
       <canvas class="pesca-lienzo" id="pesca-lienzo" width="${MW}" height="${MH}"></canvas>
+      ${HTML_VOLVER}
       <div class="juego-hud">
         <span class="juego-chip" id="pesca-puntos">0</span>
         <span class="juego-chip" id="pesca-cuantos">FISH 0</span>
@@ -413,6 +416,12 @@ export function iniciarPesca(contenedor, opts) {
     if (nuevoRecord) guardarRecord(dif, st.puntos);
     alTerminar({ puntos: st.puntos, peces: st.peces.slice(), record: Math.max(record, st.puntos), nuevoRecord, dificultad: dif });
   }
+
+  cablearVolver(contenedor, () => {
+    if (st.estado === "fin") return;
+    if (st.estado === "eligiendo") alSalir();
+    else terminar();
+  });
 
   // encuadre: el lienzo cubre la pantalla (como el cuarto), sin deformar
   const encuadrar = () => {

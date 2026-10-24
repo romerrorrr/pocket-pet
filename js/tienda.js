@@ -31,7 +31,7 @@ export const CATALOGO = [
   { id: "loto", tipo: "sticker", nombre: "Lotus stickers", precio: 30, semana: 0, arte: "tienda/sticker_loto.png", stickers: ["loto", "hoja_loto"], texto: "Lotus flowers from West Lake, for your photos." },
   { id: "mono", tipo: "accesorio", nombre: "Red bow", precio: 80, semana: 0, arte: "tienda/acc_mono.png", texto: "A red bow to wear." },
   { id: "farolitos", tipo: "decoracion", nombre: "Paper lanterns", precio: 140, semana: 0, arte: "tienda/deco_farolitos.png", texto: "Red lanterns for the window. They glow at night." },
-  { id: "pecera", tipo: "decoracion", nombre: "Goldfish bowl", precio: 180, semana: 0, arte: "tienda/deco_pecera.png", texto: "Two little goldfish, like the ones at Flower Harbor." },
+  { id: "pecera", tipo: "decoracion", nombre: "Goldfish bowl", precio: 180, semana: 0, arte: "tienda/deco_pecera.png", texto: "Two little goldfish, like the ones at Flower Harbour." },
   { id: "lentes", tipo: "accesorio", nombre: "Round glasses", precio: 90, semana: 1, arte: "tienda/acc_lentes.png", texto: "Round golden glasses. Very smart." },
   { id: "bonsai", tipo: "decoracion", nombre: "Bonsai pine", precio: 120, semana: 1, arte: "tienda/deco_bonsai.png", texto: "A tiny pine tree for the top of the TV." },
   { id: "corazones", tipo: "sticker", nombre: "Heart stickers", precio: 30, semana: 1, arte: "tienda/sticker_corazones.png", stickers: ["corazones", "brillos"], texto: "Hearts and sparkles for your photos." },
@@ -59,8 +59,9 @@ export const ACCESORIOS_TIENDA = Object.fromEntries(CATALOGO.filter((c) => c.tip
 export const porId = (id) => CATALOGO.find((c) => c.id === id) || null;
 
 /** Topes por dia de cada forma de ganar monedas (lo que no esta aca no tiene tope). */
-export const TOPES = { pasos: 10, diario: 5, cuidar: 5, juego: 10, foto: 6, saludo: 4 };
-export const PREMIOS = { diario: 5, cuidar: 1, foto: 2, saludo: 2, sello: 20, mision: 30, racha: 25, record: 5 };
+export const TOPES = { pasos: 10, diario: 5, cuidar: 5, juego: 10, foto: 6, saludo: 4, propio: 20 };
+// propio: un lugar que ella agrega desde el mapa (20 monedas, uno por dia: si no, se podrian "fabricar" monedas)
+export const PREMIOS = { diario: 5, cuidar: 1, foto: 2, saludo: 2, sello: 20, mision: 30, racha: 25, record: 5, propio: 20 };
 
 const claveDia = (t) => {
   const d = new Date(t);

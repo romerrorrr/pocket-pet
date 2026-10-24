@@ -651,7 +651,13 @@ export const CATEGORIAS = {
 };
 
 
+// Los sellos que se pueden elegir para un lugar de ustedes.
+export const SELLOS_PROPIOS = ["corazon", "cafe", "casa", "estrella"];
+export const MAX_LUGARES_DE_ELLA = 40;
+
 // Los lugares de ustedes dos (config.js -> LUGARES_PROPIOS) se suman aca.
+// (Es un arreglo que se modifica en el lugar: los que ella agrega desde el
+// mapa entran y salen con ponerLugaresDeElla, y todos los modulos lo ven.)
 export const LUGARES = [
   ...LUGARES_BASE,
   ...(LUGARES_PROPIOS || [])
@@ -669,6 +675,49 @@ export const LUGARES = [
       ...l,
     })),
 ];
+
+/** Un lugar que ella agrego desde el mapa, limpio (o null si no sirve). */
+export function lugarDeEllaValido(l) {
+  if (!l || typeof l !== "object" || typeof l.id !== "string" || !/^propio_[a-z0-9_]+$/.test(l.id)) return null;
+  if (!Number.isFinite(l.lat) || !Number.isFinite(l.lon) || Math.abs(l.lat) > 90 || Math.abs(l.lon) > 180) return null;
+  const nombre = String(l.nombre || "").trim().slice(0, 28);
+  if (!nombre) return null;
+  return {
+    id: l.id,
+    nombre,
+    recuerdo: String(l.recuerdo || "").trim().slice(0, 90),
+    sello: SELLOS_PROPIOS.includes(l.sello) ? l.sello : "corazon",
+    lat: l.lat,
+    lon: l.lon,
+    creado: Number.isFinite(l.creado) ? l.creado : 0,
+  };
+}
+
+/**
+ * v30: los lugares que ella agrega desde el mapa del corcho (se guardan en
+ * el guardado, no en config.js). Reemplaza los que habia por los de `lista`.
+ */
+export function ponerLugaresDeElla(lista) {
+  for (let i = LUGARES.length - 1; i >= 0; i--) if (LUGARES[i].deElla) LUGARES.splice(i, 1);
+  const ids = new Set(LUGARES.map((l) => l.id));
+  for (const crudo of Array.isArray(lista) ? lista : []) {
+    const l = lugarDeEllaValido(crudo);
+    if (!l || ids.has(l.id)) continue;
+    ids.add(l.id);
+    LUGARES.push({
+      rasgo: "sociable",
+      radioMetros: 120,
+      efectos: { felicidad: 20, vinculo: 10 },
+      categoria: "propio",
+      color: "rgb(206,86,128)",
+      frase: "This is our place now. I'll never forget it ♥",
+      dialogo: "",
+      propio: true,
+      deElla: true,
+      ...l,
+    });
+  }
+}
 
 // Si el GPS marca "cerca" y el usuario dice "Not now", no se vuelve a
 // ofrecer el mismo lugar antes de este tiempo — evita el nag de

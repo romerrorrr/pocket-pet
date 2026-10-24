@@ -4931,3 +4931,53 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .bote-chip-farol { display: inline-flex; align-items: center; gap: 4px; padding-top: 3px; padding-bottom: 3px; }
 .bote-chip-farol img { width: 19px; height: 21px; margin: -3px -3px -3px -5px; image-rendering: pixelated; }
 .bote-chip-farol b { font-weight: normal; }
+
+/* ------------------------------------------------------------------
+   v30 — los lugares de ustedes (se agregan desde el mapa del corcho)
+   ------------------------------------------------------------------ */
+.boton-agregar-lugar { margin-left: auto; }
+.postal-form { transform: rotate(0.5deg); padding: 10px 12px 12px; gap: 8px; }
+.postal-form .boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+.postal-form .fila-botones { justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+#lugar-nombre,
+#lugar-recuerdo {
+  width: 100%;
+  font-family: var(--fuente-cuerpo);
+  font-size: 16px; /* 16px: iOS no hace zoom al escribir */
+  line-height: 1.3;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 0;
+  color: var(--tinta);
+  background: rgb(252, 250, 244);
+  box-shadow: inset 0 0 0 2px rgba(22, 20, 22, 0.3);
+  resize: none;
+}
+#lugar-nombre:focus,
+#lugar-recuerdo:focus { outline: none; box-shadow: inset 0 0 0 2px var(--tinta); }
+.fila-sellos { display: flex; gap: 6px; justify-content: center; }
+.sello-opcion { width: 44px; height: 44px; padding: 3px; border: none; background: transparent; opacity: 0.45; cursor: pointer; }
+.sello-opcion img { width: 100%; height: 100%; image-rendering: pixelated; }
+.sello-opcion.elegido { opacity: 1; background: rgb(255, 222, 232); box-shadow: 0 0 0 2px var(--rosa-oscuro); }
+.aviso-lugar { font-family: var(--fuente-cuerpo); font-size: 12px; line-height: 1.25; color: rgba(22, 20, 22, 0.6); min-height: 15px; text-align: center; }
+.aviso-lugar.error { color: var(--rosa-oscuro); }
+.editar-lugar { justify-self: start; padding: 2px 0; font-size: 13px; color: var(--iris-oscuro); }
+@media (max-height: 400px) {
+  .postal-form { gap: 5px; padding: 8px 10px 10px; }
+  .sello-opcion { width: 36px; height: 36px; padding: 2px; }
+  #lugar-nombre, #lugar-recuerdo { padding: 4px 7px; }
+}
+
+/* v30 — la flechita de volver de los juegos de la tele (tambien sobre el cartel de dificultad) */
+.juego-volver {
+  position: absolute;
+  z-index: 7;
+  top: max(8px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.3);
+}
+.pantalla-juego .juego-hud,
+.pantalla-pesca .juego-hud { left: calc(max(12px, env(safe-area-inset-left)) + 52px); }

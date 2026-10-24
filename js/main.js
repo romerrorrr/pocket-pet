@@ -16,7 +16,7 @@
 import { PetState, estadoCara, especialPorEstado } from "./petState.js";
 import * as Personaje from "./personaje.js";
 import { iniciarJuego, Volante } from "./juego.js";
-import { RegistroNPCs, RegistroLugares, LUGARES, NPCS } from "./mundo.js";
+import { RegistroNPCs, RegistroLugares, LUGARES, NPCS, VECES_PARA_ENAMORADO, SELLOS_PROPIOS, MAX_LUGARES_DE_ELLA, ponerLugaresDeElla, lugarDeEllaValido } from "./mundo.js";
 import * as storage from "./storage.js";
 import { ejecutarItemMenu, ControladorVistas, MOTIVOS_ACCION_FALLIDA } from "./gameController.js";
 import * as R from "./render.js";
@@ -25,7 +25,7 @@ import { vibrar } from "./actuadores.js";
 import * as Sonido from "./sonido.js";
 import * as Musica from "./musica.js";
 import { Diario, claveDelDia, fechaLegible, ANIMOS, preguntaDelDia } from "./diario.js";
-import { cartaPendiente } from "./cartas.js";
+import { cartaPendiente, cartaAtrasada } from "./cartas.js";
 import * as Camara from "./camara.js";
 import { abrirLente } from "./lente.js";
 import * as Final from "./final.js";
@@ -87,7 +87,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla });
 }
 
 function registrarServiceWorker() {
@@ -147,6 +147,12 @@ function cargarPesca(datos) {
   pescaReg.pecera = (datos.pecera || []).filter((id) => PECES_DE_PECERA.has(id)).slice(-4);
 }
 registrarAccesoriosExtra(() => tienda.accesorios());
+// v30: los lugares de ustedes que ella agrega desde el mapa del corcho (mundo.js los suma a LUGARES)
+let lugaresDeElla = [];
+function cargarLugaresDeElla(datos) {
+  lugaresDeElla = (Array.isArray(datos) ? datos : []).map(lugarDeEllaValido).filter(Boolean).slice(0, MAX_LUGARES_DE_ELLA);
+  ponerLugaresDeElla(lugaresDeElla);
+}
 let cartasEntregadas = [];
 let cartaActual = null;
 const controller = new ControladorVistas();
@@ -412,6 +418,7 @@ function arrancar() {
   guardadoAuto = new storage.GuardadoAutomatico();
   if (guardado) {
     ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
+    cargarLugaresDeElla(guardado.extras && guardado.extras.lugaresPropios);
     Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final);
     Personaje.restaurar(guardado.extras && guardado.extras.personaje);
     tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
@@ -549,6 +556,7 @@ function confirmarNombre() {
   cargarPesca(null);
   cargarMudanza(null);
   cargarAmigos(null);
+  cargarLugaresDeElla(null);
   diario = diario || new Diario();
   cartasEntregadas = [];
   guardarTodo();
@@ -1211,7 +1219,8 @@ function alSellar(idLugar) {
   if (LUGARES_SECRETOS.has(idLugar)) amigos.revelar(idLugar);
   eventoAmigos({ tipo: "sello", lugar: idLugar });
   eventoAmigos(estadoParaAmigos());
-  ganarMonedas("sello");
+  const lugar = LUGARES.find((l) => l.id === idLugar);
+  ganarMonedas(lugar && lugar.deElla ? "propio" : "sello");
   eventoDeseo({ tipo: "sello" });
 }
 
@@ -1494,6 +1503,7 @@ async function revisarLugares(forzar = false) {
 
 function abrirMapa(seleccion = null) {
   if (seleccion) mapaSeleccion = seleccion;
+  formLugar = null;
   actualizarEstadoUbicacion().then(() => {
     conTransicion(() => {
       prepararVista("mapa");
@@ -1504,7 +1514,7 @@ function abrirMapa(seleccion = null) {
 
 function renderMapaActual() {
   const sellados = lugaresReg.desbloqueados;
-  if (!mapaSeleccion) mapaSeleccion = (LUGARES.find((l) => sellados.has(l.id)) || LUGARES[0]).id;
+  if (!mapaSeleccion || !LUGARES.some((l) => l.id === mapaSeleccion)) mapaSeleccion = (LUGARES.find((l) => sellados.has(l.id)) || LUGARES[0]).id;
   R.renderMapa(screenEl, {
     lugares: LUGARES.filter((l) => amigos.lugarVisible(l.id, sellados)),
     sellados,
@@ -1513,15 +1523,22 @@ function renderMapaActual() {
     ubicacion: estadoUbicacion,
     fotoDe: (id) => Camara.fotoDeLugar(id),
     posicion: posicionEnMapa,
+    form: formLugar,
+    puedeAgregar: lugaresDeElla.length < MAX_LUGARES_DE_ELLA,
   });
-  document.getElementById("btn-volver-mapa").addEventListener("click", () => conTransicion(irACasa));
+  document.getElementById("btn-volver-mapa").addEventListener("click", () => {
+    formLugar = null;
+    conTransicion(irACasa);
+  });
   for (const b of screenEl.querySelectorAll("[data-lugar]")) {
     b.addEventListener("click", () => {
       Sonido.sonar("tocar");
-      mapaSeleccion = b.dataset.lugar;
+      mapaSeleccion = siguienteEnLaPila(b.dataset.lugar, sellados);
+      formLugar = null;
       renderMapaActual();
     });
   }
+  wireLugaresDeElla();
   const btnUbicacion = document.getElementById("btn-ubicacion");
   if (btnUbicacion) {
     btnUbicacion.addEventListener("click", () => {
@@ -1554,6 +1571,182 @@ function renderMapaActual() {
       if (lugar && !lugaresReg.desbloqueados.has(lugar.id)) abrirSello(lugar);
     });
   }
+}
+
+/**
+ * Varios sellos casi en el mismo punto del mapa (West Lake y Baochu, o dos
+ * lugares de ustedes en casa) se tapan: tocar el elegido pasa al de abajo.
+ */
+function siguienteEnLaPila(id, sellados) {
+  if (id !== mapaSeleccion) return id;
+  const actual = LUGARES.find((l) => l.id === id);
+  if (!actual) return id;
+  const p0 = posicionEnMapa(actual.lat, actual.lon);
+  const pila = LUGARES.filter((l) => {
+    if (!amigos.lugarVisible(l.id, sellados)) return false;
+    const p = posicionEnMapa(l.lat, l.lon);
+    return Math.hypot(p.x - p0.x, (p.y - p0.y) * 0.5) < 0.025;
+  });
+  if (pila.length < 2) return id;
+  return pila[(pila.findIndex((l) => l.id === id) + 1) % pila.length].id;
+}
+
+// ------------------------------------------------------------------
+// v30: los lugares de ustedes. En el mapa, "+ Our place": se sella ahi
+// mismo, donde estan (GPS), con un nombre, un recuerdo y el sello que ella
+// elija. Los suyos se renombran o se borran desde su postal ("Edit").
+// ------------------------------------------------------------------
+
+let formLugar = null; // { modo: "nuevo" | "editar", id, nombre, recuerdo, sello, aviso, error, buscando, borrar }
+
+function wireLugaresDeElla() {
+  const agregar = document.getElementById("btn-agregar-lugar");
+  if (agregar) {
+    agregar.addEventListener("click", () => {
+      Sonido.sonar("tocar");
+      formLugar = { modo: "nuevo", nombre: "", recuerdo: "", sello: SELLOS_PROPIOS[0] };
+      renderMapaActual();
+    });
+  }
+  const editar = document.getElementById("btn-editar-lugar");
+  if (editar) {
+    editar.addEventListener("click", () => {
+      const l = lugaresDeElla.find((x) => x.id === mapaSeleccion);
+      if (!l) return;
+      Sonido.sonar("tocar");
+      formLugar = { modo: "editar", id: l.id, nombre: l.nombre, recuerdo: l.recuerdo, sello: l.sello };
+      renderMapaActual();
+    });
+  }
+  if (!formLugar) return;
+  const f = formLugar;
+  const nombre = document.getElementById("lugar-nombre");
+  const recuerdo = document.getElementById("lugar-recuerdo");
+  nombre.addEventListener("input", () => (f.nombre = nombre.value));
+  recuerdo.addEventListener("input", () => (f.recuerdo = recuerdo.value));
+  nombre.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") recuerdo.focus();
+  });
+  for (const b of screenEl.querySelectorAll("[data-sello]")) {
+    b.addEventListener("click", () => {
+      f.sello = b.dataset.sello;
+      for (const o of screenEl.querySelectorAll("[data-sello]")) {
+        o.classList.toggle("elegido", o === b);
+        o.setAttribute("aria-checked", String(o === b));
+      }
+      Sonido.sonar("tocar");
+    });
+  }
+  document.getElementById("btn-lugar-cancelar").addEventListener("click", () => {
+    formLugar = null;
+    Sonido.sonar("tocar");
+    renderMapaActual();
+  });
+  const borrar = document.getElementById("btn-lugar-borrar");
+  if (borrar) {
+    borrar.addEventListener("click", () => {
+      if (!f.borrar) {
+        // borrar no tiene vuelta atras: pide un segundo toque
+        f.borrar = true;
+        borrar.textContent = "Tap again";
+        return;
+      }
+      borrarLugarDeElla(f.id);
+    });
+  }
+  document.getElementById("btn-lugar-ok").addEventListener("click", () => {
+    const texto = nombre.value.trim();
+    if (!texto) {
+      avisoLugar("Give it a name ♥", true);
+      Sonido.sonar("no");
+      nombre.focus();
+      return;
+    }
+    f.nombre = texto;
+    f.recuerdo = recuerdo.value.trim();
+    nombre.blur();
+    recuerdo.blur();
+    if (f.modo === "editar") guardarLugarEditado(f);
+    else sellarLugarNuevo(f);
+  });
+}
+
+function avisoLugar(texto, error = false) {
+  if (formLugar) {
+    formLugar.aviso = texto;
+    formLugar.error = error;
+  }
+  const el = document.getElementById("aviso-lugar");
+  if (!el) return;
+  el.textContent = texto;
+  el.classList.toggle("error", error);
+}
+
+function sellarLugarNuevo(f) {
+  if (!Sensores.geolocationDisponible()) {
+    avisoLugar("This phone can't tell where we are.", true);
+    return;
+  }
+  f.buscando = true;
+  const ok = document.getElementById("btn-lugar-ok");
+  if (ok) ok.disabled = true;
+  avisoLugar("Finding where we are…");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      if (formLugar !== f) return; // cerro el formulario mientras buscaba
+      try {
+        localStorage.setItem(CLAVE_UBICACION, "1");
+      } catch (e) {
+        /* nada */
+      }
+      estadoUbicacion = "ok";
+      ultimaPosicion = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: Date.now() };
+      anotarDondeEstamos(pos);
+      const nuevo = lugarDeEllaValido({ id: `propio_${Date.now().toString(36)}`, nombre: f.nombre, recuerdo: f.recuerdo, sello: f.sello, lat: pos.coords.latitude, lon: pos.coords.longitude, creado: Date.now() });
+      formLugar = null;
+      if (!nuevo) {
+        renderMapaActual();
+        return;
+      }
+      lugaresDeElla = [...lugaresDeElla, nuevo];
+      ponerLugaresDeElla(lugaresDeElla);
+      mapaSeleccion = nuevo.id;
+      guardarTodo();
+      abrirSello(LUGARES.find((l) => l.id === nuevo.id));
+    },
+    (err) => {
+      if (formLugar !== f) return;
+      f.buscando = false;
+      if (err && err.code === 1) estadoUbicacion = "sin";
+      f.aviso = err && err.code === 1 ? "Baozi needs to know where you are: allow location for Baozi in the phone settings." : "Couldn't find where we are. Try again in a moment?";
+      f.error = true;
+      renderMapaActual();
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+  );
+}
+
+function guardarLugarEditado(f) {
+  lugaresDeElla = lugaresDeElla.map((l) => (l.id === f.id ? lugarDeEllaValido({ ...l, nombre: f.nombre, recuerdo: f.recuerdo, sello: f.sello }) || l : l));
+  ponerLugaresDeElla(lugaresDeElla);
+  formLugar = null;
+  guardarTodo();
+  Sonido.sonar("guardado");
+  renderMapaActual();
+}
+
+function borrarLugarDeElla(id) {
+  lugaresDeElla = lugaresDeElla.filter((l) => l.id !== id);
+  ponerLugaresDeElla(lugaresDeElla);
+  // su sello se va con el (las fotos y los dias del diario quedan)
+  lugaresReg.desbloqueados.delete(id);
+  delete lugaresReg.fechas[id];
+  delete lugaresReg.ultimaOfertaMs[id];
+  formLugar = null;
+  mapaSeleccion = null;
+  guardarTodo();
+  Sonido.sonar("tocar");
+  renderMapaActual();
 }
 
 let lugarDelSello = null;
@@ -2474,6 +2667,7 @@ function wireBackup() {
       const guardado = storage.cargar();
       if (!guardado) throw new Error("empty backup");
       ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
+      cargarLugaresDeElla(guardado.extras && guardado.extras.lugaresPropios);
       Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final, { forzar: true });
       Personaje.restaurar(guardado.extras && guardado.extras.personaje);
       tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
@@ -2756,6 +2950,37 @@ function registrarPasoDetectado() {
 function mostrarCartaSiCorresponde(contexto) {
   const carta = cartaPendiente(contexto, cartasEntregadas);
   if (!carta) return false;
+  entregarCarta(carta);
+  return true;
+}
+
+// v30: las cartas de algo que ya habia pasado (un lugar sellado antes de que
+// la carta existiera) llegan en el cuarto, de a una y con tiempo entre una y otra.
+const CLAVE_CARTA_ATRASADA = "baozi_carta_atrasada";
+const ESPERA_CARTA_ATRASADA_MS = 2 * 3600000;
+const abiertaDesdeMs = Date.now();
+
+function talVezCartaAtrasada() {
+  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
+  if (Date.now() - abiertaDesdeMs < 10000) return false; // primero el saludo
+  try {
+    if (Date.now() - (Number(localStorage.getItem(CLAVE_CARTA_ATRASADA)) || 0) < ESPERA_CARTA_ATRASADA_MS) return false;
+  } catch (e) {
+    return false;
+  }
+  const enamorado = NPCS.some((n) => (npcsReg.vecesEncontrado[n.id] || 0) >= VECES_PARA_ENAMORADO);
+  const carta = cartaAtrasada(cartasEntregadas, { sellados: lugaresReg.desbloqueados, enamorado });
+  if (!carta) return false;
+  try {
+    localStorage.setItem(CLAVE_CARTA_ATRASADA, String(Date.now()));
+  } catch (e) {
+    /* nada */
+  }
+  entregarCarta(carta);
+  return true;
+}
+
+function entregarCarta(carta) {
   cartasEntregadas.push(carta.id);
   cartaActual = carta;
   diario.anotarCarta(carta.id);
@@ -2766,7 +2991,6 @@ function mostrarCartaSiCorresponde(contexto) {
     controller.vista = "carta";
     renderVistaActual();
   });
-  return true;
 }
 
 function renderEncuentro() {
@@ -2908,6 +3132,7 @@ function iniciarPescaJuego() {
     sonar: (n) => Sonido.sonar(n),
     vibrar,
     alTerminar: terminarPesca,
+    alSalir: volverALaTele,
   });
 }
 
@@ -2952,6 +3177,7 @@ function iniciarMinijuego() {
     vibrar,
     bannerMotion: banner,
     alTerminar: terminarMinijuego,
+    alSalir: volverALaTele,
   });
   wireMinijuego();
   if (permisoMotionEstado === "granted") activarVolante();
@@ -2989,13 +3215,33 @@ function activarVolante() {
   });
 }
 
-function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord = false } = {}) {
-  minijuego = null;
+function soltarVolante() {
   if (detenerMotionMinijuego) {
     detenerMotionMinijuego();
     detenerMotionMinijuego = null;
   }
   volanteJuego = null;
+}
+
+/** v30: la flechita de volver antes de jugar: de vuelta a la tele, sin premio ni cartel. */
+function volverALaTele() {
+  if (minijuego) minijuego.detener();
+  minijuego = null;
+  soltarVolante();
+  if (pesca) pesca.destruir();
+  pesca = null;
+  if (juegoTele) juegoTele.destruir();
+  juegoTele = null;
+  Sonido.sonar("tocar");
+  conTransicion(() => {
+    controller.vista = "juegos";
+    renderVistaActual();
+  });
+}
+
+function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord = false } = {}) {
+  minijuego = null;
+  soltarVolante();
   mascota.resultadoMinijuego(atrapadas, Date.now());
   diario.anotarJuego(puntos);
   eventoAmigos({ tipo: "juego", puntos });
@@ -3030,6 +3276,7 @@ function iniciarJuegoTele(cual) {
     cambiarCara: (el, ojo, boca) => R.cambiarCara(el, ojo, boca),
     sonar: (n) => Sonido.sonar(n),
     vibrar,
+    alSalir: volverALaTele,
   };
   const h = new Date().getHours();
   if (cual === "torre") juegoTele = iniciarTorre(screenEl, { ...comunes, alTerminar: (r) => terminarJuegoTele("torre", r) });
@@ -3189,7 +3436,7 @@ function tick() {
   // v22: la pregunta de los pasos va antes que una visita al azar (la visita puede esperar)
   elegirDeseo();
   if (deseos.pendiente() && amigos.puesto) eventoDeseo({ tipo: "estado", puesto: amigos.puesto });
-  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezAvisarTienda() && !celebrarDeseo()) {
+  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezAvisarTienda() && !celebrarDeseo() && !talVezCartaAtrasada()) {
     talVezVisita();
     talVezPedirDiario();
   }

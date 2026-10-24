@@ -43,6 +43,23 @@ export function guardarDificultadDe(clave, dif) {
   }
 }
 
+/**
+ * v30: la flechita de volver, arriba a la izquierda (queda tambien encima
+ * del cartel de dificultad). Antes de jugar vuelve a la tele; jugando, la
+ * partida termina ahi y cuenta lo que llevaba.
+ */
+export const HTML_VOLVER = `<button class="boton-volver juego-volver" type="button" data-juego-volver aria-label="Back"><i class="glifo g-atras" aria-hidden="true"></i></button>`;
+
+export function cablearVolver(contenedor, fn) {
+  const b = contenedor.querySelector("[data-juego-volver]");
+  if (!b) return;
+  b.addEventListener("pointerdown", (e) => e.stopPropagation());
+  b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    fn();
+  });
+}
+
 /** El cartel de elegir dificultad (mismo que Snack Rain y la pesca). */
 export function htmlDificultad(titulo, clave, actual, unidad = "") {
   return `

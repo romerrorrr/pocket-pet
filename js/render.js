@@ -29,7 +29,7 @@ import { arte } from "./arte.js";
 import * as Personaje from "./personaje.js";
 import { buscarCategoria } from "./gameController.js";
 import { TRAITS, TRAIT_NOMBRES, PESO_HISTORICO, PESO_RECIENTE, FELICIDAD_A_BOCA } from "./petState.js";
-import { LUGARES, NPCS, VECES_PARA_ENAMORADO, CATEGORIAS } from "./mundo.js";
+import { LUGARES, NPCS, VECES_PARA_ENAMORADO, CATEGORIAS, SELLOS_PROPIOS } from "./mundo.js";
 import { resumenDelDia, fotoDelDia, fechaLegible, ANIMOS, preguntaDelDia, claveDelDia } from "./diario.js";
 import { buscarCarta } from "./cartas.js";
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
@@ -440,11 +440,38 @@ function stickerBaozi() {
 }
 
 /**
+ * v30: agregar (o editar) un lugar de ustedes, en el costado del mapa.
+ * form: { modo: "nuevo" | "editar", id, nombre, recuerdo, sello, aviso, error, buscando, borrar }
+ */
+function formLugar(form) {
+  const nuevo = form.modo === "nuevo";
+  const sellos = SELLOS_PROPIOS.map(
+    (s) => `<button class="sello-opcion ${s === form.sello ? "elegido" : ""}" type="button" data-sello="${s}" role="radio" aria-checked="${s === form.sello}" aria-label="${s}">
+      <img src="${arte("pieza/sello_" + s + ".png")}" alt="" draggable="false" />
+    </button>`,
+  ).join("");
+  return `
+    <div class="postal postal-form" id="form-lugar">
+      <div class="postal-nombre">${nuevo ? "A place of ours" : "Our place"}</div>
+      <input id="lugar-nombre" type="text" maxlength="28" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="Name it (our first coffee…)" aria-label="Name of the place" value="${esc(form.nombre || "")}" data-sin-nombre />
+      <textarea id="lugar-recuerdo" maxlength="90" rows="2" placeholder="What happened here? (optional)" aria-label="A memory of this place" data-sin-nombre>${esc(form.recuerdo || "")}</textarea>
+      <div class="fila-sellos" role="radiogroup" aria-label="Stamp">${sellos}</div>
+      <div class="aviso-lugar ${form.error ? "error" : ""}" id="aviso-lugar" aria-live="polite">${esc(form.aviso || (nuevo ? "It gets stamped right where you are now." : ""))}</div>
+      <div class="fila-botones">
+        <button class="boton boton-fantasma chico" type="button" id="btn-lugar-cancelar">Cancel</button>
+        ${nuevo ? "" : `<button class="boton boton-fantasma chico" type="button" id="btn-lugar-borrar">${form.borrar ? "Tap again" : "Delete"}</button>`}
+        <button class="boton chico" type="button" id="btn-lugar-ok" ${form.buscando ? "disabled" : ""}>${nuevo ? `${glifo("pin")} Stamp it here` : `${glifo("check")} Save`}</button>
+      </div>
+    </div>`;
+}
+
+/**
  * opts: lugares (LUGARES), sellados (Set de ids), fechas {id: ms},
- * seleccionado (id), ubicacion: "ok" | "pedir" | "sin", fotoDe(id)
+ * seleccionado (id), ubicacion: "ok" | "pedir" | "sin", fotoDe(id),
+ * form (v30: agregar/editar un lugar de ustedes), puedeAgregar
  */
 export function renderMapa(container, opts) {
-  const { lugares, sellados, fechas, seleccionado, ubicacion, fotoDe, posicion } = opts;
+  const { lugares, sellados, fechas, seleccionado, ubicacion, fotoDe, posicion, form = null, puedeAgregar = true } = opts;
   const sel = lugares.find((l) => l.id === seleccionado) || lugares[0];
   const marcas = lugares
     .map((l) => {
@@ -457,15 +484,18 @@ export function renderMapa(container, opts) {
     .join("");
   const hecho = sellados.has(sel.id);
   let lado;
-  if (hecho) {
+  if (form) {
+    lado = formLugar(form);
+  } else if (hecho) {
     lado = `
       <figure class="postal">
         <div class="postal-foto">${imagenDePostal(sel, fotoDe(sel.id))}${stickerBaozi()}</div>
         <img class="postal-sello" src="${arte("pieza/sello_" + sel.sello + ".png")}" alt="" draggable="false" />
         <figcaption>
-          <div class="postal-nombre">${esc(sel.nombre)}</div>
+          <div class="postal-nombre" ${sel.deElla ? "data-sin-nombre" : ""}>${esc(sel.nombre)}</div>
           <div class="postal-fecha">Stamped ${esc(fechaDeMs(fechas[sel.id] || Date.now()))}</div>
-          <div class="postal-frase">“${esc(sel.frase)}”</div>
+          <div class="postal-frase" ${sel.deElla ? "data-sin-nombre" : ""}>“${esc(sel.recuerdo || sel.frase)}”</div>
+          ${sel.deElla ? `<button class="boton-texto editar-lugar" type="button" id="btn-editar-lugar">Edit</button>` : ""}
         </figcaption>
       </figure>`;
   } else {
@@ -487,7 +517,8 @@ export function renderMapa(container, opts) {
     <div class="pantalla-mapa">
       <div class="mapa-cabecera">
         <button class="boton-volver" id="btn-volver-mapa" aria-label="Back">${glifo("atras")}</button>
-        <div class="titulo-vista">Hangzhou · ${sellados.size}/${lugares.length}</div>
+        <div class="titulo-vista">Hangzhou · ${lugares.filter((l) => sellados.has(l.id)).length}/${lugares.length}</div>
+        ${puedeAgregar && !form ? `<button class="boton chico boton-agregar-lugar" type="button" id="btn-agregar-lugar">+ Our place</button>` : ""}
         <div class="colecciones">${Object.entries(CATEGORIAS)
           .map(([id, nombre]) => {
             const de = lugares.filter((l) => (l.categoria || "propio") === id);

@@ -16,6 +16,8 @@
  * record por dificultad. Termina a los 40 s o sin corazones.
  */
 
+import { HTML_VOLVER, cablearVolver } from "./juegoComun.js";
+
 const DURACION_MS = 40000;
 const CORAZONES = 3;
 const CLAVE_RECORD = "baozi_record_juego"; // + "_easy" / "_hard" (normal usa la clave de siempre)
@@ -80,15 +82,17 @@ function multiplicador(combo) {
  *   cambiarCara(el, ojo, boca)
  *   sonar(nombre), vibrar(ms)
  *   alTerminar({ puntos, atrapadas, record, nuevoRecord })
+ *   alSalir()                 volvio antes de empezar (sin jugar)
  *   bannerMotion (html opcional para pedir el permiso de movimiento)
  */
 export function iniciarJuego(contenedor, opts) {
-  const { arte, sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, alTerminar = () => {} } = opts;
+  const { arte, sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, alTerminar = () => {}, alSalir = () => {} } = opts;
   let dif = leerDificultad();
   let D = DIFICULTADES[dif];
   let record = leerRecord(dif);
   contenedor.innerHTML = `
     <div class="pantalla-juego con-cuarto" id="area-minijuego">
+      ${HTML_VOLVER}
       <div class="juego-hud">
         <span class="juego-chip" id="juego-puntos">0</span>
         <span class="juego-chip juego-combo oculto" id="juego-combo">x2</span>
@@ -154,6 +158,12 @@ export function iniciarJuego(contenedor, opts) {
     if (e.key === "ArrowRight") st.objetivo = Math.min(0.94, st.objetivo + 0.12);
   };
   window.addEventListener("keydown", teclas);
+
+  cablearVolver(contenedor, () => {
+    if (!st.vivo || st.terminado) return;
+    if (!st.empezo) alSalir(); // eligiendo o en la cuenta regresiva: todavia no jugo
+    else terminar();
+  });
 
   // ---- caras ----
   function cara(ojo, boca, ms = 380) {

@@ -14,7 +14,7 @@
  * record por cancion y dificultad. Las notas usan el reloj del audio, asi
  * no se desfasan.
  */
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, guardarDificultadDe, NOMBRES_DIFICULTAD, lienzoPixel, imagen, lista, flotante, multiplicador } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, guardarDificultadDe, NOMBRES_DIFICULTAD, lienzoPixel, imagen, lista, flotante, multiplicador, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_ritmo"; // + "_<cancion>" (+ "_<dif>")
 const CLAVE_CANCION = "baozi_ritmo_cancion";
@@ -71,10 +71,11 @@ export function notasDelJuego(melodia, paso, separacion, enTiempo = false) {
 /**
  * opts: arte, sprite, cambiarCara, sonar, vibrar,
  *       musica: { estacionesParaJugar(), tocarParaJuego(escena, {adelanto}), estacionActual() },
- *       alTerminar({ puntos, perfectos, buenos, fallados, total, record, nuevoRecord, dificultad, cancion, nombreCancion })
+ *       alTerminar({ puntos, perfectos, buenos, fallados, total, record, nuevoRecord, dificultad, cancion, nombreCancion }),
+ *       alSalir() (volvio sin jugar)
  */
 export function iniciarRitmo(contenedor, opts) {
-  const { arte, sprite, cambiarCara, musica, sonar = () => {}, vibrar = () => {}, alTerminar = () => {} } = opts;
+  const { arte, sprite, cambiarCara, musica, sonar = () => {}, vibrar = () => {}, alTerminar = () => {}, alSalir = () => {} } = opts;
   const canciones = musica.estacionesParaJugar();
   let cancion = (() => {
     try {
@@ -92,6 +93,7 @@ export function iniciarRitmo(contenedor, opts) {
 
   contenedor.innerHTML = `
     <div class="pantalla-juego pantalla-ritmo con-cuarto" id="area-ritmo">
+      ${HTML_VOLVER}
       <div class="juego-hud">
         <span class="juego-chip" id="ritmo-puntos">0</span>
         <span class="juego-chip juego-combo oculto" id="ritmo-combo">x2</span>
@@ -179,6 +181,12 @@ export function iniciarRitmo(contenedor, opts) {
       if (p) p.classList.add("oculto");
     }, 5000);
   }
+
+  cablearVolver(contenedor, () => {
+    if (!st.vivo) return;
+    if (st.estado === "eligiendo") alSalir();
+    else terminar();
+  });
 
   const ahora = () => (st.juego ? st.juego.reloj() - st.juego.latencia : 0);
   const centroCarril = (c) => L.W / 2 + (c - 1) * SEPARACION;
