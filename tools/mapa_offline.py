@@ -48,7 +48,12 @@ from PIL import Image, ImageDraw
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(AQUI)
 
-OVERPASS = "https://overpass-api.de/api/interpreter"
+# servidores de Overpass (se prueba el siguiente si uno no responde)
+OVERPASS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+]
 
 # rotulos: el mismo orden que ROTULOS en js/mapaDia.js
 AGUA, BOSQUE, PARQUE, TIERRA, EDIF, CALLE = range(6)
@@ -128,7 +133,7 @@ def consulta(bbox, detalle):
     return "[out:json][timeout:600][maxsize:1073741824];\n(\n" + "\n".join(partes) + "\n);\nout geom qt;"
 
 
-def bajar(bbox, detalle, cache_dir, intentos=8):
+def bajar(bbox, detalle, cache_dir, intentos=9):
     nombre = f"{'d' if detalle else 'a'}_{bbox[0]:.4f}_{bbox[1]:.4f}_{bbox[2]:.4f}_{bbox[3]:.4f}.json"
     ruta = os.path.join(cache_dir, nombre)
     if os.path.exists(ruta):
@@ -137,8 +142,9 @@ def bajar(bbox, detalle, cache_dir, intentos=8):
     datos = urllib.parse.urlencode({"data": consulta(bbox, detalle)}).encode()
     espera = 10
     for intento in range(1, intentos + 1):
+        servidor = OVERPASS[(intento - 1) % len(OVERPASS)]
         try:
-            req = urllib.request.Request(OVERPASS, data=datos, headers={"User-Agent": "baozi-pocket-pet/1.0 (mapa offline de un juego personal)"})
+            req = urllib.request.Request(servidor, data=datos, headers={"User-Agent": "baozi-pocket-pet/1.0 (mapa offline de un juego personal)"})
             with urllib.request.urlopen(req, timeout=900) as r:
                 crudo = r.read()
             j = json.loads(crudo)
@@ -150,7 +156,7 @@ def bajar(bbox, detalle, cache_dir, intentos=8):
             time.sleep(4)  # sin apurar a Overpass
             return j
         except Exception as e:  # 429, 504, cortes: se espera y se reintenta
-            print(f"  fallo {nombre} (intento {intento}): {e}", flush=True)
+            print(f"  fallo {nombre} (intento {intento}, {servidor.split('/')[2]}): {e}", flush=True)
             time.sleep(espera)
             espera = min(espera * 2, 180)
     raise SystemExit(f"no se pudo bajar {nombre}")
