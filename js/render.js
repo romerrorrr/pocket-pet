@@ -468,20 +468,44 @@ function formLugar(form) {
 /**
  * opts: lugares (LUGARES), sellados (Set de ids), fechas {id: ms},
  * seleccionado (id), ubicacion: "ok" | "pedir" | "sin", fotoDe(id),
- * form (v30: agregar/editar un lugar de ustedes), puedeAgregar
+ * form (v30: agregar/editar un lugar de ustedes), puedeAgregar,
+ * real (v31: { png, w, h, posicion(lat, lon) -> {x, y} en pixeles de mapa }:
+ * el mapa de verdad; sin el, el dibujo de siempre), armando (se esta armando)
  */
 export function renderMapa(container, opts) {
-  const { lugares, sellados, fechas, seleccionado, ubicacion, fotoDe, posicion, form = null, puedeAgregar = true } = opts;
+  const { lugares, sellados, fechas, seleccionado, ubicacion, fotoDe, posicion, form = null, puedeAgregar = true, real = null, armando = false } = opts;
   const sel = lugares.find((l) => l.id === seleccionado) || lugares[0];
   const marcas = lugares
     .map((l) => {
-      const { x, y } = posicion(l.lat, l.lon);
       const hecho = sellados.has(l.id);
-      return `<button class="sello-mapa ${hecho ? "hecho" : "falta"} ${l.id === sel.id ? "elegido" : ""}" data-lugar="${l.id}" style="left:${(x * 100).toFixed(1)}%;top:${(y * 100).toFixed(1)}%" aria-label="${esc(l.nombre)}">
+      let donde;
+      if (real) {
+        // en el mapa real, main.js los ubica (con el zoom) a partir de su punto del mapa
+        const p = real.posicion(l.lat, l.lon);
+        donde = `data-mx="${p.x}" data-my="${p.y}"`;
+      } else {
+        const { x, y } = posicion(l.lat, l.lon);
+        donde = `style="left:${(x * 100).toFixed(1)}%;top:${(y * 100).toFixed(1)}%"`;
+      }
+      return `<button class="sello-mapa ${hecho ? "hecho" : "falta"} ${l.id === sel.id ? "elegido" : ""}" data-lugar="${l.id}" ${donde} aria-label="${esc(l.nombre)}">
         ${hecho ? `<img src="${arte("pieza/sello_" + l.sello + ".png")}" alt="" draggable="false" />` : "<span>?</span>"}
       </button>`;
     })
     .join("");
+  const papel = real
+    ? `<div class="mapa-papel real" id="mapa-real">
+          <img class="mapa-real-img" id="mapa-real-img" src="${real.png}" alt="Map of Hangzhou" draggable="false" />
+          <div class="mapa-real-sellos">${marcas}</div>
+          <div class="mapa-zoom">
+            <button class="boton-volver" type="button" id="btn-zoom-mas" aria-label="Zoom in">+</button>
+            <button class="boton-volver" type="button" id="btn-zoom-menos" aria-label="Zoom out">−</button>
+          </div>
+          <span class="mapa-credito">© OpenStreetMap</span>
+        </div>`
+    : `<div class="mapa-papel">
+          <img class="mapa-img" src="${arte("pieza/mapa.png")}" alt="Map of Hangzhou" draggable="false" />
+          ${marcas}
+        </div>`;
   const hecho = sellados.has(sel.id);
   let lado;
   if (form) {
@@ -518,6 +542,7 @@ export function renderMapa(container, opts) {
       <div class="mapa-cabecera">
         <button class="boton-volver" id="btn-volver-mapa" aria-label="Back">${glifo("atras")}</button>
         <div class="titulo-vista">Hangzhou · ${lugares.filter((l) => sellados.has(l.id)).length}/${lugares.length}</div>
+        ${armando ? `<span class="mapa-estado">Drawing the real map…</span>` : ""}
         ${puedeAgregar && !form ? `<button class="boton chico boton-agregar-lugar" type="button" id="btn-agregar-lugar">+ Our place</button>` : ""}
         <div class="colecciones">${Object.entries(CATEGORIAS)
           .map(([id, nombre]) => {
@@ -529,10 +554,7 @@ export function renderMapa(container, opts) {
           .join("")}</div>
       </div>
       <div class="mapa-cuerpo">
-        <div class="mapa-papel">
-          <img class="mapa-img" src="${arte("pieza/mapa.png")}" alt="Map of Hangzhou" draggable="false" />
-          ${marcas}
-        </div>
+        ${papel}
         <div class="mapa-lado">${lado}</div>
       </div>
     </div>`;

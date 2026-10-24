@@ -121,8 +121,11 @@ function cargarImagen(url) {
 /**
  * Baja las teselas que cubren los encuadres y devuelve los rotulos de cada
  * pixel de tesela: { z, x0, y0, ancho, alto, rot: Uint8Array }.
+ * tolerancia: que parte de las teselas puede fallar (queda como agua) antes
+ * de darse por vencido. El mapa del dia no tolera ninguna; el del corcho
+ * (v31, corchoReal.js), que baja muchas, alguna que otra.
  */
-async function rasterDeRotulos(encuadres, z) {
+export async function rasterDeRotulos(encuadres, z, { tolerancia = 0 } = {}) {
   const n = 2 ** z * 256;
   let px0 = Infinity, py0 = Infinity, px1 = -Infinity, py1 = -Infinity;
   for (const e of encuadres) {
@@ -148,7 +151,9 @@ async function rasterDeRotulos(encuadres, z) {
       pedidos.push(cargarImagen(URL_TESELA(z, txx, ty)).then((img) => ctx.drawImage(img, tx * 256 - px0, ty * 256 - py0)));
     }
   }
-  await Promise.all(pedidos);
+  let fallas = 0;
+  await Promise.all(pedidos.map((pd) => pd.catch(() => fallas++)));
+  if (fallas > Math.floor(pedidos.length * tolerancia)) throw new Error("teselas");
   const datos = ctx.getImageData(0, 0, ancho, alto).data; // tira si la tesela no permite leerla
   const rot = new Uint8Array(ancho * alto);
   const memo = new Map();
@@ -165,7 +170,7 @@ async function rasterDeRotulos(encuadres, z) {
 }
 
 /** Los rotulos de un encuadre (w x h) a partir del raster: moda de cada celda. */
-function rotulosDelEncuadre(raster, e) {
+export function rotulosDelEncuadre(raster, e) {
   const n = 2 ** raster.z * 256;
   const { w, h } = e;
   const izq = (e.cx - w / 2 / e.escala) * n - raster.x0;
@@ -215,7 +220,7 @@ function rotulosDelEncuadre(raster, e) {
   return limpio;
 }
 
-function pintarRotulos(ctx, rot, w, h) {
+export function pintarRotulos(ctx, rot, w, h) {
   const img = ctx.createImageData(w, h);
   const d = img.data;
   for (let j = 0; j < h; j++) {

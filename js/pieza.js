@@ -1514,3 +1514,9 @@ export function posicionEnMapa(lat, lon) {
     y: Math.min(0.95, Math.max(0.05, (mp.latN - lat) / (mp.latN - mp.latS))),
   };
 }
+
+/** v31: ¿el punto cae adentro del dibujo del mapa? (lo de afuera no se pega al borde del corcho) */
+export function dentroDelDibujo(lat, lon) {
+  const mp = PIEZA.mapa;
+  return lat <= mp.latN && lat >= mp.latS && lon >= mp.lonO && lon <= mp.lonE;
+}

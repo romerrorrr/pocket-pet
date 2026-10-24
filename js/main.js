@@ -34,7 +34,7 @@ import { escribir, conNombre } from "./dialogo.js";
 import { arte } from "./arte.js";
 import { FINAL, FECHAS, DESEOS_PROPIOS, MUDANZA } from "./config.js";
 import { Deseos } from "./deseos.js";
-import { crearPieza, posicionEnMapa, ponerCuarto } from "./pieza.js";
+import { crearPieza, posicionEnMapa, dentroDelDibujo, ponerCuarto } from "./pieza.js";
 import * as Clima from "./clima.js";
 import { RegistroAmigos, LUGARES_SECRETOS, lugarCercano, progresoDe, registrarAccesoriosExtra } from "./amigos.js";
 import { Tienda, porId as productoTienda } from "./tienda.js";
@@ -47,6 +47,8 @@ import * as Galeria from "./galeria.js";
 import * as Grabacion from "./grabacion.js";
 import * as Donde from "./dondeEstuvimos.js";
 import * as MapaDia from "./mapaDia.js";
+import * as Corcho from "./corchoReal.js";
+import { crearVisor } from "./visorMapa.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -395,6 +397,7 @@ function arrancar() {
   registrarServiceWorker();
   storage.pedirAlmacenamientoPersistente();
   const fotosListas = Camara.precargarFotos();
+  Corcho.precargar();
   MapaDia.precargarMapas().then(() => {
     if (controller.vista === "consulta" && controller.consultaActual === "diary") renderVistaActual();
   });
@@ -789,7 +792,7 @@ function estadoPieza() {
     // se queda sentado en su zabuton (no pasea) si esta enfermo o si Baozi pidio la foto del lago
     quieto: fotoPedida || mascota.enferma || finalOcupado(),
     recuerdos: [...lugaresReg.desbloqueados],
-    pines: LUGARES.filter((l) => lugaresReg.desbloqueados.has(l.id)).map((l) => ({ lat: l.lat, lon: l.lon, color: l.color })),
+    pines: LUGARES.filter((l) => lugaresReg.desbloqueados.has(l.id) && dentroDelDibujo(l.lat, l.lon)).map((l) => ({ lat: l.lat, lon: l.lon, color: l.color })),
     dia: new Date().getDate(),
     anillo: Final.dijoQueSi(),
     cuarto: tienda.cuarto || "depto", // v25
@@ -1504,6 +1507,11 @@ async function revisarLugares(forzar = false) {
 function abrirMapa(seleccion = null) {
   if (seleccion) mapaSeleccion = seleccion;
   formLugar = null;
+  vistaMapa = null; // el mapa real abre centrado en el lugar elegido
+  // v31: el mapa real del corcho (si falta o quedo chico, se arma en segundo plano)
+  Corcho.asegurar(LUGARES).then(() => {
+    if (controller.vista === "mapa" && !formLugar) renderMapaActual();
+  });
   actualizarEstadoUbicacion().then(() => {
     conTransicion(() => {
       prepararVista("mapa");
@@ -1512,9 +1520,45 @@ function abrirMapa(seleccion = null) {
   });
 }
 
+// v31: el mapa real se mueve y se acerca con los dedos (visorMapa.js)
+let visor = null;
+let vistaMapa = null; // { s, cx, cy }: donde quedo, para redibujar sin moverlo
+
+function montarVisor(real) {
+  if (visor) visor.destruir();
+  visor = null;
+  const caja = document.getElementById("mapa-real");
+  const img = document.getElementById("mapa-real-img");
+  if (!caja || !img) return;
+  const sellos = [...caja.querySelectorAll(".sello-mapa")];
+  if (!vistaMapa) {
+    // la primera vez: el lugar elegido en el centro, con unos 11 km a lo ancho
+    const l = LUGARES.find((x) => x.id === mapaSeleccion);
+    const p = l ? Corcho.posicion(l.lat, l.lon) : { x: real.enc.w / 2, y: real.enc.h / 2 };
+    vistaMapa = { cx: p.x, cy: p.y, s: caja.clientWidth / Corcho.pxPorKm(11) };
+  }
+  visor = crearVisor(caja, {
+    capa: img,
+    w: real.enc.w,
+    h: real.enc.h,
+    vista: vistaMapa,
+    alMover: ({ s, tx, ty }) => {
+      for (const b of sellos) {
+        b.style.left = `${tx + Number(b.dataset.mx) * s}px`;
+        b.style.top = `${ty + Number(b.dataset.my) * s}px`;
+      }
+      if (visor) vistaMapa = visor.vista();
+    },
+  });
+  vistaMapa = visor.vista();
+  document.getElementById("btn-zoom-mas").addEventListener("click", () => visor.zoomEn(1.6));
+  document.getElementById("btn-zoom-menos").addEventListener("click", () => visor.zoomEn(1 / 1.6));
+}
+
 function renderMapaActual() {
   const sellados = lugaresReg.desbloqueados;
   if (!mapaSeleccion || !LUGARES.some((l) => l.id === mapaSeleccion)) mapaSeleccion = (LUGARES.find((l) => sellados.has(l.id)) || LUGARES[0]).id;
+  const real = Corcho.listo();
   R.renderMapa(screenEl, {
     lugares: LUGARES.filter((l) => amigos.lugarVisible(l.id, sellados)),
     sellados,
@@ -1525,7 +1569,14 @@ function renderMapaActual() {
     posicion: posicionEnMapa,
     form: formLugar,
     puedeAgregar: lugaresDeElla.length < MAX_LUGARES_DE_ELLA,
+    real: real ? { png: real.png, w: real.enc.w, h: real.enc.h, posicion: Corcho.posicion } : null,
+    armando: Corcho.armando(),
   });
+  if (real) montarVisor(real);
+  else if (visor) {
+    visor.destruir();
+    visor = null;
+  }
   document.getElementById("btn-volver-mapa").addEventListener("click", () => {
     formLugar = null;
     conTransicion(irACasa);
@@ -1581,12 +1632,13 @@ function siguienteEnLaPila(id, sellados) {
   if (id !== mapaSeleccion) return id;
   const actual = LUGARES.find((l) => l.id === id);
   if (!actual) return id;
-  const p0 = posicionEnMapa(actual.lat, actual.lon);
-  const pila = LUGARES.filter((l) => {
-    if (!amigos.lugarVisible(l.id, sellados)) return false;
-    const p = posicionEnMapa(l.lat, l.lon);
-    return Math.hypot(p.x - p0.x, (p.y - p0.y) * 0.5) < 0.025;
-  });
+  // en el mapa real, "encima" depende del zoom (en pixeles de pantalla); en el dibujo, del dibujo
+  const real = Corcho.listo();
+  const s = vistaMapa ? vistaMapa.s : 1;
+  const pos = (l) => (real ? Corcho.posicion(l.lat, l.lon) : posicionEnMapa(l.lat, l.lon));
+  const juntos = (a, b) => (real ? Math.hypot(a.x - b.x, a.y - b.y) * s < 16 : Math.hypot(a.x - b.x, (a.y - b.y) * 0.5) < 0.025);
+  const p0 = pos(actual);
+  const pila = LUGARES.filter((l) => amigos.lugarVisible(l.id, sellados) && juntos(pos(l), p0));
   if (pila.length < 2) return id;
   return pila[(pila.findIndex((l) => l.id === id) + 1) % pila.length].id;
 }

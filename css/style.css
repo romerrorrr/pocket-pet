@@ -4981,3 +4981,39 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 }
 .pantalla-juego .juego-hud,
 .pantalla-pesca .juego-hud { left: calc(max(12px, env(safe-area-inset-left)) + 52px); }
+
+/* ------------------------------------------------------------------
+   v31 — el mapa real del corcho (corchoReal.js): se mueve y se acerca con los dedos
+   ------------------------------------------------------------------ */
+.mapa-papel.real {
+  align-self: stretch;
+  aspect-ratio: auto;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+  transform: none;
+  touch-action: none;
+  background: rgb(126, 176, 204);
+}
+.mapa-real-img { position: absolute; left: 0; top: 0; max-width: none; image-rendering: pixelated; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.mapa-real-sellos { position: absolute; inset: 0; pointer-events: none; }
+.mapa-real-sellos .sello-mapa { pointer-events: auto; width: 30px; }
+.mapa-papel.real .sello-mapa.falta { width: 11px; }
+.mapa-papel.real .sello-mapa.falta.elegido { width: 26px; }
+.mapa-papel.real .sello-mapa.hecho.elegido { width: 38px; z-index: 3; }
+.mapa-zoom { position: absolute; right: 6px; bottom: 6px; z-index: 5; display: grid; gap: 6px; }
+.mapa-zoom .boton-volver { width: 32px; height: 30px; margin: 0; font-family: var(--fuente-display); font-size: 15px; line-height: 1; }
+.mapa-credito {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  z-index: 5;
+  padding: 0 3px;
+  font-family: var(--fuente-cuerpo);
+  font-size: 9px;
+  color: rgba(30, 28, 30, 0.75);
+  background: rgba(255, 251, 240, 0.65);
+  pointer-events: none;
+}
+.mapa-estado { font-family: var(--fuente-cuerpo); font-size: 12px; color: var(--papel); opacity: 0.85; }

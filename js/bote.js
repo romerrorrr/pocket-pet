@@ -3,33 +3,61 @@
  * ========
  * v29: BOAT RIDE, minijuego de la tele. El personaje va en un bote de
  * remos por el West Lake (de dia o de noche, segun la hora). El bote
- * avanza solo; tocar arriba o abajo del bote lo cambia de carril (hay
- * tres). Hay que juntar los farolitos que flotan y esquivar los lotos:
- * cada loto cuesta un corazon (hay tres). Cada vez va mas rapido.
+ * avanza solo; tocar el agua lleva el bote a ese carril (hay tres,
+ * marcados con boyas). Hay que juntar los farolitos que flotan y esquivar
+ * los lotos: cada loto cuesta un corazon (hay tres). Cada vez va mas rapido.
  *
  *   farolito +1 · farolito dorado +5 (raro) · el record es la distancia
+ *
+ * v31 (rom: "al cambiar de carril es muy facil pegarse con el loto, o hay
+ * momentos que es imposible cambiar de carril sin chocarse"):
+ *   - Los lotos vienen en filas, con agua libre entre una y otra: siempre da
+ *     el tiempo de cambiar de carril (lo que tarda en pasar el bote, mas un
+ *     respiro que se agranda con la velocidad).
+ *   - Un loto solo pega si lo choca la proa (de frente). Si el bote se
+ *     cruza de carril y el loto ya estaba al costado, lo roza y no pasa nada.
+ *   - Los farolitos se juntan en el carril mas cercano, tambien mientras se
+ *     cambia de carril.
+ *   - Carriles mas separados y marcados con boyas: se ve en cual va cada cosa.
  *
  * El bote es nuevo (tools/juegos_arte.py), no el del final.
  */
 import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, imagen, lista, flotante, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_bote";
-const ALTO = 160;
+const ALTO = 168;
 const HORIZONTE = 66;
-const CARRILES = [100, 124, 148]; // linea de flotacion de cada carril
+const SEP = 28; // entre carril y carril (un farolito mide 27 de alto: no se pisan)
+const CARRILES = [96, 96 + SEP, 96 + 2 * SEP]; // linea de flotacion de cada carril
+const BOYAS = [CARRILES[0] + SEP / 2, CARRILES[1] + SEP / 2]; // las sogas entre carriles
 const BX = 26; // donde va el bote (borde izquierdo)
 const BOTE_W = 84;
 const FLOTA = 20; // fila del dibujo del bote que queda a la altura del agua
+const CASCO = [BX + 6, BX + BOTE_W - 6]; // lo que ocupa el casco a lo largo
+const PROA = CASCO[1]; // un loto que cruza esta linea en el carril del bote, choca
+const ANCHO_LOTO = 10; // medio ancho del loto (para la proa)
+const PASO_FAROLES = 26; // entre farolito y farolito de una tira
 const METROS_POR_PX = 1 / 3;
 const CORAZONES = 3;
 
+// v0 + dv: la velocidad (px/s) al empezar y lo que suma en `rampa` segundos.
+// respiro: segundos entre que una fila de lotos pasa la proa y llega la
+// siguiente (reaccionar y cambiar de carril tarda ~0,6 s).
 export const DIFICULTADES_BOTE = {
-  easy: { v0: 34, dv: 30, cada: 74, rampa: 70 },
-  normal: { v0: 44, dv: 40, cada: 60, rampa: 60 },
-  hard: { v0: 56, dv: 52, cada: 50, rampa: 50 },
+  easy: { v0: 40, dv: 40, rampa: 70, respiro: 1.3, oro: 0.08 },
+  normal: { v0: 50, dv: 55, rampa: 70, respiro: 0.95, oro: 0.07 },
+  hard: { v0: 62, dv: 70, rampa: 60, respiro: 0.72, oro: 0.06 },
 };
 
 export const leerRecordBote = (dif = null) => leerRecordDe(CLAVE, dif);
+
+/** El carril que corresponde a una altura de la pantalla (en pixeles de juego). */
+export function carrilDeAltura(y) {
+  // cada carril se ve un poco arriba de su linea de flotacion (las cosas flotan encima)
+  let mejor = 0;
+  for (let i = 1; i < CARRILES.length; i++) if (Math.abs(y - (CARRILES[i] - 8)) < Math.abs(y - (CARRILES[mejor] - 8))) mejor = i;
+  return mejor;
+}
 
 /**
  * opts: arte, sprite(ojo, boca), cambiarCara, sonar, vibrar, noche,
@@ -51,7 +79,7 @@ export function iniciarBote(contenedor, opts) {
       <div class="juego-record" id="bote-record">BOAT RIDE</div>
       <div class="bote-personaje" id="bote-personaje">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
       <div class="juego-cielo" id="bote-capa"></div>
-      <div class="pista-minijuego" id="bote-pista">Tap above or below the boat to row · collect the lanterns</div>
+      <div class="pista-minijuego" id="bote-pista">Tap the lane you want to row to · collect the lanterns · dodge the lotus</div>
       ${htmlDificultad("BOAT RIDE", CLAVE, dif, " m")}
     </div>`;
   const $ = (id) => contenedor.querySelector(`#${id}`);
@@ -77,10 +105,10 @@ export function iniciarBote(contenedor, opts) {
     estado: "eligiendo", // eligiendo | remando | fin
     carril: 1,
     y: CARRILES[1], // linea de flotacion actual (se mueve suave entre carriles)
-    cosas: [], // { tipo: farol|oro|loto, carril, x, hecha }
+    cosas: [], // { tipo: farol|oro|loto, carril, x, hecha, cruzo }
     olas: [],
     recorrido: 0, // px
-    proxima: 120,
+    proxima: 140,
     faroles: 0,
     corazones: CORAZONES,
     invulnerable: 0,
@@ -92,6 +120,8 @@ export function iniciarBote(contenedor, opts) {
   for (let i = 0; i < 46; i++) st.olas.push({ x: Math.random() * 420, y: HORIZONTE + 4 + Math.random() * (ALTO - HORIZONTE - 6), largo: 2 + Math.floor(Math.random() * 5) });
 
   const velocidad = () => D.v0 + D.dv * Math.min(1, (performance.now() - st.t0) / 1000 / D.rampa);
+  const carrilCercano = () => carrilDeAltura(st.y - 8);
+  const enSuCarril = () => Math.abs(st.y - CARRILES[st.carril]) < 6;
 
   function cara(ojo, boca, ms = 600) {
     const el = pjEl.querySelector(".sprite-cara");
@@ -109,7 +139,7 @@ export function iniciarBote(contenedor, opts) {
     setTimeout(() => {
       const p = $("bote-pista");
       if (p) p.classList.add("oculto");
-    }, 5000);
+    }, 6000);
   });
 
   cablearVolver(contenedor, () => {
@@ -118,9 +148,10 @@ export function iniciarBote(contenedor, opts) {
     else terminar();
   });
 
-  function remar(dir) {
+  /** Al carril n (tocando el agua: directo; con las flechas: de a uno). */
+  function irA(n) {
     if (st.estado !== "remando") return;
-    const n = Math.max(0, Math.min(2, st.carril + dir));
+    n = Math.max(0, Math.min(CARRILES.length - 1, n));
     if (n === st.carril) return;
     st.carril = n;
     sonar("tocar");
@@ -131,52 +162,65 @@ export function iniciarBote(contenedor, opts) {
     if (e.target.closest("button")) return;
     e.preventDefault();
     const r = area.getBoundingClientRect();
-    const y = (e.clientY - r.top) / fondo.escala;
-    remar(y < st.y - FLOTA / 2 ? -1 : 1);
+    irA(carrilDeAltura((e.clientY - r.top) / fondo.escala));
   });
   const teclas = (e) => {
-    if (e.key === "ArrowUp") remar(-1);
-    if (e.key === "ArrowDown") remar(1);
+    if (e.key === "ArrowUp") irA(st.carril - 1);
+    if (e.key === "ArrowDown") irA(st.carril + 1);
   };
   window.addEventListener("keydown", teclas);
 
-  // ---- lo que aparece ----
-  function aparecer(W) {
-    const x = W + 20;
+  // ---- lo que aparece: filas, con agua libre entre una y otra ----
+  const farol = () => (Math.random() < D.oro ? "oro" : "farol");
+
+  /** Pone una fila a partir de x. Devuelve lo que ocupa a lo largo (para la proxima). */
+  function aparecer(x) {
+    const orden = [0, 1, 2].sort(() => Math.random() - 0.5);
     const r = Math.random();
-    const carriles = [0, 1, 2].sort(() => Math.random() - 0.5);
-    if (r < 0.32) {
-      st.cosas.push({ tipo: Math.random() < 0.07 ? "oro" : "farol", carril: carriles[0], x });
-    } else if (r < 0.62) {
-      st.cosas.push({ tipo: "loto", carril: carriles[0], x });
-    } else if (r < 0.88) {
-      st.cosas.push({ tipo: "loto", carril: carriles[0], x });
-      st.cosas.push({ tipo: Math.random() < 0.07 ? "oro" : "farol", carril: carriles[1], x: x + (Math.random() < 0.5 ? 0 : 18) });
-    } else {
-      // dos lotos: siempre queda un carril libre
-      st.cosas.push({ tipo: "loto", carril: carriles[0], x });
-      st.cosas.push({ tipo: "loto", carril: carriles[1], x: x + 6 });
+    if (r < 0.3) {
+      // una tira de farolitos en un carril
+      const n = 2 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < n; k++) st.cosas.push({ tipo: farol(), carril: orden[0], x: x + k * PASO_FAROLES });
+      return (n - 1) * PASO_FAROLES;
+    }
+    if (r < 0.65) {
+      // un loto, y a veces un farolito en otro carril
+      st.cosas.push({ tipo: "loto", carril: orden[0], x });
+      if (Math.random() < 0.6) st.cosas.push({ tipo: farol(), carril: orden[1], x });
+      return 0;
+    }
+    // dos lotos: el carril libre suele traer el premio
+    st.cosas.push({ tipo: "loto", carril: orden[0], x });
+    st.cosas.push({ tipo: "loto", carril: orden[1], x });
+    if (Math.random() < 0.75) st.cosas.push({ tipo: farol(), carril: orden[2], x });
+    return 0;
+  }
+
+  /**
+   * Cuanta agua dejar hasta la proxima fila. Un loto que ya paso la proa no
+   * pega mas, asi que alcanza con el respiro (que crece con la velocidad):
+   * siempre da para llegar al carril libre de la fila que viene.
+   */
+  const distanciaHastaLaProxima = (largo, v) => largo + 2 * ANCHO_LOTO + 16 + v * D.respiro * (1 + Math.random() * 0.6);
+
+  function chocar(c) {
+    if (performance.now() < st.invulnerable) return;
+    c.hecha = true;
+    st.corazones -= 1;
+    st.invulnerable = performance.now() + 1300;
+    sonar("no");
+    vibrar([30, 40, 30]);
+    cara("ojo_especial_asustado.png", "boca_especial_asustado.png", 800);
+    flotante($("bote-capa"), "Bonk!", ((BX + BOTE_W / 2) / fondo.W) * 100, ((st.y - 40) / ALTO) * 100, "mal");
+    pintarHud();
+    if (st.corazones <= 0) {
+      st.estado = "fin";
+      cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png", 99999);
+      setTimeout(terminar, 1300);
     }
   }
 
-  function chocar(c) {
-    if (c.tipo === "loto") {
-      if (performance.now() < st.invulnerable) return;
-      c.hecha = true;
-      st.corazones -= 1;
-      st.invulnerable = performance.now() + 1300;
-      sonar("no");
-      vibrar([30, 40, 30]);
-      cara("ojo_especial_asustado.png", "boca_especial_asustado.png", 800);
-      flotante($("bote-capa"), "Bonk!", ((BX + BOTE_W / 2) / fondo.W) * 100, ((st.y - 40) / ALTO) * 100, "mal");
-      pintarHud();
-      if (st.corazones <= 0) {
-        st.estado = "fin";
-        cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png", 99999);
-        setTimeout(terminar, 1300);
-      }
-      return;
-    }
+  function juntar(c) {
     c.hecha = true;
     const gana = c.tipo === "oro" ? 5 : 1;
     st.faroles += gana;
@@ -208,8 +252,7 @@ export function iniciarBote(contenedor, opts) {
     const W = fondo.W;
     const v = st.estado === "remando" ? velocidad() : st.estado === "fin" ? 0 : 12;
     // el bote va hacia su carril
-    const objetivo = CARRILES[st.carril];
-    st.y += (objetivo - st.y) * Math.min(1, dt * 12);
+    st.y += (CARRILES[st.carril] - st.y) * Math.min(1, dt * 12);
     for (const o of st.olas) {
       o.x -= v * (0.45 + ((o.y - HORIZONTE) / (ALTO - HORIZONTE)) * 0.8) * dt;
       if (o.x < -8) {
@@ -221,15 +264,22 @@ export function iniciarBote(contenedor, opts) {
       st.recorrido += v * dt;
       st.proxima -= v * dt;
       if (st.proxima <= 0) {
-        aparecer(W);
-        st.proxima = D.cada * (0.75 + Math.random() * 0.6);
+        const largo = aparecer(W + 16);
+        st.proxima = distanciaHastaLaProxima(largo, v);
       }
       for (const c of st.cosas) c.x -= v * dt;
-      // choques: el bote ocupa de BX+10 a BX+74 y esta en su carril (si ya llego)
-      const enCarril = Math.abs(st.y - CARRILES[st.carril]) < 7 ? st.carril : -1;
+      const cerca = carrilCercano();
       for (const c of st.cosas) {
-        if (c.hecha || c.carril !== enCarril) continue;
-        if (c.x > BX + 10 && c.x < BX + BOTE_W - 8) chocar(c);
+        if (c.hecha) continue;
+        if (c.tipo === "loto") {
+          // pega solo de frente: cuando cruza la proa, si el bote ya esta en ese carril
+          if (!c.cruzo && c.x - ANCHO_LOTO <= PROA) {
+            c.cruzo = true;
+            if (c.carril === st.carril && enSuCarril()) chocar(c);
+          }
+        } else if (c.carril === cerca && c.x > CASCO[0] && c.x < CASCO[1] + 6) {
+          juntar(c);
+        }
       }
       st.cosas = st.cosas.filter((c) => c.x > -30 && !(c.hecha && c.tipo !== "loto"));
       pintarHud();
@@ -249,8 +299,30 @@ export function iniciarBote(contenedor, opts) {
         m.fillRect(x - 8, wl + 1, 16, 1);
       }
     } else {
+      // su reflejo en el agua: ayuda a ver en que carril flota
+      m.fillStyle = noche ? "rgba(255,190,110,0.35)" : "rgba(255,240,200,0.45)";
+      m.fillRect(x - 5, wl + 1, 10, 1);
       const i = c.tipo === "oro" ? img.oro : img.farol;
       if (lista(i)) m.drawImage(i, x - 12, wl - 23 + vaiven);
+    }
+  }
+
+  /** Las sogas con boyas entre carril y carril (corren con el agua). */
+  function dibujarBoyas(m) {
+    const soga = noche ? "rgba(150,170,220,0.35)" : "rgba(30,70,96,0.28)";
+    const desde = -((st.recorrido * 0.95) % 44);
+    for (const y of BOYAS) {
+      m.fillStyle = soga;
+      for (let x = Math.round(desde); x < fondo.W; x += 4) m.fillRect(x, y, 2, 1);
+      for (let x = Math.round(desde); x < fondo.W; x += 44) {
+        const roja = Math.round((x - desde) / 44 + y) % 2 === 0;
+        m.fillStyle = "rgb(30,28,30)";
+        m.fillRect(x - 2, y - 2, 5, 4);
+        m.fillStyle = roja ? "rgb(214,72,72)" : "rgb(244,238,226)";
+        m.fillRect(x - 1, y - 1, 3, 2);
+        m.fillStyle = noche ? "rgba(150,170,220,0.4)" : "rgba(255,255,255,0.45)";
+        m.fillRect(x - 1, y + 2, 3, 1);
+      }
     }
   }
 
@@ -269,8 +341,9 @@ export function iniciarBote(contenedor, opts) {
     if (lista(img.agua)) a.drawImage(img.agua, 0, 0, 1, img.agua.naturalHeight, 0, HORIZONTE, W, ALTO - HORIZONTE);
     a.fillStyle = noche ? "rgba(120,140,200,0.55)" : "rgba(222,242,246,0.75)";
     for (const o of st.olas) a.fillRect(Math.round(o.x), Math.round(o.y), o.largo, 1);
+    dibujarBoyas(a);
     // el bote, su carril y lo de los otros carriles (lo de mas abajo va adelante)
-    const carrilBote = CARRILES.reduce((m, y, i) => (Math.abs(y - st.y) < Math.abs(CARRILES[m] - st.y) ? i : m), 0);
+    const carrilBote = carrilCercano();
     for (const c of st.cosas) dibujarCosa(c.carril <= carrilBote ? a : f, c, t);
     const parpadeo = performance.now() < st.invulnerable && Math.floor(performance.now() / 110) % 2 === 0;
     const balanceo = st.estado === "remando" ? Math.floor(t / 500) % 2 : 0;
@@ -320,7 +393,8 @@ export function iniciarBote(contenedor, opts) {
     },
     // para las pruebas: poner algo en un carril, delante del bote
     _poner: (tipo, carril, x = BX + BOTE_W + 40) => st.cosas.push({ tipo, carril, x }),
-    _remar: (dir) => remar(dir),
-    _estado: () => ({ estado: st.estado, carril: st.carril, faroles: st.faroles, corazones: st.corazones, metros: Math.floor(st.recorrido * METROS_POR_PX), cosas: st.cosas.length }),
+    _remar: (dir) => irA(st.carril + dir),
+    _ir: (n) => irA(n),
+    _estado: () => ({ estado: st.estado, carril: st.carril, y: st.y, faroles: st.faroles, corazones: st.corazones, metros: Math.floor(st.recorrido * METROS_POR_PX), cosas: st.cosas.length, lotos: st.cosas.filter((c) => c.tipo === "loto").map((c) => ({ carril: c.carril, x: Math.round(c.x) })) }),
   };
 }
