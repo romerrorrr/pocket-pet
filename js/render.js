@@ -225,7 +225,7 @@ export function renderHuevo(container) {
     <div class="pantalla-huevo con-cuarto" id="pantalla-huevo">
       <div class="huevo" id="huevo">
         <img class="huevo-sprite" src="${arte(Personaje.esMantou() ? "final/huevo_blanco.png" : "final/huevo.png")}" alt="" draggable="false" />
-        <img class="huevo-grieta g1" src="${arte("final/grieta.png")}" alt="" draggable="false" />
+        <img class="huevo-grieta" src="${arte(Personaje.esMantou() ? "final/grieta_blanco.png" : "final/grieta.png")}" alt="" draggable="false" />
       </div>
       <div class="sombra-huevo"></div>
       <div class="rotulo-huevo" id="rotulo-huevo">Something's hatching…</div>

@@ -206,9 +206,9 @@ export function iniciarPesca(contenedor, opts) {
       st.corcho = { x, y };
       cambiar("tirando_linea", ahora);
       sonar("tocar");
-      pista("Wait for the !");
+      pista("Wait for the “!”");
     } else if (st.estado === "esperando") {
-      cartel("Too soon! Wait for the !");
+      cartel("Too soon! Wait for the “!”");
       st.corcho = null;
       cambiar("listo", ahora);
       pista("Tap to cast");

@@ -2001,25 +2001,28 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   image-rendering: pixelated;
 }
 
-.huevo-grieta { clip-path: inset(0 100% 0 0); }
-.huevo[data-grietas="1"] .huevo-grieta { clip-path: inset(0 62% 0 0); }
-.huevo[data-grietas="2"] .huevo-grieta { clip-path: inset(0 30% 0 0); }
-.huevo[data-grietas="3"] .huevo-grieta { clip-path: inset(0 0 0 0); }
+/* la grieta (24x25, como el huevo) crece desde el centro; los cortes caen
+   justo entre pixeles del dibujo (de a 1/24 del ancho) */
+.huevo-grieta { clip-path: inset(0 50% 0 50%); }
+.huevo[data-grietas="1"] .huevo-grieta { clip-path: inset(0 calc(100% * 8 / 24) 0 calc(100% * 8 / 24)); }
+.huevo[data-grietas="2"] .huevo-grieta { clip-path: inset(0 calc(100% * 4 / 24) 0 calc(100% * 4 / 24)); }
+.huevo[data-grietas="3"] .huevo-grieta { clip-path: none; }
 
 .huevo.tiembla { animation: huevo-tiembla 0.36s steps(6); }
 
+/* se mueve de a un pixel del dibujo (4 px), sin rotar: rotado, el pixel art se deforma */
 @keyframes huevo-balanceo {
-  0%, 70%, 100% { transform: rotate(0deg); }
-  80% { transform: rotate(-4deg); }
-  90% { transform: rotate(4deg); }
+  0%, 70%, 100% { transform: translateX(0); }
+  80% { transform: translateX(-4px); }
+  90% { transform: translateX(4px); }
 }
 
 @keyframes huevo-tiembla {
-  0%, 100% { transform: translateX(0) rotate(0); }
-  20% { transform: translateX(-4px) rotate(-6deg); }
-  40% { transform: translateX(4px) rotate(6deg); }
-  60% { transform: translateX(-3px) rotate(-4deg); }
-  80% { transform: translateX(3px) rotate(4deg); }
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 0); }
+  40% { transform: translate(4px, -4px); }
+  60% { transform: translate(-4px, 0); }
+  80% { transform: translate(4px, 0); }
 }
 
 .sombra-huevo {
@@ -3180,7 +3183,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 
 .postal-vacia { text-align: center; justify-items: center; padding: 14px 12px; gap: 10px; }
 .postal-vacia .postal-hueco { color: rgba(90, 76, 64, 0.45); }
-.postal-vacia .boton { white-space: normal; font-size: 14px; }
+.postal-vacia .boton { white-space: normal; font-size: 14px; line-height: 1.15; text-wrap: balance; }
 
 /* el sello que cae */
 .pantalla-sello, .pantalla-postal {

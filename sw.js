@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-37727118dc"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-05ac53c092"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -113,6 +113,7 @@ const ARTE = [
   "mantou/cara_hambriento.png",
   "mantou/cara_sorprendido.png",
   "final/huevo_blanco.png",
+  "final/grieta_blanco.png",
   ...["acc_orejas", "acc_antenas", "acc_boina", "acc_corona", "deco_maceta", "deco_ovni", "deco_te", "deco_cuadro_baozi", "deco_cuadro_mantou"].map((n) => `amigos/${n}.png`),
   // v24: la pesca
   ...["fondo_dia", "fondo_noche", "pez_carpa", "pez_dorado", "pez_koi", "pez_koi_dorado", "pez_sandalia", "pez_hoja"].map((n) => `pesca/${n}.png`),
