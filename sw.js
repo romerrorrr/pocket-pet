@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-5221c8c8fc"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-a142fbfd8f"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
