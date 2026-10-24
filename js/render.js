@@ -626,7 +626,7 @@ export function renderCuaderno(container, pestana, contenido) {
     </div>`;
 }
 
-export function htmlAjustes(sonidoOn, lugaresOn = true) {
+export function htmlAjustes(sonidoOn, lugaresOn = true, { fotos = 0, conVideo = false } = {}) {
   return `
     <div class="lista-journal">
       <div class="subtitulo-lista">Sound</div>
@@ -646,16 +646,17 @@ export function htmlAjustes(sonidoOn, lugaresOn = true) {
       <div class="cuerpo-backup">
         Baozi lives only on this phone. If the browser data gets cleared or you change phones,
         a backup file is the only way to bring Baozi along.
-        <span class="tenue">(Photos live in the album on this phone and aren't included.)</span>
+        <span class="tenue">(${conVideo ? "Your photos and our video go in it too." : "Your photos go in it too."})</span>
       </div>
       <div class="fila-botones">
         <button class="boton" id="btn-exportar-backup">${glifo("check")} Save backup</button>
         <label class="boton boton-fantasma">
           Restore
-          <input type="file" id="input-importar-backup" accept="application/json,.json" hidden />
+          <input type="file" id="input-importar-backup" hidden />
         </label>
       </div>
-      <div id="mensaje-backup" class="mensaje-backup"></div>
+      ${fotos > 0 ? `<div class="fila-botones"><button class="boton boton-fantasma" id="btn-guardar-fotos" type="button">${glifo("camara")} Save all photos (${fotos})</button></div>` : ""}
+      <div id="mensaje-backup" class="mensaje-backup" aria-live="polite"></div>
     </div>`;
 }
 
@@ -1203,27 +1204,6 @@ export function renderProgress(container, mascota, lugaresReg) {
   `;
 }
 
-export function renderBackup(container) {
-  container.innerHTML = `
-    ${encabezado("Backup", "btn-volver-consulta")}
-    <div class="lista-journal">
-      <div class="cuerpo-backup">
-        Baozi lives only on this phone. If the browser data gets cleared or you change phones,
-        a backup file is the only way to bring Baozi along.
-        <span class="tenue">(Photos live in the album on this phone and aren't included.)</span>
-      </div>
-      <div class="fila-botones">
-        <button class="boton" id="btn-exportar-backup">${glifo("check")} Save backup</button>
-        <label class="boton boton-fantasma">
-          Restore
-          <input type="file" id="input-importar-backup" accept="application/json,.json" hidden />
-        </label>
-      </div>
-      <div id="mensaje-backup" class="mensaje-backup"></div>
-    </div>
-  `;
-}
-
 // ------------------------------------------------------------------
 // Caminar
 // ------------------------------------------------------------------
@@ -1717,6 +1697,72 @@ export function renderPreguntaPasos(container, { clave, cuando = "today", contad
           <button class="boton boton-fantasma" id="btn-pasos-luego">Not now</button>
           <button class="boton" id="btn-pasos-guardar">${glifo("check")} Save</button>
         </div>
+      </div>
+    </div>`;
+}
+
+/**
+ * v33: las fechas de ustedes (se abre tocando el calendario del cuarto).
+ * opts: { cabeza: linea de arriba, filas: [{ id, nombre, tipo, fecha, falta, hoy, fija }],
+ *         form: null | { nombre, mes, dia, anio, tipo, aviso, error }, tipos: [{ id, nombre }],
+ *         borrar: id que pide confirmacion, puedeAgregar, enamorado }
+ */
+const MESES_LARGOS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export const NOMBRE_MES = (mes) => MESES_LARGOS[mes - 1] || "";
+function iconoFecha(tipo) {
+  if (tipo === "boda") return `<img class="icono-fecha" src="${arte("final/anillo.png")}" alt="" draggable="false" />`;
+  return glifo({ aniversario: "corazon", cumple: "estrella", otra: "nota" }[tipo] || "nota", "icono-fecha");
+}
+export function renderFechas(container, { cabeza = "", filas = [], form = null, tipos = [], borrar = null, puedeAgregar = true, enamorado = false } = {}) {
+  let cuerpo;
+  if (form) {
+    const anioActual = new Date().getFullYear();
+    const anios = [];
+    for (let a = anioActual + 6; a >= 1950; a--) anios.push(a);
+    cuerpo = `
+      <div class="form-fecha" id="form-fecha">
+        <input id="fecha-nombre" type="text" maxlength="28" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="What is it? (her birthday…)" aria-label="Name of the date" value="${esc(form.nombre || "")}" data-sin-nombre />
+        <div class="fila-selects">
+          <select id="fecha-mes" aria-label="Month">${MESES_LARGOS.map((m, i) => `<option value="${i + 1}" ${form.mes === i + 1 ? "selected" : ""}>${m}</option>`).join("")}</select>
+          <select id="fecha-dia" aria-label="Day">${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${form.dia === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select>
+          <select id="fecha-anio" aria-label="Year (optional)"><option value="">Year (optional)</option>${anios.map((a) => `<option value="${a}" ${form.anio === a ? "selected" : ""}>${a}</option>`).join("")}</select>
+        </div>
+        <div class="fila-tipos" role="radiogroup" aria-label="Kind">
+          ${tipos.map((t) => `<button class="chip-elegir ${t.id === form.tipo ? "puesto" : ""}" type="button" data-tipo-fecha="${t.id}" role="radio" aria-checked="${t.id === form.tipo}">${iconoFecha(t.id)} ${esc(t.nombre)}</button>`).join("")}
+        </div>
+        <div class="aviso-lugar ${form.error ? "error" : ""}" id="aviso-fecha" aria-live="polite">${esc(form.aviso || "")}</div>
+        <div class="hoja-botones">
+          <button class="boton boton-fantasma" type="button" id="btn-fecha-cancelar">Cancel</button>
+          <button class="boton" type="button" id="btn-fecha-guardar">${glifo("check")} Save</button>
+        </div>
+      </div>`;
+  } else {
+    const lista = filas.length
+      ? `<ul class="lista-fechas">${filas
+          .map(
+            (f) => `<li class="fila-fecha ${f.hoy ? "hoy" : ""}">
+              <span class="tipo-fecha">${iconoFecha(f.tipo)}</span>
+              <span class="nombre-fecha" data-sin-nombre>${esc(f.nombre)}<small>${esc(f.fecha)}</small></span>
+              <span class="falta-fecha">${esc(f.falta)}</span>
+              ${f.fija ? `<span class="borrar-fecha" aria-hidden="true"></span>` : `<button class="borrar-fecha ${borrar === f.id ? "seguro" : ""}" type="button" data-borrar-fecha="${esc(f.id)}" aria-label="Delete ${esc(f.nombre)}">${borrar === f.id ? "Sure?" : glifo("cerrar")}</button>`}
+            </li>`,
+          )
+          .join("")}</ul>`
+      : `<div class="vacio-suave">No dates yet. Add the ones that matter to you two ♥</div>`;
+    cuerpo = `
+      ${lista}
+      <div class="hoja-botones">
+        <button class="boton boton-fantasma" type="button" id="btn-fechas-cerrar">${glifo("atras")} Back</button>
+        ${puedeAgregar ? `<button class="boton" type="button" id="btn-fecha-agregar">+ Add a date</button>` : ""}
+      </div>`;
+  }
+  container.innerHTML = `
+    <div class="pantalla-escribir con-cuarto pantalla-fechas">
+      <div class="escribir-personaje">${enamorado ? spriteCara("ojo_especial_enamorado.png", "boca_especial_enamorado.png") : spriteCara("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
+      <div class="hoja-escribir papel fechas-hoja">
+        <div class="hoja-fecha">${form ? "A new date" : "Our dates"}</div>
+        ${form ? "" : `<div class="hoja-pregunta">${esc(cabeza)}</div>`}
+        ${cuerpo}
       </div>
     </div>`;
 }

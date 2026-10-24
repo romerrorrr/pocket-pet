@@ -5017,3 +5017,100 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   pointer-events: none;
 }
 .mapa-estado { font-family: var(--fuente-cuerpo); font-size: 12px; color: var(--papel); opacity: 0.85; }
+
+/* v33 — las fechas de ustedes (el calendario del cuarto) */
+.pantalla-fechas .hoja-escribir { flex: 0 1 auto; min-height: 0; width: min(500px, 60vw); text-align: left; align-items: stretch; justify-content: flex-start; padding: 14px 16px; gap: 8px; }
+.pantalla-fechas .hoja-fecha, .pantalla-fechas .hoja-pregunta { text-align: center; }
+.pantalla-fechas .escribir-personaje { width: min(52vh, 30vw); margin-bottom: -8vh; }
+.pantalla-fechas .hoja-pregunta { font-size: 15px; line-height: 1.25; }
+.pantalla-fechas .hoja-botones { flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.lista-fechas { list-style: none; margin: 0; padding: 0 2px 2px 0; display: grid; gap: 5px; overflow-y: auto; min-height: 0; flex: 0 1 auto; overscroll-behavior: contain; }
+.fila-fecha {
+  display: grid;
+  grid-template-columns: 26px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 4px 6px 4px 8px;
+  background: rgb(252, 250, 244);
+  box-shadow: inset 0 0 0 1px rgba(22, 20, 22, 0.2);
+}
+.fila-fecha.hoy { background: rgb(255, 232, 238); box-shadow: inset 0 0 0 2px var(--rosa-oscuro); }
+.tipo-fecha { display: grid; place-items: center; color: var(--rosa-oscuro); }
+.tipo-fecha .glifo { transform: scale(1.15); }
+.icono-fecha { image-rendering: pixelated; }
+img.icono-fecha { width: 22px; height: 21px; }
+.chip-elegir .glifo.icono-fecha { color: var(--rosa-oscuro); }
+.nombre-fecha { display: flex; flex-direction: column; min-width: 0; font-family: var(--fuente-cuerpo); font-size: 14px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.nombre-fecha small { font-size: 11px; font-weight: 400; color: rgba(22, 20, 22, 0.6); }
+.falta-fecha { font-family: var(--fuente-display); font-size: 8px; color: var(--iris-oscuro); white-space: nowrap; }
+.fila-fecha.hoy .falta-fecha { color: var(--rosa-oscuro); }
+.borrar-fecha {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: none;
+  font-family: var(--fuente-cuerpo);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(22, 20, 22, 0.4);
+  background: transparent;
+  cursor: pointer;
+}
+.borrar-fecha.seguro { color: var(--papel); background: var(--rosa-oscuro); }
+.borrar-fecha:focus-visible { outline: 2px solid rgb(232, 170, 52); outline-offset: 1px; }
+.pantalla-fechas .vacio-suave { flex: 0 0 auto; padding: 14px 6px; font-size: 13px; color: rgba(22, 20, 22, 0.6); }
+.form-fecha { display: flex; flex-direction: column; gap: 8px; }
+#fecha-nombre {
+  width: 100%;
+  font-family: var(--fuente-cuerpo);
+  font-size: 16px; /* 16px: iOS no hace zoom al escribir */
+  padding: 6px 8px;
+  border: none;
+  border-radius: 0;
+  color: var(--tinta);
+  background: rgb(252, 250, 244);
+  box-shadow: inset 0 0 0 2px rgba(22, 20, 22, 0.3);
+}
+#fecha-nombre:focus { outline: none; box-shadow: inset 0 0 0 2px var(--tinta); }
+.fila-selects { display: flex; gap: 6px; flex-wrap: wrap; }
+.fila-selects select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 34px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 0;
+  font-family: var(--fuente-cuerpo);
+  font-size: 16px;
+  color: var(--tinta);
+  background: rgb(252, 250, 244);
+  box-shadow: inset 0 0 0 2px rgba(22, 20, 22, 0.3);
+}
+.fila-selects #fecha-dia { flex: 0 0 64px; }
+.fila-selects select:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--tinta); }
+.fila-tipos { display: flex; gap: 6px; flex-wrap: wrap; }
+.fila-tipos .chip-elegir { min-height: 30px; padding: 4px 9px; font-size: 12px; }
+.pantalla-fechas .boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+@media (max-height: 400px) {
+  .pantalla-fechas .hoja-escribir { padding: 8px 10px; gap: 5px; }
+  .fila-fecha { min-height: 32px; padding: 2px 4px 2px 6px; }
+  .form-fecha { gap: 5px; }
+  .fila-selects select { height: 30px; }
+  #fecha-nombre { padding: 4px 7px; }
+}
+
+/* v33 — Radio Beats: el ajuste de sincronia (auriculares) */
+.ritmo-sync { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; max-width: 92vw; font-family: var(--fuente-cuerpo); font-size: 12px; color: var(--papel); }
+.ritmo-sync:empty { display: none; }
+.ritmo-sync .boton { font-size: 11px; min-height: 30px; }
+.ritmo-sync span { opacity: 0.85; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5); }
+.ritmo-sync-quitar { padding: 4px 2px; border: none; background: none; font-family: var(--fuente-cuerpo); font-size: 12px; color: var(--papel); text-decoration: underline; opacity: 0.75; cursor: pointer; }
+.ritmo-ajuste { background: rgba(14, 12, 16, 0.72); touch-action: none; user-select: none; -webkit-user-select: none; }
+.ritmo-ajuste-texto { max-width: min(420px, 86vw); text-align: center; font-family: var(--fuente-cuerpo); font-size: 15px; line-height: 1.35; color: var(--papel); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5); }
+.ritmo-ajuste-puntos { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 80vw; }
+.ritmo-ajuste-puntos i { width: 10px; height: 10px; box-shadow: inset 0 0 0 2px rgba(244, 238, 226, 0.6); }
+.ritmo-ajuste-puntos i.hecho { background: rgb(246, 200, 92); box-shadow: none; }
+@media (max-height: 400px) {
+  .pantalla-ritmo .juego-dificultad { gap: 9px; }
+}

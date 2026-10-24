@@ -1,43 +1,48 @@
 /**
  * cartas.js
  * ==========
- * Cartas que Baozi "trae" al cruzar un hito: cada 5.000 pasos, al
- * descubrir un lugar, al enamorarse de alguien. Reusa la pantalla
- * narrativa que ya existe, no necesita arte, y es la via mas directa
- * para que la voz de rom aparezca de a poco durante las semanas previas
- * en vez de toda junta el ultimo dia.
+ * Cartas que Baozi "trae" al cruzar un hito: los pasos caminados juntos,
+ * al descubrir un lugar, al enamorarse de alguien y, despues del si, en
+ * las fechas del compromiso. Reusa la pantalla narrativa que ya existe, no
+ * necesita arte, y es la via mas directa para que la voz de rom aparezca
+ * de a poco en vez de toda junta el ultimo dia.
  *
  * El texto es de rom (en ingles, como toda la app). Se puede cambiar
  * cuando quiera: los id y las condiciones ya estan cableados y
  * probados, no hace falta tocar nada mas. El texto no pasa por el
  * cambio Baozi -> Mantou (data-sin-nombre): por eso no nombra a la
  * mascota. Entra comodo en la pantalla hasta ~300 letras.
+ *
+ * Ritmo (v33, rom: "llegan demasiado rapido"): las de pasos y las
+ * atrasadas llegan como mucho una por dia (main.js). Las de un momento
+ * (un lugar, el primer In Love) llegan en ese momento. Los id no cambian
+ * aunque cambie el hito: asi una carta que ya llego no vuelve a llegar.
  */
 
 export const CARTAS = [
   {
     id: "pasos_5k",
-    condicion: { tipo: "pasos", valor: 5000 },
-    titulo: "5,000 steps together",
-    texto: "Hi, my love. Our little friend asked me to write you something, so here it is: thank you for walking with me. 5,000 steps already, and every single one was better because you were next to me. Let's keep going? — Juan",
+    condicion: { tipo: "pasos", valor: 10000 },
+    titulo: "10,000 steps together",
+    texto: "Hi, my love. Our little friend asked me to write you something, so here it is: thank you for walking with me. 10,000 steps already, and every single one was better because you were next to me. Let's keep going? — Juan",
   },
   {
     id: "pasos_15k",
-    condicion: { tipo: "pasos", valor: 15000 },
-    titulo: "15,000 steps together",
-    texto: "15,000 steps! Honestly, I don't always notice where we're going, because I'm too busy looking at you. Thank you for every walk: the long ones, the lazy ones, the ones with snacks and the ones with no plan at all. — Juan",
+    condicion: { tipo: "pasos", valor: 30000 },
+    titulo: "30,000 steps together",
+    texto: "30,000 steps! Honestly, I don't always notice where we're going, because I'm too busy looking at you. Thank you for every walk: the long ones, the lazy ones, the ones with snacks and the ones with no plan at all. — Juan",
   },
   {
     id: "pasos_30k",
-    condicion: { tipo: "pasos", valor: 30000 },
-    titulo: "30,000 steps together",
-    texto: "30,000 steps. That's a lot of Hangzhou! I hope you know that the best part of any place is that you're in it. Wherever we go next, near or far, I want to get there walking next to you. — Juan",
+    condicion: { tipo: "pasos", valor: 60000 },
+    titulo: "60,000 steps together",
+    texto: "60,000 steps. That's a lot of Hangzhou! I hope you know that the best part of any place is that you're in it. Wherever we go next, near or far, I want to get there walking next to you. — Juan",
   },
   {
     id: "pasos_60k",
-    condicion: { tipo: "pasos", valor: 60000 },
-    titulo: "60,000 steps together",
-    texto: "60,000 steps together! If I could, I would walk every single one of them again, the same way, next to the same person. Thank you for letting me walk beside you. I'm not planning on stopping anytime soon. — Juan",
+    condicion: { tipo: "pasos", valor: 120000 },
+    titulo: "120,000 steps together",
+    texto: "120,000 steps together! If I could, I would walk every single one of them again, the same way, next to the same person. Thank you for letting me walk beside you. I'm not planning on stopping anytime soon. — Juan",
   },
   {
     id: "lugar_westlake",
@@ -63,19 +68,44 @@ export const CARTAS = [
     titulo: "Baozi is in love",
     texto: "Look at that, our little friend fell in love! Big eyes, silly smile, can't stop thinking about someone… I know that feeling very well. I've had it every single day since Hong Kong. — Juan",
   },
+  // v33: despues del si (dias desde el si), y el dia de la boda (una fecha
+  // "Wedding" con su año en el calendario del cuarto)
+  {
+    id: "si_30",
+    condicion: { tipo: "trasElSi", dias: 30 },
+    titulo: "One month engaged",
+    texto: "One month ago you said yes, and I still smile like an idiot every time I see the ring on your hand. Thank you for choosing me. I promise to keep choosing you, every single day. — Juan",
+  },
+  {
+    id: "si_100",
+    condicion: { tipo: "trasElSi", dias: 100 },
+    titulo: "100 days",
+    texto: "100 days since you said yes. They say the first hundred days are worth celebrating, so consider this my little celebration: thank you for every one of them. Here's to the next ten thousand. — Juan",
+  },
+  {
+    id: "si_182",
+    condicion: { tipo: "trasElSi", dias: 182 },
+    titulo: "Half a year",
+    texto: "Six months ago, on a little boat on West Lake, you said yes. I think about that moment more than you'd believe. Every day since then has felt like the beginning of something beautiful. — Juan",
+  },
+  {
+    id: "si_365",
+    condicion: { tipo: "trasElSi", dias: 365 },
+    titulo: "One year engaged",
+    texto: "One year since West Lake. A whole year of being your fiancé… I love saying that word. Whatever the next year brings, I want to face it holding your hand. Thank you for saying yes. — Juan",
+  },
+  {
+    id: "boda",
+    condicion: { tipo: "boda" },
+    titulo: "Our wedding day",
+    texto: "Today is the day. Whatever happens, wherever we are, I just want you to know: marrying you is the best thing I will ever do. I'll be the one waiting for you, with the biggest smile. — Juan",
+  },
 ];
 
 export function buscarCarta(id) {
   return CARTAS.find((c) => c.id === id) || null;
 }
 
-/**
- * Devuelve la PRIMERA carta que corresponda entregar y todavia no se
- * haya entregado — de a una por vez, a proposito: dos cartas seguidas se
- * pisarian y ninguna se leeria con atencion.
- *
- * `contexto` es { pasosTotales, lugarDescubierto, huboEnamorado }.
- */
 /**
  * Una carta sin texto real (vacia o que todavia dice "TODO") NO se
  * entrega nunca: ella jamas tiene que ver un marcador. Queda sin marcar
@@ -88,22 +118,32 @@ export function cartaEscrita(carta) {
 }
 
 /**
- * v30: una carta de lugar o de "In Love" cuyo momento ya paso sin que se
- * entregara (el lugar se sello antes de que la carta estuviera escrita, por
- * ejemplo). La trae la mascota la proxima vez que ella esta en el cuarto.
- * Las de pasos no: esas llegan solas la proxima vez que se anotan pasos.
- * pasado = { sellados: Set de ids, enamorado: bool }
+ * Las cartas que la mascota trae al cuarto (de a una por dia): las de algo
+ * que ya paso sin que se entregara (un lugar sellado antes de que la carta
+ * existiera, el primer In Love) y las del compromiso. Las de pasos no:
+ * esas llegan solas la proxima vez que se anotan pasos.
+ * pasado = { sellados: Set de ids, enamorado: bool, diasTrasElSi: numero|null, boda: bool }
  */
-export function cartaAtrasada(entregadas, { sellados = new Set(), enamorado = false } = {}) {
+export function cartaAtrasada(entregadas, { sellados = new Set(), enamorado = false, diasTrasElSi = null, boda = false } = {}) {
   for (const carta of CARTAS) {
     if (entregadas.includes(carta.id) || !cartaEscrita(carta)) continue;
     const c = carta.condicion;
     if (c.tipo === "lugar" && sellados.has(c.valor)) return carta;
     if (c.tipo === "enamorado" && enamorado) return carta;
+    if (c.tipo === "trasElSi" && diasTrasElSi != null && diasTrasElSi >= c.dias) return carta;
+    if (c.tipo === "boda" && boda) return carta;
   }
   return null;
 }
 
+/**
+ * Devuelve la PRIMERA carta que corresponda entregar ahora y todavia no se
+ * haya entregado — de a una por vez, a proposito: dos cartas seguidas se
+ * pisarian y ninguna se leeria con atencion.
+ *
+ * `contexto` es { pasosTotales, lugarDescubierto, huboEnamorado, sinPasos }
+ * (sinPasos: hoy ya llego una carta, las de pasos esperan a otro dia).
+ */
 export function cartaPendiente(contexto, entregadas) {
   const yaEsta = (id) => entregadas.includes(id);
 
@@ -112,7 +152,7 @@ export function cartaPendiente(contexto, entregadas) {
     if (!cartaEscrita(carta)) continue;
     const c = carta.condicion;
 
-    if (c.tipo === "pasos" && (contexto.pasosTotales || 0) >= c.valor) return carta;
+    if (c.tipo === "pasos" && !contexto.sinPasos && (contexto.pasosTotales || 0) >= c.valor) return carta;
     if (c.tipo === "lugar" && contexto.lugarDescubierto === c.valor) return carta;
     if (c.tipo === "enamorado" && contexto.huboEnamorado) return carta;
   }

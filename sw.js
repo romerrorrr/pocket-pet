@@ -16,7 +16,7 @@
  * solo la proxima vez que abra la app con señal (sin mezclar versiones).
  */
 
-const VERSION = "baozi-a142fbfd8f"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-37727118dc"; // tools/deploy.py la reemplaza por un hash del contenido
 
 const SHELL = [
   "./",
@@ -32,6 +32,7 @@ const SHELL = [
   "./js/mapaDia.js",
   "./js/corchoReal.js",
   "./js/visorMapa.js",
+  "./js/fechas.js",
   "./js/juegoComun.js",
   "./js/torre.js",
   "./js/ritmo.js",

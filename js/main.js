@@ -49,6 +49,7 @@ import * as Donde from "./dondeEstuvimos.js";
 import * as MapaDia from "./mapaDia.js";
 import * as Corcho from "./corchoReal.js";
 import { crearVisor } from "./visorMapa.js";
+import * as Fechas from "./fechas.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -67,7 +68,7 @@ const tabbarEl = document.getElementById("tabbar");
 const marcoEl = document.querySelector(".marco-manito");
 
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "bote"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "bote", "fechas"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -89,7 +90,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla });
 }
 
 function registrarServiceWorker() {
@@ -155,6 +156,13 @@ function cargarLugaresDeElla(datos) {
   lugaresDeElla = (Array.isArray(datos) ? datos : []).map(lugarDeEllaValido).filter(Boolean).slice(0, MAX_LUGARES_DE_ELLA);
   ponerLugaresDeElla(lugaresDeElla);
 }
+// v33: las fechas que ella agrega desde el calendario del cuarto (fechas.js)
+let fechasDeElla = [];
+function cargarFechasDeElla(datos) {
+  fechasDeElla = (Array.isArray(datos) ? datos : []).map(Fechas.fechaValida).filter(Boolean).slice(0, Fechas.MAX_FECHAS);
+}
+const todasLasFechas = () => [...Fechas.fechasDeConfig(FECHAS), ...fechasDeElla];
+const bodaLlego = () => Fechas.bodaLlego(fechasDeElla);
 let cartasEntregadas = [];
 let cartaActual = null;
 const controller = new ControladorVistas();
@@ -220,18 +228,9 @@ let fotoDelDescubrimiento = false;
 // Arranque
 // ------------------------------------------------------------------
 
-/** La proxima de las fechas de ustedes (config FECHAS), con los dias que faltan. */
+/** La proxima de las fechas de ustedes (las de config y las de ella), con los dias que faltan. */
 function proximaFecha(ahora = new Date()) {
-  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-  let mejor = null;
-  for (const f of FECHAS || []) {
-    if (!f || !f.nombre || !f.mes || !f.dia) continue;
-    let d = new Date(hoy.getFullYear(), f.mes - 1, f.dia);
-    if (d < hoy) d = new Date(hoy.getFullYear() + 1, f.mes - 1, f.dia);
-    const dias = Math.round((d - hoy) / 86400000);
-    if (!mejor || dias < mejor.dias) mejor = { nombre: f.nombre, dias };
-  }
-  return mejor;
+  return Fechas.proxima(todasLasFechas(), ahora);
 }
 
 // De noche, si todavia no escribio la pagina de hoy, el personaje se lo pide (una vez por dia).
@@ -422,6 +421,7 @@ function arrancar() {
   if (guardado) {
     ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
     cargarLugaresDeElla(guardado.extras && guardado.extras.lugaresPropios);
+    cargarFechasDeElla(guardado.extras && guardado.extras.fechasPropias);
     Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final);
     Personaje.restaurar(guardado.extras && guardado.extras.personaje);
     tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
@@ -560,6 +560,7 @@ function confirmarNombre() {
   cargarMudanza(null);
   cargarAmigos(null);
   cargarLugaresDeElla(null);
+  cargarFechasDeElla(null);
   diario = diario || new Diario();
   cartasEntregadas = [];
   guardarTodo();
@@ -659,6 +660,9 @@ function renderVistaActual() {
       break;
     case "mapadia":
       renderMapaDiaActual();
+      break;
+    case "fechas":
+      renderFechasActual();
       break;
     case "menu":
       renderMenuActual();
@@ -902,22 +906,11 @@ function tocarObjeto(id) {
       Sonido.sonar("tocar");
       abrirMapa();
       break;
-    case "calendario": {
+    case "calendario":
+      // v33: el calendario abre las fechas de ustedes (y se pueden agregar)
       Sonido.sonar("tocar");
-      const si = Final.fechaDelSi();
-      const proxima = proximaFecha();
-      decir(
-        Final.dijoQueSi() && si
-          ? `Since ${fechaCorta(si)} ♥`
-          : proxima
-            ? proxima.dias === 0
-              ? `Today is ${proxima.nombre}!! ♥`
-              : `${proxima.dias} ${proxima.dias === 1 ? "day" : "days"} until ${proxima.nombre}.`
-            : `Today is ${fechaCorta(Date.now())}.`,
-        3200,
-      );
+      abrirFechas();
       break;
-    }
     case "ventana":
       tocarVentana();
       break;
@@ -1094,6 +1087,138 @@ function wireDeseo() {
       conTransicion(irACasa);
     });
   }
+}
+
+// ------------------------------------------------------------------
+// v33: las fechas de ustedes (el calendario del cuarto)
+// ------------------------------------------------------------------
+
+let formFecha = null; // { nombre, mes, dia, anio, tipo, aviso, error }
+let borrarFecha = null; // la que pide el segundo toque para borrarse
+
+function abrirFechas() {
+  formFecha = null;
+  borrarFecha = null;
+  conTransicion(() => {
+    prepararVista("fechas");
+    renderVistaActual();
+  });
+}
+
+/** "12 days until our anniversary." (o el dia del si, despues del si) */
+function cabezaDeFechas() {
+  const p = proximaFecha();
+  const cuenta = p ? (p.dias === 0 ? `Today: ${p.nombre} ♥` : p.dias === 1 ? `Tomorrow: ${p.nombre}!` : `${p.dias} days until ${p.nombre}.`) : "";
+  const si = Final.dijoQueSi() && Final.fechaDelSi();
+  if (si) return `Engaged since ${fechaCorta(si)} ♥${cuenta ? ` ${cuenta}` : ""}`;
+  return cuenta || `Today is ${fechaCorta(Date.now())}.`;
+}
+
+function renderFechasActual() {
+  const ahora = new Date();
+  const filas = Fechas.ordenadas(todasLasFechas(), ahora).map((f) => {
+    const dias = Fechas.diasHasta(f, ahora);
+    const veces = Fechas.vecesCumplidas(f, ahora);
+    return {
+      id: f.id,
+      nombre: f.nombre,
+      tipo: f.tipo,
+      fija: !!f.fija,
+      fecha: `${MESES_CORTOS[f.mes - 1]} ${f.dia}${f.anio != null ? `, ${f.anio}` : ""}${veces > 0 ? ` · ${veces} ${veces === 1 ? "year" : "years"}` : ""}`,
+      falta: dias === 0 ? "Today! ♥" : dias === 1 ? "tomorrow" : `in ${dias} days`,
+      hoy: dias === 0,
+    };
+  });
+  const tipos = Fechas.TIPOS_FECHA.filter((t) => t !== "boda" || Final.dijoQueSi()).map((id) => ({ id, nombre: Fechas.NOMBRES_TIPO[id] }));
+  R.renderFechas(screenEl, { cabeza: cabezaDeFechas(), filas, form: formFecha, tipos, borrar: borrarFecha, puedeAgregar: fechasDeElla.length < Fechas.MAX_FECHAS, enamorado: Final.dijoQueSi() });
+  wireFechas();
+}
+
+function wireFechas() {
+  const $ = (id) => document.getElementById(id);
+  if (!formFecha) {
+    $("btn-fechas-cerrar").addEventListener("click", () => conTransicion(irACasa));
+    const agregar = $("btn-fecha-agregar");
+    if (agregar) {
+      agregar.addEventListener("click", () => {
+        Sonido.sonar("tocar");
+        const hoy = new Date();
+        formFecha = { nombre: "", mes: hoy.getMonth() + 1, dia: hoy.getDate(), anio: null, tipo: "aniversario" };
+        borrarFecha = null;
+        renderFechasActual();
+      });
+    }
+    for (const b of screenEl.querySelectorAll("[data-borrar-fecha]")) {
+      b.addEventListener("click", () => {
+        const id = b.dataset.borrarFecha;
+        if (borrarFecha !== id) {
+          // borrar no tiene vuelta atras: pide un segundo toque
+          borrarFecha = id;
+          Sonido.sonar("tocar");
+          renderFechasActual();
+          return;
+        }
+        fechasDeElla = fechasDeElla.filter((f) => f.id !== id);
+        borrarFecha = null;
+        guardarTodo();
+        Sonido.sonar("tocar");
+        renderFechasActual();
+      });
+    }
+    return;
+  }
+  const f = formFecha;
+  const nombre = $("fecha-nombre");
+  const leer = () => {
+    f.nombre = nombre.value;
+    f.mes = Number($("fecha-mes").value);
+    f.dia = Number($("fecha-dia").value);
+    f.anio = $("fecha-anio").value ? Number($("fecha-anio").value) : null;
+  };
+  for (const id of ["fecha-nombre", "fecha-mes", "fecha-dia", "fecha-anio"]) $(id).addEventListener("change", leer);
+  nombre.addEventListener("input", leer);
+  for (const b of screenEl.querySelectorAll("[data-tipo-fecha]")) {
+    b.addEventListener("click", () => {
+      leer();
+      f.tipo = b.dataset.tipoFecha;
+      Sonido.sonar("tocar");
+      renderFechasActual();
+    });
+  }
+  $("btn-fecha-cancelar").addEventListener("click", () => {
+    formFecha = null;
+    Sonido.sonar("tocar");
+    renderFechasActual();
+  });
+  $("btn-fecha-guardar").addEventListener("click", () => {
+    leer();
+    const aviso = (texto) => {
+      f.aviso = texto;
+      f.error = true;
+      Sonido.sonar("no");
+      const el = $("aviso-fecha");
+      if (el) {
+        el.textContent = texto;
+        el.classList.add("error");
+      }
+    };
+    if (!f.nombre.trim()) {
+      aviso("Give it a name ♥");
+      nombre.focus();
+      return;
+    }
+    const nueva = Fechas.fechaValida({ nombre: f.nombre, mes: f.mes, dia: f.dia, anio: f.anio, tipo: f.tipo, id: `fecha_${Date.now().toString(36)}` });
+    if (!nueva) {
+      aviso(`${R.NOMBRE_MES(f.mes)} doesn't have a ${f.dia}${f.anio ? ` in ${f.anio}` : ""}.`);
+      return;
+    }
+    nombre.blur();
+    fechasDeElla = [...fechasDeElla, nueva];
+    formFecha = null;
+    guardarTodo();
+    Sonido.sonar("guardado");
+    renderFechasActual();
+  });
 }
 
 // ------------------------------------------------------------------
@@ -2306,7 +2431,7 @@ function renderConsulta() {
     tienda.marcarVistas();
     R.renderTienda(tmp, tienda, { ...estadoTiendaUI, puesto: amigos.puesto, peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi" });
   }
-  else if (tipo === "ajustes" || tipo === "backup") tmp.innerHTML = R.htmlAjustes(Sonido.sonidoHabilitado(), Donde.activo());
+  else if (tipo === "ajustes" || tipo === "backup") tmp.innerHTML = R.htmlAjustes(Sonido.sonidoHabilitado(), Donde.activo(), { fotos: Camara.cantidadDeFotos(), conVideo: Final.dijoQueSi() });
   else R.renderProgress(tmp, mascota, lugaresReg);
   const cabecera = tmp.querySelector(".encabezado-vista");
   if (cabecera) cabecera.remove();
@@ -2705,37 +2830,89 @@ function abrirEscribir() {
 }
 
 function wireBackup() {
-  document.getElementById("btn-exportar-backup").addEventListener("click", () => {
+  const mensajeEl = document.getElementById("mensaje-backup");
+  const mensaje = (texto, clase = "") => {
+    mensajeEl.textContent = texto;
+    mensajeEl.className = `mensaje-backup ${clase}`;
+  };
+  // v33: el video del si va en el backup. Se busca al abrir los ajustes, no
+  // en el toque: compartir tiene que salir enseguida del toque (si espera a
+  // IndexedDB, el iPhone lo niega).
+  const videos = Final.dijoQueSi() ? Grabacion.videosParaBackup().catch(() => []) : Promise.resolve([]);
+  document.getElementById("btn-exportar-backup").addEventListener("click", async () => {
     guardarTodo();
-    storage.exportarBackup();
+    const blob = storage.armarBackup({ fotos: Camara.todasLasFotos(), videos: await videos });
+    if (!blob) {
+      mensaje("Nothing to save yet.", "error");
+      return;
+    }
+    const r = await Galeria.guardarBlob(blob, storage.nombreDelBackup());
+    if (r === "compartido" || r === "descargado") mensaje(r === "compartido" ? "Backup ready ♥ Keep it somewhere safe (Files, iCloud…)." : "Backup saved in your downloads ♥", "ok");
+    else if (r === "error") mensaje("Couldn't save the backup. Try again?", "error");
   });
+
+  const btnFotos = document.getElementById("btn-guardar-fotos");
+  if (btnFotos) {
+    let listas = null;
+    const textoBase = btnFotos.innerHTML;
+    btnFotos.addEventListener("click", async () => {
+      if (listas) {
+        const r = await Galeria.guardarVarios(listas);
+        listas = null;
+        btnFotos.innerHTML = textoBase;
+        btnFotos.classList.add("boton-fantasma");
+        if (r === "compartido" || r === "descargado") mensaje("Photos saved ♥", "ok");
+        else if (r === "error") mensaje("Couldn't save the photos. Try again?", "error");
+        return;
+      }
+      // primer toque: se preparan (lleva un momento); el segundo las comparte
+      btnFotos.disabled = true;
+      btnFotos.textContent = "Getting them ready…";
+      listas = await Galeria.prepararFotos(Camara.todasLasFotos());
+      btnFotos.disabled = false;
+      if (!listas.length) {
+        listas = null;
+        btnFotos.innerHTML = textoBase;
+        mensaje("Couldn't read the photos.", "error");
+        return;
+      }
+      btnFotos.classList.remove("boton-fantasma");
+      btnFotos.textContent = `Save ${listas.length} ${listas.length === 1 ? "photo" : "photos"} ♥`;
+      Sonido.sonar("tocar");
+    });
+  }
+
   const inputArchivo = document.getElementById("input-importar-backup");
   inputArchivo.addEventListener("change", async () => {
     const archivo = inputArchivo.files[0];
+    inputArchivo.value = ""; // asi se puede elegir el mismo archivo otra vez
     if (!archivo) return;
-    const mensajeEl = document.getElementById("mensaje-backup");
+    mensaje("Reading the backup…");
     try {
-      await storage.importarBackup(archivo);
+      const datos = await storage.leerBackup(archivo);
+      storage.restaurarBackup(datos);
       const guardado = storage.cargar();
       if (!guardado) throw new Error("empty backup");
+      const nFotos = await Camara.importarFotos(datos.fotos);
+      await Grabacion.importarVideos(datos.videos);
+      // lo de la memoria pasa a ser lo del backup (si algo guarda antes de
+      // recargar, guarda lo restaurado, no lo de antes)
       ({ mascota, npcs: npcsReg, lugares: lugaresReg, diario, cartasEntregadas } = guardado);
       cargarLugaresDeElla(guardado.extras && guardado.extras.lugaresPropios);
+      cargarFechasDeElla(guardado.extras && guardado.extras.fechasPropias);
       Final.restaurarDesdeGuardado(guardado.extras && guardado.extras.final, { forzar: true });
       Personaje.restaurar(guardado.extras && guardado.extras.personaje);
       tienda = Tienda.desdeObjeto(guardado.extras && guardado.extras.tienda);
-      aplicarCuarto();
       deseos = Deseos.desdeObjeto(guardado.extras && guardado.extras.deseos, DESEOS_PROPIOS);
       cargarPesca(guardado.extras && guardado.extras.pesca);
       cargarMudanza(guardado.extras && guardado.extras.mudanza);
       cargarAmigos(guardado.extras && guardado.extras.amigos);
-      if (pieza) pieza.destruir();
-      pieza = null;
       mascota.actualizarTiempo(Date.now());
-      mensajeEl.textContent = "Backup restored. Welcome back, Baozi!";
-      mensajeEl.className = "mensaje-backup ok";
+      mensaje(`Backup restored${nFotos ? ` (+${nFotos} ${nFotos === 1 ? "photo" : "photos"})` : ""}. Welcome back, Baozi!`, "ok");
+      // se recarga para que todo (records, el cuarto, el album) arranque del backup
+      setTimeout(() => location.reload(), 1800);
     } catch (e) {
-      mensajeEl.textContent = "Couldn't read that file: " + e.message;
-      mensajeEl.className = "mensaje-backup error";
+      mensaje("Couldn't read that file: " + e.message, "error");
     }
   });
 }
@@ -2999,35 +3176,42 @@ function registrarPasoDetectado() {
   animarPaso();
 }
 
+/** v33: ¿hoy ya llego una carta? (el diario anota cada una en su dia) */
+function huboCartaHoy() {
+  const e = diario && diario.entradaDe(claveDelDia());
+  return !!e && e.cartas.length > 0;
+}
+
 function mostrarCartaSiCorresponde(contexto) {
-  const carta = cartaPendiente(contexto, cartasEntregadas);
+  // las de pasos, como mucho una por dia; las de un momento (un lugar, el In Love), en ese momento
+  const carta = cartaPendiente({ ...contexto, sinPasos: huboCartaHoy() }, cartasEntregadas);
   if (!carta) return false;
   entregarCarta(carta);
   return true;
 }
 
 // v30: las cartas de algo que ya habia pasado (un lugar sellado antes de que
-// la carta existiera) llegan en el cuarto, de a una y con tiempo entre una y otra.
-const CLAVE_CARTA_ATRASADA = "baozi_carta_atrasada";
-const ESPERA_CARTA_ATRASADA_MS = 2 * 3600000;
-const abiertaDesdeMs = Date.now();
+// la carta existiera) y (v33) las del compromiso llegan en el cuarto, como
+// mucho una por dia (y no el dia que ya llego otra).
+const abiertaDesdeMs = performance.now();
+
+/** Dias enteros desde el si (o null si todavia no). */
+function diasTrasElSi(ahora = new Date()) {
+  const si = Final.dijoQueSi() && Final.fechaDelSi();
+  if (!si) return null;
+  const d0 = new Date(si);
+  const a = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate());
+  const b = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  return Math.round((b - a) / 86400000);
+}
 
 function talVezCartaAtrasada() {
   if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
-  if (Date.now() - abiertaDesdeMs < 10000) return false; // primero el saludo
-  try {
-    if (Date.now() - (Number(localStorage.getItem(CLAVE_CARTA_ATRASADA)) || 0) < ESPERA_CARTA_ATRASADA_MS) return false;
-  } catch (e) {
-    return false;
-  }
+  if (performance.now() - abiertaDesdeMs < 10000) return false; // primero el saludo
+  if (huboCartaHoy()) return false;
   const enamorado = NPCS.some((n) => (npcsReg.vecesEncontrado[n.id] || 0) >= VECES_PARA_ENAMORADO);
-  const carta = cartaAtrasada(cartasEntregadas, { sellados: lugaresReg.desbloqueados, enamorado });
+  const carta = cartaAtrasada(cartasEntregadas, { sellados: lugaresReg.desbloqueados, enamorado, diasTrasElSi: diasTrasElSi(), boda: bodaLlego() });
   if (!carta) return false;
-  try {
-    localStorage.setItem(CLAVE_CARTA_ATRASADA, String(Date.now()));
-  } catch (e) {
-    /* nada */
-  }
   entregarCarta(carta);
   return true;
 }

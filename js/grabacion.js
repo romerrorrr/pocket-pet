@@ -467,6 +467,32 @@ export async function ultimoVideo({ ensayo = false } = {}) {
   return { blob: new Blob(pedazos.map((p) => p.blob), { type: tipo }), mime: tipo, empezo: v.empezo, conAudio: v.conAudio !== false, picoAudio: typeof v.picoAudio === "number" ? v.picoAudio : null };
 }
 
+/** v33, para el backup: los videos de verdad (no los ensayos), con sus pedacitos en orden. */
+export async function videosParaBackup() {
+  const lista = [];
+  for (const v of (await listarVideos()).filter((x) => !x.ensayo && x.pedazos > 0)) {
+    const pedazos = await tx(PEDAZOS, "readonly", (s) => s.index("id").getAll(v.id));
+    if (pedazos && pedazos.length) lista.push({ meta: v, pedazos: pedazos.sort((a, b) => a.n - b.n).map((p) => ({ n: p.n, blob: p.blob })) });
+  }
+  return lista;
+}
+
+/** v33: los videos de un backup (los que ya estan, mismo id, se saltean). */
+export async function importarVideos(lista) {
+  const yaEstan = new Set((await listarVideos()).map((v) => v.id));
+  let n = 0;
+  for (const { meta, pedazos } of Array.isArray(lista) ? lista : []) {
+    if (!meta || meta.id == null || yaEstan.has(meta.id) || !pedazos.length) continue;
+    const ok = await tx(PEDAZOS, "readwrite", (s) => {
+      for (const p of pedazos) s.put({ clave: [meta.id, p.n], id: meta.id, n: p.n, blob: p.blob });
+    });
+    if (!ok) continue;
+    await tx(VIDEOS, "readwrite", (s) => s.put({ ...meta, ensayo: false }));
+    n++;
+  }
+  return n;
+}
+
 export async function hayVideo({ ensayo = false } = {}) {
   return (await listarVideos()).some((v) => !!v.ensayo === !!ensayo && v.pedazos > 0);
 }

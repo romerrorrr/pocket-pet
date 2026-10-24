@@ -335,6 +335,36 @@ export async function guardarFoto({ dataUrl, dia, lugar = null, tipo = "diario",
   return foto;
 }
 
+/**
+ * v33: las fotos de un backup. Se suman a las que ya hay (nunca se borra
+ * una foto de este telefono); las que ya estan (misma clave) se saltean.
+ * Devuelve cuantas se agregaron.
+ */
+export async function importarFotos(lista) {
+  const yaEstan = new Set(fotos.map((f) => f.clave));
+  const nuevas = (Array.isArray(lista) ? lista : [])
+    .filter((f) => f && typeof f.clave === "string" && typeof f.dataUrl === "string" && f.dataUrl.startsWith("data:image/") && !yaEstan.has(f.clave))
+    .map((f) => ({ ...normalizar(f), stickers: Array.isArray(f.stickers) ? f.stickers.slice(0, 8) : [] }));
+  if (!nuevas.length) return 0;
+  fotos = [...fotos, ...nuevas].sort((a, b) => a.t - b.t);
+  const db = await abrirDB();
+  if (db) {
+    await new Promise((resolve) => {
+      try {
+        const tx = db.transaction(TIENDA, "readwrite");
+        const tienda = tx.objectStore(TIENDA);
+        for (const f of nuevas) tienda.put(f);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch (e) {
+        resolve();
+      }
+    });
+  }
+  return nuevas.length;
+}
+
 // ------------------------------------------------------------------
 // Respaldo: la app de camara del sistema via <input type=file>. Se usa
 // cuando el visor en vivo no puede abrir la camara (permiso negado, el

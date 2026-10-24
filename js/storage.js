@@ -179,7 +179,44 @@ export class GuardadoAutomatico {
 // es parte del nucleo, no un extra.
 // -----------------------------------------------------------------
 
-export function exportarBackup() {
+// v33 (rom: "si a todo"): el backup lleva tambien las fotos del album, el
+// video del si (despues del si) y lo demas del juego (records, el final,
+// el personaje...). Un solo archivo: una cabecera de texto con todo lo
+// chico (JSON, las fotos van adentro como dataUrl: son de 10-20 KB) y
+// atras, crudos, los pedacitos del video. Sin base64 para el video: un
+// video de minutos en base64 dentro de un JSON no entra en la memoria de
+// un iPhone; armado con Blobs, el navegador lo va leyendo del disco.
+//
+//   "BAOZI-BACKUP-2\n" + largo de la cabecera (10 digitos) + "\n"
+//   + cabecera (JSON, UTF-8) + los pedacitos, uno atras del otro
+//
+// Los backups viejos (el JSON del guardado, solo) se siguen leyendo.
+
+const MAGIA = "BAOZI-BACKUP-2\n";
+const LARGO_PREFIJO = MAGIA.length + 11;
+
+// Lo que es de ESTE telefono (un permiso, un cache, el ajuste de los
+// auriculares) no viaja: en el otro telefono no vale.
+const CLAVES_QUE_NO_VIAJAN = new Set([CLAVE_GUARDADO, CLAVE_ANTERIOR, CLAVE_RESCATE, "baozi_ultima_vista", "baozi_prueba_mic", "baozi_clima", "baozi_ubicacion", "baozi_ritmo_ajuste"]);
+
+function otrasClaves() {
+  const otras = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && /^(baozi|mochi)_/.test(k) && !CLAVES_QUE_NO_VIAJAN.has(k)) otras[k] = localStorage.getItem(k);
+    }
+  } catch (e) {
+    /* sin storage: van solo el progreso y las fotos */
+  }
+  return otras;
+}
+
+/**
+ * Arma el archivo del backup (Blob) o null si no hay nada guardado.
+ * fotos: las filas del album (camara.js); videos: [{ meta, pedazos: [{ n, blob }] }] (grabacion.js).
+ */
+export function armarBackup({ fotos = [], videos = [] } = {}) {
   let crudo = null;
   try {
     crudo = localStorage.getItem(CLAVE_GUARDADO);
@@ -187,47 +224,98 @@ export function exportarBackup() {
     return null;
   }
   if (!crudo) return null;
-
-  const blob = new Blob([crudo], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const fecha = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `baozi-backup-${fecha}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Safari necesita el URL vivo un rato despues del click
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-  return true;
+  const partes = [];
+  let offset = 0;
+  const videosCabecera = videos.map(({ meta, pedazos }) => ({
+    meta,
+    pedazos: pedazos.map(({ n, blob }) => {
+      const p = { n, offset, largo: blob.size, tipo: blob.type };
+      offset += blob.size;
+      partes.push(blob);
+      return p;
+    }),
+  }));
+  const cabecera = new TextEncoder().encode(
+    JSON.stringify({ formato: "baozi-backup", v: 2, creado: Date.now(), progreso: JSON.parse(crudo), otras: otrasClaves(), fotos, videos: videosCabecera }),
+  );
+  return new Blob([MAGIA, String(cabecera.length).padStart(10, "0"), "\n", cabecera, ...partes], { type: "application/octet-stream" });
 }
 
-export function importarBackup(archivo) {
+export function nombreDelBackup() {
+  return `baozi-backup-${new Date().toISOString().slice(0, 10)}.baozi`;
+}
+
+function leerTexto(blob) {
   return new Promise((resolve, reject) => {
     const lector = new FileReader();
-    lector.onload = () => {
-      try {
-        const datos = JSON.parse(lector.result);
-        if (!datos.mascota || !datos.npcs || !datos.lugares) {
-          reject(new Error("that file isn't a Baozi backup."));
-          return;
-        }
-        if ((datos.version || 1) > VERSION_ESQUEMA) {
-          reject(new Error("that backup is from a newer Baozi."));
-          return;
-        }
-        // Se migra al esquema actual antes de escribirlo, y el guardado
-        // que habia se conserva como copia anterior por las dudas.
-        const migrado = migrar(datos);
-        const actual = localStorage.getItem(CLAVE_GUARDADO);
-        if (actual) localStorage.setItem(CLAVE_ANTERIOR, actual);
-        localStorage.setItem(CLAVE_GUARDADO, JSON.stringify(migrado));
-        resolve(true);
-      } catch (e) {
-        reject(e);
-      }
-    };
+    lector.onload = () => resolve(lector.result);
     lector.onerror = () => reject(lector.error);
-    lector.readAsText(archivo);
+    lector.readAsText(blob);
   });
+}
+
+function validarProgreso(datos) {
+  if (!datos || !datos.mascota || !datos.npcs || !datos.lugares) throw new Error("that file isn't a Baozi backup.");
+  if ((datos.version || 1) > VERSION_ESQUEMA) throw new Error("that backup is from a newer Baozi.");
+  return datos;
+}
+
+/**
+ * Lee un backup (el nuevo o uno viejo) sin escribir nada todavia:
+ * { progreso, otras, fotos, videos: [{ meta, pedazos: [{ n, blob }] }] }.
+ */
+export async function leerBackup(archivo) {
+  const inicio = await leerTexto(archivo.slice(0, LARGO_PREFIJO));
+  if (!inicio.startsWith(MAGIA)) {
+    // un backup de antes de v33: el guardado solo, en JSON
+    let datos;
+    try {
+      datos = JSON.parse(await leerTexto(archivo));
+    } catch (e) {
+      throw new Error("that file isn't a Baozi backup.");
+    }
+    return { progreso: validarProgreso(datos), otras: {}, fotos: [], videos: [] };
+  }
+  const largo = Number(inicio.slice(MAGIA.length, MAGIA.length + 10));
+  if (!(largo > 0) || LARGO_PREFIJO + largo > archivo.size) throw new Error("that backup is incomplete.");
+  let cab;
+  try {
+    cab = JSON.parse(await leerTexto(archivo.slice(LARGO_PREFIJO, LARGO_PREFIJO + largo)));
+  } catch (e) {
+    throw new Error("that backup is damaged.");
+  }
+  if (!cab || cab.formato !== "baozi-backup") throw new Error("that file isn't a Baozi backup.");
+  if (cab.v > 2) throw new Error("that backup is from a newer Baozi.");
+  const base = LARGO_PREFIJO + largo;
+  const videos = (Array.isArray(cab.videos) ? cab.videos : [])
+    .filter((v) => v && v.meta && Array.isArray(v.pedazos))
+    .map((v) => ({
+      meta: v.meta,
+      pedazos: v.pedazos
+        .filter((p) => p && p.offset >= 0 && p.largo >= 0 && base + p.offset + p.largo <= archivo.size)
+        .map((p) => ({ n: p.n, blob: archivo.slice(base + p.offset, base + p.offset + p.largo, p.tipo || "") })),
+    }));
+  const otras = {};
+  if (cab.otras && typeof cab.otras === "object") {
+    for (const [k, v] of Object.entries(cab.otras)) if (/^(baozi|mochi)_/.test(k) && !CLAVES_QUE_NO_VIAJAN.has(k) && typeof v === "string") otras[k] = v;
+  }
+  return { progreso: validarProgreso(cab.progreso), otras, fotos: Array.isArray(cab.fotos) ? cab.fotos : [], videos };
+}
+
+/**
+ * Escribe el progreso (migrado) y lo demas del juego. El guardado que
+ * habia se conserva como copia anterior, por las dudas.
+ */
+export function restaurarBackup({ progreso, otras = {} }) {
+  const migrado = migrar(progreso);
+  const actual = localStorage.getItem(CLAVE_GUARDADO);
+  if (actual) localStorage.setItem(CLAVE_ANTERIOR, actual);
+  localStorage.setItem(CLAVE_GUARDADO, JSON.stringify(migrado));
+  for (const [k, v] of Object.entries(otras)) {
+    try {
+      localStorage.setItem(k, v);
+    } catch (e) {
+      /* sin lugar: lo importante (el progreso) ya esta */
+    }
+  }
 }

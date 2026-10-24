@@ -562,6 +562,57 @@ export function tocarParaJuego(escena, { adelanto = 2 } = {}) {
   };
 }
 
+/**
+ * v33: el metronomo del ajuste de Radio Beats (ritmo.js). `golpes` clicks a
+ * `bpm`, el primero en `adelanto` s. Devuelve { reloj(), tiempos, detener() }
+ * con los tiempos de cada click en el reloj del audio, o null sin sonido.
+ */
+export function metronomo({ bpm = 80, golpes = 20, adelanto = 0.8 } = {}) {
+  const c = contexto();
+  if (!c || !sonidoHabilitado()) return null;
+  detener(0.2);
+  if (c.state !== "running") c.resume().catch(() => {});
+  const maestro = c.createGain();
+  maestro.gain.value = 0.9;
+  maestro.connect(c.destination);
+  const t0 = c.currentTime + adelanto;
+  const tiempos = [];
+  const osciladores = [];
+  for (let i = 0; i < golpes; i++) {
+    const t = t0 + (i * 60) / bpm;
+    tiempos.push(t);
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = "square";
+    o.frequency.value = i % 4 === 0 ? 1320 : 880;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    o.connect(g).connect(maestro);
+    o.start(t);
+    o.stop(t + 0.08);
+    osciladores.push(o);
+  }
+  return {
+    reloj: () => c.currentTime,
+    tiempos,
+    detener: () => {
+      for (const o of osciladores) {
+        try {
+          o.stop();
+        } catch (e) {
+          /* ya paro */
+        }
+      }
+      try {
+        maestro.disconnect();
+      } catch (e) {
+        /* nada */
+      }
+    },
+  };
+}
+
 /** Solo para tests: pasos totales de cada voz de cada tema (tienen que coincidir). */
 export function _duracionesDeVoces() {
   const r = {};

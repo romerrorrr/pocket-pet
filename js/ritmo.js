@@ -13,7 +13,13 @@
  * se saltean; en EASY solo las que caen en el pulso), lo rapido que caen y cuanto perdona el tiempo. Hay un
  * record por cancion y dificultad. Las notas usan el reloj del audio, asi
  * no se desfasan.
+ *
+ * v33, SYNC: con auriculares bluetooth el sonido llega tarde (200-300 ms)
+ * y el iPhone no lo avisa. Un metronomo, ella toca con cada click, y la
+ * diferencia (la mediana, sin los toques sueltos) queda como el ajuste
+ * del juego. Es de este telefono: no viaja en el backup.
  */
+import { sonidoHabilitado } from "./sonido.js";
 import { leerRecordDe, guardarRecordDe, leerDificultadDe, guardarDificultadDe, NOMBRES_DIFICULTAD, lienzoPixel, imagen, lista, flotante, multiplicador, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_ritmo"; // + "_<cancion>" (+ "_<dif>")
@@ -32,6 +38,58 @@ export const DIFICULTADES_RITMO = {
 
 const COMIDAS = ["comida/comida_dumpling.png", "comida/comida_bao.png", "comida/comida_onigiri.png"];
 const COLORES = ["rgb(232,142,160)", "rgb(244,238,226)", "rgb(246,200,92)"];
+
+// el ajuste (s): lo que tarda en llegar el sonido + lo que tarda el dedo
+const CLAVE_AJUSTE = "baozi_ritmo_ajuste";
+export const AJUSTE_MIN = -0.1;
+export const AJUSTE_MAX = 0.45;
+const BPM_AJUSTE = 80;
+const GOLPES_AJUSTE = 20;
+const CALENTAMIENTO = 4; // los primeros clicks son para escuchar
+
+export function leerAjusteRitmo() {
+  try {
+    const v = localStorage.getItem(CLAVE_AJUSTE);
+    if (v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(AJUSTE_MAX, Math.max(AJUSTE_MIN, n)) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function guardarAjusteRitmo(v) {
+  try {
+    if (v == null) localStorage.removeItem(CLAVE_AJUSTE);
+    else localStorage.setItem(CLAVE_AJUSTE, v.toFixed(3));
+  } catch (e) {
+    /* nada */
+  }
+}
+
+/**
+ * Los toques (reloj del audio) contra los clicks -> { ajuste, usados } o
+ * null si no alcanzan o salieron muy desparejos. Cada toque va con el
+ * ultimo click que sono (hasta 150 ms antes de tocar: el que se adelanta).
+ */
+export function calcularAjuste(toques, tiempos, { calentamiento = CALENTAMIENTO } = {}) {
+  const intervalo = tiempos.length > 1 ? tiempos[1] - tiempos[0] : 60 / BPM_AJUSTE;
+  const desfases = [];
+  for (const t of toques) {
+    let k = -1;
+    for (let i = 0; i < tiempos.length; i++) if (tiempos[i] <= t + 0.15) k = i;
+    if (k < calentamiento) continue;
+    const d = t - tiempos[k];
+    if (d >= -0.15 && d < intervalo - 0.15) desfases.push(d);
+  }
+  if (desfases.length < 6) return null;
+  const orden = [...desfases].sort((a, b) => a - b);
+  const mediana = orden[Math.floor(orden.length / 2)];
+  const cerca = desfases.filter((d) => Math.abs(d - mediana) <= 0.08);
+  if (cerca.length < 5) return null;
+  const media = cerca.reduce((a, b) => a + b, 0) / cerca.length;
+  return { ajuste: Math.min(AJUSTE_MAX, Math.max(AJUSTE_MIN, media)), usados: cerca.length };
+}
 
 export const claveRecordRitmo = (cancion) => `${CLAVE}_${cancion}`;
 export const leerRecordRitmo = (cancion = null, dif = null) => {
@@ -108,6 +166,7 @@ export function iniciarRitmo(contenedor, opts) {
           ${canciones.map((c) => `<button class="boton chico ${c.id === cancion ? "" : "boton-fantasma"}" data-cancion="${c.id}">♪ ${c.nombre}</button>`).join("")}
         </div>
         <div class="juego-dificultad-botones" id="ritmo-dificultades"></div>
+        <div class="ritmo-sync" id="ritmo-sync"></div>
       </div>
     </div>`;
   const $ = (id) => contenedor.querySelector(`#${id}`);
@@ -131,6 +190,130 @@ export function iniciarRitmo(contenedor, opts) {
     }
   }
   pintarDificultades();
+
+  // v33: el ajuste de sincronia (sin sonido no hay nada que ajustar)
+  let ajuste = leerAjusteRitmo();
+  function pintarSync() {
+    const caja = $("ritmo-sync");
+    if (!caja) return;
+    if (!sonidoHabilitado() || !musica.metronomo) {
+      caja.innerHTML = "";
+      return;
+    }
+    caja.innerHTML =
+      ajuste == null
+        ? `<button class="boton chico boton-fantasma" type="button" id="btn-ritmo-sync">♪ Sync</button><span>Bluetooth headphones? Sync once.</span>`
+        : `<button class="boton chico boton-fantasma" type="button" id="btn-ritmo-sync">♪ Sync again</button><span>Synced (${Math.round(ajuste * 1000)} ms)</span><button class="ritmo-sync-quitar" type="button" id="btn-ritmo-sync-quitar">reset</button>`;
+    for (const b of caja.querySelectorAll("button")) b.addEventListener("pointerdown", (e) => e.stopPropagation());
+    $("btn-ritmo-sync").addEventListener("click", (e) => {
+      e.stopPropagation();
+      abrirAjuste();
+    });
+    const quitar = $("btn-ritmo-sync-quitar");
+    if (quitar) {
+      quitar.addEventListener("click", (e) => {
+        e.stopPropagation();
+        ajuste = null;
+        guardarAjusteRitmo(null);
+        sonar("tocar");
+        pintarSync();
+      });
+    }
+  }
+  pintarSync();
+
+  function abrirAjuste() {
+    const cartel = $("ritmo-cartel");
+    if (cartel) cartel.classList.add("oculto");
+    const panel = document.createElement("div");
+    panel.className = "juego-dificultad ritmo-ajuste";
+    panel.id = "ritmo-ajuste";
+    area.appendChild(panel);
+    const puntos = GOLPES_AJUSTE - CALENTAMIENTO;
+    const cerrar = () => {
+      soltarAjuste();
+      panel.remove();
+      if (cartel) cartel.classList.remove("oculto");
+      pintarSync();
+    };
+    const empezarAjuste = () => {
+      const toques = [];
+      panel.innerHTML = `
+        <div class="juego-dificultad-titulo">SYNC</div>
+        <div class="ritmo-ajuste-texto" id="ritmo-ajuste-texto">Listen to the clicks…</div>
+        <div class="ritmo-ajuste-puntos" aria-hidden="true">${"<i></i>".repeat(puntos)}</div>
+        <div class="juego-dificultad-botones"><button class="boton boton-fantasma" type="button" id="btn-ajuste-cancelar">Cancel</button></div>`;
+      const btnCancelar = panel.querySelector("#btn-ajuste-cancelar");
+      btnCancelar.addEventListener("pointerdown", (e) => e.stopPropagation());
+      btnCancelar.addEventListener("click", (e) => {
+        e.stopPropagation();
+        cerrar();
+      });
+      st.metro = musica.metronomo({ bpm: BPM_AJUSTE, golpes: GOLPES_AJUSTE });
+      if (!st.metro) {
+        cerrar();
+        return;
+      }
+      const m = st.metro;
+      const texto = panel.querySelector("#ritmo-ajuste-texto");
+      const marcas = panel.querySelectorAll(".ritmo-ajuste-puntos i");
+      const aviso = m.tiempos[CALENTAMIENTO] - 60 / BPM_AJUSTE / 2;
+      const cuandoAviso = Math.max(0, (aviso - m.reloj()) * 1000);
+      st.timerAjuste = setTimeout(() => {
+        texto.textContent = "Now tap anywhere, right on each click ♪";
+      }, cuandoAviso);
+      const toque = (e) => {
+        if (e.target.closest("button")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const t = m.reloj();
+        if (t < aviso) return;
+        toques.push(t);
+        const i = Math.min(marcas.length, toques.length) - 1;
+        if (marcas[i]) marcas[i].classList.add("hecho");
+        vibrar(8);
+      };
+      panel.addEventListener("pointerdown", toque);
+      st.teclaAjuste = (e) => {
+        if (e.key === " " || e.key === "Enter") toque({ target: panel, preventDefault() {}, stopPropagation() {} });
+      };
+      const fin = (m.tiempos[m.tiempos.length - 1] - m.reloj() + 0.7) * 1000;
+      st.timerAjuste2 = setTimeout(() => {
+        panel.removeEventListener("pointerdown", toque);
+        if (st.metro === m) {
+          m.detener();
+          st.metro = null;
+        }
+        const r = calcularAjuste(toques, m.tiempos);
+        if (r) {
+          ajuste = r.ajuste;
+          guardarAjusteRitmo(ajuste);
+          sonar("guardado");
+        } else sonar("no");
+        panel.innerHTML = `
+          <div class="juego-dificultad-titulo">${r ? "SYNCED ♪" : "HMM…"}</div>
+          <div class="ritmo-ajuste-texto">${r ? `Your sound arrives ${Math.round(r.ajuste * 1000)} ms late. The game knows now ♥` : "The taps were a bit uneven. Want to try again?"}</div>
+          <div class="juego-dificultad-botones">
+            ${r ? "" : `<button class="boton boton-fantasma" type="button" id="btn-ajuste-otra">Try again</button>`}
+            <button class="boton" type="button" id="btn-ajuste-listo">${r ? "Let's play" : "Cancel"}</button>
+          </div>`;
+        for (const b of panel.querySelectorAll("button")) b.addEventListener("pointerdown", (e) => e.stopPropagation());
+        panel.querySelector("#btn-ajuste-listo").addEventListener("click", (e) => {
+          e.stopPropagation();
+          cerrar();
+        });
+        const otra = panel.querySelector("#btn-ajuste-otra");
+        if (otra) {
+          otra.addEventListener("click", (e) => {
+            e.stopPropagation();
+            empezarAjuste();
+          });
+        }
+      }, fin);
+    };
+    empezarAjuste();
+  }
+
   for (const b of contenedor.querySelectorAll("[data-cancion]")) {
     b.addEventListener("pointerdown", (e) => e.stopPropagation());
     b.addEventListener("click", (e) => {
@@ -160,7 +343,19 @@ export function iniciarRitmo(contenedor, opts) {
     fin: 0,
     caraHasta: 0,
     vivo: true,
+    metro: null, // el metronomo del ajuste, mientras suena
+    timerAjuste: 0,
+    timerAjuste2: 0,
+    teclaAjuste: null,
   };
+
+  function soltarAjuste() {
+    if (st.metro) st.metro.detener();
+    st.metro = null;
+    st.teclaAjuste = null;
+    clearTimeout(st.timerAjuste);
+    clearTimeout(st.timerAjuste2);
+  }
 
   function empezar() {
     D = DIFICULTADES_RITMO[dif];
@@ -184,11 +379,14 @@ export function iniciarRitmo(contenedor, opts) {
 
   cablearVolver(contenedor, () => {
     if (!st.vivo) return;
+    soltarAjuste();
     if (st.estado === "eligiendo") alSalir();
     else terminar();
   });
 
-  const ahora = () => (st.juego ? st.juego.reloj() - st.juego.latencia : 0);
+  // con sonido: el ajuste de ella si sincronizo; si no, lo que dice el navegador
+  const desfase = () => (st.juego.conAudio && ajuste != null ? ajuste : st.juego.latencia);
+  const ahora = () => (st.juego ? st.juego.reloj() - desfase() : 0);
   const centroCarril = (c) => L.W / 2 + (c - 1) * SEPARACION;
 
   function cara(ojo, boca, ms = 500) {
@@ -253,6 +451,10 @@ export function iniciarRitmo(contenedor, opts) {
     tocar(carril);
   });
   const teclas = (e) => {
+    if (st.teclaAjuste) {
+      st.teclaAjuste(e);
+      return;
+    }
     const k = { ArrowLeft: 0, a: 0, ArrowDown: 1, s: 1, ArrowRight: 2, d: 2 }[e.key];
     if (k !== undefined) tocar(k);
   };
@@ -342,6 +544,7 @@ export function iniciarRitmo(contenedor, opts) {
     if (!st.vivo) return;
     st.vivo = false;
     st.estado = "fin";
+    soltarAjuste();
     window.removeEventListener("keydown", teclas);
     window.removeEventListener("resize", L.medir);
     if (st.juego) st.juego.detener();
@@ -367,12 +570,14 @@ export function iniciarRitmo(contenedor, opts) {
     terminar,
     destruir: () => {
       st.vivo = false;
+      soltarAjuste();
       window.removeEventListener("keydown", teclas);
       window.removeEventListener("resize", L.medir);
       if (st.juego) st.juego.detener();
     },
     // para las pruebas
     _tocar: (carril) => tocar(carril),
-    _estado: () => ({ estado: st.estado, puntos: st.puntos, combo: st.combo, perfectos: st.perfectos, buenos: st.buenos, fallados: st.fallados, total: st.notas.length, ahora: ahora(), proximas: st.notas.filter((n) => !n.hecha).slice(0, 3).map((n) => ({ t: n.t, carril: n.carril })) }),
+    _metro: () => (st.metro ? { tiempos: st.metro.tiempos, ahora: st.metro.reloj() } : null),
+    _estado: () => ({ desfase: st.juego ? desfase() : null, estado: st.estado, puntos: st.puntos, combo: st.combo, perfectos: st.perfectos, buenos: st.buenos, fallados: st.fallados, total: st.notas.length, ahora: ahora(), proximas: st.notas.filter((n) => !n.hecha).slice(0, 3).map((n) => ({ t: n.t, carril: n.carril })) }),
   };
 }
