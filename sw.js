@@ -10,6 +10,11 @@
  * arte (es poco). Los clips de musica opcionales se
  * intentan uno por uno y si no estan, no pasa nada.
  *
+ * v35: el mapa de Hangzhou (assets/mapa/, tools/mapa_offline.py) va en su
+ * propia cache, MAPA, que no se borra con cada deploy (pesa unos MB y casi
+ * nunca cambia): se baja una vez, sin frenar la instalacion si falla (el
+ * mapa entonces se intenta de nuevo cuando la app lo pide).
+ *
  * Todo sale de la cache de esta VERSION (cache primero). VERSION la
  * escribe tools/deploy.py con un hash del contenido: cualquier cambio,
  * de codigo o de arte, da una VERSION nueva y el telefono se actualiza
@@ -17,6 +22,7 @@
  */
 
 const VERSION = "baozi-c14e0fb52a"; // tools/deploy.py la reemplaza por un hash del contenido
+const MAPA = "baozi-mapa-0000000000"; // idem, con el hash de assets/mapa/
 
 const SHELL = [
   "./",
@@ -33,6 +39,7 @@ const SHELL = [
   "./js/corchoReal.js",
   "./js/visorMapa.js",
   "./js/fechas.js",
+  "./js/mapaLocal.js",
   "./js/juegoComun.js",
   "./js/torre.js",
   "./js/ritmo.js",
@@ -140,6 +147,9 @@ const ARTE = [
 
 const MUSICA_OPCIONAL = ["busqueda", "propuesta", "si", "carta", "descubrimiento", "enamorado", "casa"].map((n) => `./assets/musica/${n}.mp3`);
 
+const MAPA_ARCHIVOS = ["mapa.json", ...[11, 12, 13, 14, 15].map((z) => `hz${z}.bin`)].map((n) => `./assets/mapa/${n}`);
+const esDelMapa = (url) => url.pathname.includes("/assets/mapa/");
+
 self.addEventListener("install", (evento) => {
   evento.waitUntil(
     caches
@@ -151,6 +161,9 @@ self.addEventListener("install", (evento) => {
         await cache.addAll(SHELL.map(fresco));
         await cache.addAll(ARTE.map(fresco));
         await Promise.all(MUSICA_OPCIONAL.map((u) => cache.add(fresco(u)).catch(() => {})));
+        // el mapa: solo lo que falta en su cache (si ya estaba, no se vuelve a bajar)
+        const mapa = await caches.open(MAPA);
+        await Promise.all(MAPA_ARCHIVOS.map((u) => mapa.match(u).then((r) => r || mapa.add(fresco(u))).catch(() => {})));
       })
       .then(() => self.skipWaiting()),
   );
@@ -160,7 +173,7 @@ self.addEventListener("activate", (evento) => {
   evento.waitUntil(
     caches
       .keys()
-      .then((claves) => Promise.all(claves.filter((c) => c !== VERSION).map((c) => caches.delete(c))))
+      .then((claves) => Promise.all(claves.filter((c) => c !== VERSION && c !== MAPA).map((c) => caches.delete(c))))
       .then(() => self.clients.claim()),
   );
 });
@@ -199,14 +212,14 @@ self.addEventListener("fetch", (evento) => {
     return;
   }
 
-  // Arte, fuentes, musica: cache primero (no cambian, y pesan).
+  // Arte, fuentes, musica, mapa: cache primero (no cambian, y pesan).
   evento.respondWith(
     caches.match(pedido).then((enCache) => {
       if (enCache) return enCache;
       return fetch(pedido).then((respuesta) => {
         if (respuesta.ok && respuesta.type === "basic") {
           const copia = respuesta.clone();
-          caches.open(VERSION).then((cache) => cache.put(pedido, copia));
+          caches.open(esDelMapa(url) ? MAPA : VERSION).then((cache) => cache.put(pedido, copia));
         }
         return respuesta;
       });

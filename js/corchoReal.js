@@ -8,14 +8,16 @@
  * igual que el mapa del dia del diario: mapaDia.js), con cada lugar en su
  * punto exacto.
  *
- * Se arma una vez con internet (hasta 64 teselas) y queda guardado en el
- * telefono (IndexedDB): despues anda sin señal. Si no hay red o las teselas
- * no cargan (en China puede pasar), el corcho muestra el dibujo de siempre y
- * se vuelve a intentar mas tarde. Si ella agrega un lugar que queda fuera,
- * el mapa se rehace mas grande la proxima vez que abre el corcho.
+ * Se arma una vez y queda guardado en el telefono (IndexedDB). v35: sale del
+ * mapa de Hangzhou que viaja con la app (mapaLocal.js), sin internet; solo
+ * un lugar fuera de esa zona necesita las teselas de internet (hasta 64). Si
+ * no hay con que armarlo, el corcho muestra el dibujo de siempre y se vuelve
+ * a intentar mas tarde. Si ella agrega un lugar que queda fuera, el mapa se
+ * rehace mas grande la proxima vez que abre el corcho.
  */
 import { mx, my, proyectar, zoomPara, rasterDeRotulos, rotulosDelEncuadre, pintarRotulos } from "./mapaDia.js";
 import { distanciaMetros } from "./mundo.js";
+import * as MapaLocal from "./mapaLocal.js";
 
 const ANCHO = 640; // pixeles de mapa a lo ancho (cada uno, ~4 de tesela)
 const CENTRO = { lat: 30.2455, lon: 120.1418 }; // West Lake
@@ -24,7 +26,7 @@ const MARGEN = 0.06;
 const LADO_MINIMO = 0.00012; // ~4 km: aunque haya pocos lugares, se ve un poco de ciudad
 const REINTENTO_MS = 10 * 60000;
 const MAX_TESELAS = 64; // se baja una vez, pero sin abusar de OpenStreetMap
-const VERSION = 1;
+const VERSION = 2; // v35: el mapa sale del mapa local (se rehace una vez)
 
 const DB_NOMBRE = "mochi_corcho";
 const TIENDA = "mapa";
@@ -131,7 +133,6 @@ export async function asegurar(lugares) {
   await precargar();
   if (mapa && cubre(mapa, lugares)) return false;
   if (trabajando) return trabajando;
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
   if (Date.now() - ultimoFallo < REINTENTO_MS) return false;
   trabajando = armar(lugares)
     .then(async (m) => {
@@ -158,8 +159,12 @@ async function armar(lugares) {
     return (Math.floor(lim.x1 * n) - Math.floor(lim.x0 * n) + 1) * (Math.floor(lim.y1 * n) - Math.floor(lim.y0 * n) + 1);
   };
   let z = zoomPara(escala);
-  while (z > 10 && teselas(z) > MAX_TESELAS) z--;
-  const raster = await rasterDeRotulos([enc], z, { tolerancia: 0.08 });
+  // con el mapa local alcanza (y no hay tope de teselas); si no, internet, sin abusar
+  const zl = await MapaLocal.zoomLocal(z, lim);
+  const conLocal = zl != null && zl >= z - 2;
+  if (!conLocal) while (z > 10 && teselas(z) > MAX_TESELAS) z--;
+  const sinRed = typeof navigator !== "undefined" && navigator.onLine === false;
+  const raster = await rasterDeRotulos([enc], z, { tolerancia: 0.08, soloLocal: sinRed });
   const lienzo = document.createElement("canvas");
   lienzo.width = enc.w;
   lienzo.height = enc.h;

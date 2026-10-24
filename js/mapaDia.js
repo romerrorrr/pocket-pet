@@ -7,13 +7,17 @@
  * textos. Arriba van los pines de cada lugar y puntitos que los unen en el
  * orden del dia (los puntitos dicen "despues fuimos aca", no el camino).
  *
- * Si no hay internet o las teselas no cargan (en China puede pasar), sale un
- * mapa de pergamino con los mismos pines y se reintenta mas tarde.
+ * v35: en Hangzhou y alrededores no hace falta internet: el mapa sale del
+ * que viaja con la app (mapaLocal.js, armado con tools/mapa_offline.py).
+ * Fuera de esa zona se bajan las teselas; si no hay internet o no cargan (en
+ * China puede pasar), sale un mapa de pergamino con los mismos pines y se
+ * reintenta mas tarde.
  *
  * Los mapas hechos se guardan en IndexedDB: un dia que ya paso no se vuelve
  * a bajar.
  */
 import * as Donde from "./dondeEstuvimos.js";
+import * as MapaLocal from "./mapaLocal.js";
 
 export const MINI = { w: 146, h: 110 }; // la polaroid del diario (4:3)
 export const GRANDE = { w: 300, h: 176 }; // la vista grande (se ve a 2x)
@@ -118,23 +122,26 @@ function cargarImagen(url) {
   });
 }
 
-/**
- * Baja las teselas que cubren los encuadres y devuelve los rotulos de cada
- * pixel de tesela: { z, x0, y0, ancho, alto, rot: Uint8Array }.
- * tolerancia: que parte de las teselas puede fallar (queda como agua) antes
- * de darse por vencido. El mapa del dia no tolera ninguna; el del corcho
- * (v31, corchoReal.js), que baja muchas, alguna que otra.
- */
-export async function rasterDeRotulos(encuadres, z, { tolerancia = 0 } = {}) {
-  const n = 2 ** z * 256;
-  let px0 = Infinity, py0 = Infinity, px1 = -Infinity, py1 = -Infinity;
+/** La caja (Web Mercator 0..1) que cubren los encuadres. */
+function cajaDe(encuadres) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const e of encuadres) {
-    px0 = Math.min(px0, (e.cx - e.w / 2 / e.escala) * n);
-    px1 = Math.max(px1, (e.cx + e.w / 2 / e.escala) * n);
-    py0 = Math.min(py0, (e.cy - e.h / 2 / e.escala) * n);
-    py1 = Math.max(py1, (e.cy + e.h / 2 / e.escala) * n);
+    x0 = Math.min(x0, e.cx - e.w / 2 / e.escala);
+    x1 = Math.max(x1, e.cx + e.w / 2 / e.escala);
+    y0 = Math.min(y0, e.cy - e.h / 2 / e.escala);
+    y1 = Math.max(y1, e.cy + e.h / 2 / e.escala);
   }
-  px0 = Math.floor(px0); py0 = Math.floor(py0); px1 = Math.ceil(px1); py1 = Math.ceil(py1);
+  return { x0, x1, y0, y1 };
+}
+
+// los colores de referencia de cada rotulo (para pintar una tesela local lisa)
+const COLOR_DE_ROTULO = ROTULOS.map((_, k) => REFERENCIAS.find((ref) => ref[3] === k).slice(0, 3));
+
+/** Arma el raster de rotulos de la caja a ese zoom; `pintar(ctx, z, px0, py0, px1, py1)` pone las teselas. */
+async function armarRaster(caja, z, pintar) {
+  const n = 2 ** z * 256;
+  const px0 = Math.floor(caja.x0 * n), py0 = Math.floor(caja.y0 * n);
+  const px1 = Math.ceil(caja.x1 * n), py1 = Math.ceil(caja.y1 * n);
   const ancho = px1 - px0, alto = py1 - py0;
   const lienzo = document.createElement("canvas");
   lienzo.width = ancho;
@@ -142,18 +149,7 @@ export async function rasterDeRotulos(encuadres, z, { tolerancia = 0 } = {}) {
   const ctx = lienzo.getContext("2d", { willReadFrequently: true });
   ctx.fillStyle = "rgb(170,211,223)";
   ctx.fillRect(0, 0, ancho, alto);
-  const lado = 2 ** z;
-  const pedidos = [];
-  for (let tx = Math.floor(px0 / 256); tx <= Math.floor((px1 - 1) / 256); tx++) {
-    for (let ty = Math.floor(py0 / 256); ty <= Math.floor((py1 - 1) / 256); ty++) {
-      if (ty < 0 || ty >= lado) continue;
-      const txx = ((tx % lado) + lado) % lado;
-      pedidos.push(cargarImagen(URL_TESELA(z, txx, ty)).then((img) => ctx.drawImage(img, tx * 256 - px0, ty * 256 - py0)));
-    }
-  }
-  let fallas = 0;
-  await Promise.all(pedidos.map((pd) => pd.catch(() => fallas++)));
-  if (fallas > Math.floor(pedidos.length * tolerancia)) throw new Error("teselas");
+  await pintar(ctx, z, px0, py0, px1, py1);
   const datos = ctx.getImageData(0, 0, ancho, alto).data; // tira si la tesela no permite leerla
   const rot = new Uint8Array(ancho * alto);
   const memo = new Map();
@@ -167,6 +163,57 @@ export async function rasterDeRotulos(encuadres, z, { tolerancia = 0 } = {}) {
     rot[i] = v;
   }
   return { z, x0: px0, y0: py0, ancho, alto, rot };
+}
+
+/** Las teselas de OpenStreetMap, bajadas (con internet). */
+function pintarDeInternet(tolerancia) {
+  return async (ctx, z, px0, py0, px1, py1) => {
+    const lado = 2 ** z;
+    const pedidos = [];
+    for (let tx = Math.floor(px0 / 256); tx <= Math.floor((px1 - 1) / 256); tx++) {
+      for (let ty = Math.floor(py0 / 256); ty <= Math.floor((py1 - 1) / 256); ty++) {
+        if (ty < 0 || ty >= lado) continue;
+        const txx = ((tx % lado) + lado) % lado;
+        pedidos.push(cargarImagen(URL_TESELA(z, txx, ty)).then((img) => ctx.drawImage(img, tx * 256 - px0, ty * 256 - py0)));
+      }
+    }
+    let fallas = 0;
+    await Promise.all(pedidos.map((pd) => pd.catch(() => fallas++)));
+    if (fallas > Math.floor(pedidos.length * tolerancia)) throw new Error("teselas");
+  };
+}
+
+const pintarLocal = (ctx, z, px0, py0, px1, py1) => MapaLocal.pintar(ctx, z, px0, py0, px1, py1, COLOR_DE_ROTULO);
+
+/**
+ * El raster de rotulos que cubre los encuadres: { z, x0, y0, ancho, alto, rot }.
+ * v35: primero el mapa que viaja con la app (mapaLocal.js), si cubre la zona
+ * con un detalle parecido al pedido (hasta 2 zooms menos); si no, las teselas
+ * de internet, y si tampoco, el local aunque sea mas grueso. Sin internet
+ * (soloLocal) solo el local. El z del raster puede ser menor que el pedido:
+ * rotulosDelEncuadre usa el del raster.
+ * tolerancia: que parte de las teselas de internet puede fallar (queda como
+ * agua) antes de darse por vencido. El mapa del dia no tolera ninguna; el del
+ * corcho (v31, corchoReal.js), que baja muchas, alguna que otra.
+ */
+export async function rasterDeRotulos(encuadres, z, { tolerancia = 0, soloLocal = false } = {}) {
+  const caja = cajaDe(encuadres);
+  const zMax = await MapaLocal.zoomMaximo();
+  const zl = zMax == null ? null : await MapaLocal.zoomLocal(z, caja);
+  if (zl != null && (soloLocal || zl >= Math.min(z, zMax) - 2)) {
+    try {
+      return await armarRaster(caja, zl, pintarLocal);
+    } catch (e) {
+      if (soloLocal) throw e;
+    }
+  }
+  if (soloLocal) throw new Error("sin mapa local");
+  try {
+    return await armarRaster(caja, z, pintarDeInternet(tolerancia));
+  } catch (e) {
+    if (zl == null) throw e;
+    return armarRaster(caja, zl, pintarLocal);
+  }
 }
 
 /** Los rotulos de un encuadre (w x h) a partir del raster: moda de cada celda. */
@@ -320,12 +367,12 @@ export async function hacerMapa(dia, { pines, orden } = Donde.pinesDe(dia), { si
   const encMini = encuadre(pines, MINI.w, MINI.h);
   const encGrande = encuadre(pines, GRANDE.w, GRANDE.h);
   let raster = null;
-  if (!sinRed && (typeof navigator === "undefined" || navigator.onLine !== false)) {
-    try {
-      raster = await rasterDeRotulos([encMini, encGrande], zoomPara(encGrande.escala));
-    } catch (e) {
-      raster = null;
-    }
+  try {
+    // v35: sin señal tambien, con el mapa que viaja con la app
+    const soloLocal = sinRed || (typeof navigator !== "undefined" && navigator.onLine === false);
+    raster = await rasterDeRotulos([encMini, encGrande], zoomPara(encGrande.escala), { soloLocal });
+  } catch (e) {
+    raster = null;
   }
   const salida = {};
   let posGrande = [];
