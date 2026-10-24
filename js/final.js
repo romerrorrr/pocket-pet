@@ -922,13 +922,21 @@ function lluviaDeCorazones(contenedor, cantidad = 36) {
   contenedor.appendChild(capa);
 }
 
+// v34: la carita de la celebracion (config.js) dibujada en pixel. Sus letras
+// (tibetanas y japonesas) no estan en las fuentes pixel: cada celular las
+// dibujaba con otra fuente, desparejas, y en algunos salian cuadraditos.
+const KAOMOJI = "༼ つ ◕_◕ ༽つ";
+const KAOMOJI_SVG = `<svg class="kaomoji" viewBox="0 0 50 12" role="img" aria-label="${KAOMOJI}" shape-rendering="crispEdges"><path fill="currentColor" d="M2 0h2v1h-2zM40 0h2v1h-2zM1 1h1v1h-1zM4 1h1v1h-1zM39 1h1v1h-1zM42 1h1v1h-1zM1 2h1v1h-1zM18 2h3v1h-3zM31 2h3v1h-3zM42 2h1v1h-1zM0 3h1v1h-1zM17 3h1v1h-1zM20 3h2v1h-2zM30 3h1v1h-1zM33 3h2v1h-2zM43 3h1v1h-1zM0 4h1v1h-1zM8 4h4v1h-4zM16 4h1v1h-1zM20 4h3v1h-3zM29 4h1v1h-1zM33 4h3v1h-3zM43 4h1v1h-1zM45 4h4v1h-4zM0 5h1v1h-1zM12 5h1v1h-1zM16 5h7v1h-7zM29 5h7v1h-7zM43 5h1v1h-1zM49 5h1v1h-1zM0 6h1v1h-1zM12 6h1v1h-1zM16 6h7v1h-7zM29 6h7v1h-7zM43 6h1v1h-1zM49 6h1v1h-1zM0 7h1v1h-1zM11 7h1v1h-1zM17 7h5v1h-5zM30 7h5v1h-5zM43 7h1v1h-1zM48 7h1v1h-1zM0 8h1v1h-1zM8 8h3v1h-3zM18 8h3v1h-3zM31 8h3v1h-3zM43 8h1v1h-1zM45 8h3v1h-3zM1 9h1v1h-1zM24 9h4v1h-4zM42 9h1v1h-1zM1 10h1v1h-1zM42 10h1v1h-1zM2 11h2v1h-2zM40 11h2v1h-2z"/></svg>`;
+// (en config.js van con espacios duros: cualquier espacio vale)
+const conKaomoji = (html) => html.replace(/༼\s*つ\s*◕_◕\s*༽\s*つ/gu, KAOMOJI_SVG);
+
 function pasoCelebracion() {
   const [l1, l2] = (FINAL.celebracion || []).map(t);
   const papel = lienzoPapel(
     `
     <div class="final-cara salto">${cara("euforico")}</div>
-    <div class="celebracion-grande">${esc(l1 || "♥")}</div>
-    ${l2 ? `<div class="final-texto">${esc(l2)}</div>` : ""}
+    <div class="celebracion-grande">${conKaomoji(esc(l1 || "♥"))}</div>
+    ${l2 ? `<div class="final-texto">${conKaomoji(esc(l2))}</div>` : ""}
     <button class="boton oculto" id="celebracion-seguir">Continue</button>`,
     "es-celebracion",
   );

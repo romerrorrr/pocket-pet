@@ -2496,6 +2496,10 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   text-shadow: 3px 3px 0 var(--iris);
   animation: latido 0.5s steps(2) infinite;
 }
+/* v34: la carita en pixel (50x12): x3 en el titulo, x2 en el texto */
+.kaomoji { display: inline-block; width: 4.17em; height: 1em; vertical-align: -0.15em; }
+.celebracion-grande .kaomoji { width: 150px; height: 36px; filter: drop-shadow(3px 3px 0 var(--iris)); }
+.final-texto .kaomoji { width: 100px; height: 24px; margin-left: 0.2em; }
 
 .lluvia-corazones {
   position: absolute;
