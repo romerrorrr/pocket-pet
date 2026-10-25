@@ -941,8 +941,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   const mas = { id: null, x: LUGARES_MASCOTA[0], dir: 1, pose: "quieta", destino: null, prox: 0, siesta: 0, corazon: 0, parpadeo: 0 };
   // todos los cuadros (se cargan juntos al aparecer: si no, parpadea la primera vez que cambia)
   const CUADROS_MASCOTA = {
-    gato: ["sentado", "sentado_b", "parpadeo", "dormido", "dormido_b", "camina", "camina_b"],
-    perro: ["sentado", "sentado_b", "parpadeo", "contento", "dormido", "dormido_b", "camina", "camina_b"],
+    gato: ["sentado", "sentado_b", "parpadeo", "dormido", "dormido_b", "camina", "camina_b", "camina_c", "camina_d"],
+    perro: ["sentado", "sentado_b", "parpadeo", "contento", "dormido", "dormido_b", "camina", "camina_b", "camina_c", "camina_d"],
     serpiente: ["enroscada", "alta", "lengua", "dormida", "repta", "repta_b"],
   };
   let ultimoCuadro = null;
@@ -1002,7 +1002,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   function cuadroMascota(id, ahora) {
     const alt = (ms) => Math.floor(ahora / ms) % 2 === 1;
     if (mas.pose === "dormida") return id === "serpiente" ? "serpiente_dormida" : `${id}_dormido${alt(1100) ? "_b" : ""}`;
-    if (mas.pose === "camina") return id === "serpiente" ? `serpiente_repta${alt(320) ? "_b" : ""}` : `${id}_camina${alt(170) ? "_b" : ""}`;
+    if (mas.pose === "camina") return id === "serpiente" ? `serpiente_repta${alt(320) ? "_b" : ""}` : `${id}_camina${["", "_b", "_c", "_d"][Math.floor(ahora / (id === "perro" ? 120 : 150)) % 4]}`;
     if (!mas.parpadeo) mas.parpadeo = ahora + 3000;
     if (ahora > mas.parpadeo + 150) mas.parpadeo = ahora + 2500 + Math.random() * 3500;
     const parpadea = ahora > mas.parpadeo;
