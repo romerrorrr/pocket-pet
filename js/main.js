@@ -405,7 +405,7 @@ function guardarPasosAnotados(p, n) {
 
 function talVezPedirDiario() {
   if (!mascota || !diario || controller.vista !== "cara" || mascota.dormida || !puedeComentar()) return;
-  if (!esHoraDeEscribir() || diario.hoyEscrito() || enCalma("tienda")) return;
+  if (!esHoraDeEscribir() || diario.hoyEscrito()) return;
   const clave = claveDelDiaLogico(); // v35: pasada la medianoche sigue siendo la noche de "hoy"
   try {
     if (localStorage.getItem(CLAVE_PEDIDO_DIARIO) === clave) return;
@@ -894,11 +894,11 @@ function estadoPieza() {
           ...new Set([
             ...(dormido ? [] : R.necesidades(mascota).map((n) => n.objeto).filter(Boolean)),
             // la pagina de hoy sin escribir: un "!" sobre el cuaderno de la mesita
-            ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() && !enCalma("tienda") ? ["mesita"] : []),
+            ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() ? ["mesita"] : []),
             // un amigo trae un regalo: "!" sobre la ventana
             ...(visita && visita.regalo ? ["ventana"] : []),
             // v23: cosas nuevas en la tienda (en el cuaderno): "!" sobre la mesita
-            ...(puedeComentar() && !["armado", "pedido", "en_curso"].includes(Final.fase()) && tienda.nuevas().length && !enCalma("tienda") ? ["mesita"] : []),
+            ...(puedeComentar() && !["armado", "pedido", "en_curso"].includes(Final.fase()) && tienda.nuevas().length ? ["mesita"] : []),
           ]),
         ],
     npc: visita ? visita.npc.id : null,
@@ -1092,10 +1092,10 @@ function ganarMonedas(fuente, cantidad) {
 const finalEnMarcha = () => ["armado", "pedido", "en_curso"].includes(Final.fase());
 
 // v36: los primeros minutos con la mascota nueva son tranquilos: primero
-// conocerse (comer, jugar, tocar el cuarto) y despues, de a una, las demas
-// cosas. Cuenta desde que nace (creadoEn), asi una mascota que ya existe
+// conocerse (comer, jugar, tocar el cuarto); el deseo llega a los 2 min y
+// las visitas desde los 3,5 min. Cuenta desde que nace (creadoEn), asi una mascota que ya existe
 // (o un backup restaurado) no espera nada.
-const CALMA_MS = { tienda: 2 * 60000, deseo: 3 * 60000, visita: 5 * 60000 };
+const CALMA_MS = { deseo: 2 * 60000, visita: 3.5 * 60000 };
 const enCalma = (que) => !!mascota && Date.now() - (mascota.creadoEn || 0) < CALMA_MS[que];
 
 function contextoDeseos(ahora = new Date()) {
@@ -1388,7 +1388,7 @@ function aplicarCuarto() {
 
 /** Baozi avisa una vez por entrega que hay cosas nuevas en la tienda. */
 function talVezAvisarTienda() {
-  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar() || enCalma("tienda")) return false;
+  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
   if (["armado", "pedido", "en_curso"].includes(Final.fase())) return false;
   const semana = tienda.semanaActual();
   if (semana <= tienda.avisoSemana || !tienda.nuevas().length) return false;
