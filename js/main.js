@@ -405,7 +405,7 @@ function guardarPasosAnotados(p, n) {
 
 function talVezPedirDiario() {
   if (!mascota || !diario || controller.vista !== "cara" || mascota.dormida || !puedeComentar()) return;
-  if (!esHoraDeEscribir() || diario.hoyEscrito()) return;
+  if (!esHoraDeEscribir() || diario.hoyEscrito() || enCalma("tienda")) return;
   const clave = claveDelDiaLogico(); // v35: pasada la medianoche sigue siendo la noche de "hoy"
   try {
     if (localStorage.getItem(CLAVE_PEDIDO_DIARIO) === clave) return;
@@ -894,16 +894,16 @@ function estadoPieza() {
           ...new Set([
             ...(dormido ? [] : R.necesidades(mascota).map((n) => n.objeto).filter(Boolean)),
             // la pagina de hoy sin escribir: un "!" sobre el cuaderno de la mesita
-            ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() ? ["mesita"] : []),
+            ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() && !enCalma("tienda") ? ["mesita"] : []),
             // un amigo trae un regalo: "!" sobre la ventana
             ...(visita && visita.regalo ? ["ventana"] : []),
             // v23: cosas nuevas en la tienda (en el cuaderno): "!" sobre la mesita
-            ...(puedeComentar() && !["armado", "pedido", "en_curso"].includes(Final.fase()) && tienda.nuevas().length ? ["mesita"] : []),
+            ...(puedeComentar() && !["armado", "pedido", "en_curso"].includes(Final.fase()) && tienda.nuevas().length && !enCalma("tienda") ? ["mesita"] : []),
           ]),
         ],
     npc: visita ? visita.npc.id : null,
     decoraciones: [...amigos.decoraciones(), ...tienda.decoraciones()],
-    deseo: deseos.estado === "nuevo" && !fotoPedida && !finalEnMarcha() ? "nuevo" : null,
+    deseo: deseos.estado === "nuevo" && !fotoPedida && !finalEnMarcha() && !enCalma("deseo") ? "nuevo" : null,
     // v23: el peluche es del OTRO personaje; y despues del si, la foto del anillo enmarcada
     peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi",
     pecera: tienda.tiene("pecera") ? pescaReg.pecera : [],
@@ -1022,7 +1022,7 @@ function tocarBaozi() {
   }
   const ahora = Date.now();
   // v24: el primer toque del dia cuenta el deseo; uno de la vida real pendiente se vuelve a mostrar (cada 10 min)
-  if (!finalEnMarcha() && deseos.actual()) {
+  if (!finalEnMarcha() && !enCalma("deseo") && deseos.actual()) {
     const d = deseos.actual();
     if (deseos.estado === "nuevo" || (d.real && deseos.estado === "escuchado" && ahora - ultimaTarjetaDeseo > 10 * 60000)) {
       abrirDeseo();
@@ -1091,6 +1091,13 @@ function ganarMonedas(fuente, cantidad) {
 
 const finalEnMarcha = () => ["armado", "pedido", "en_curso"].includes(Final.fase());
 
+// v36: los primeros minutos con la mascota nueva son tranquilos: primero
+// conocerse (comer, jugar, tocar el cuarto) y despues, de a una, las demas
+// cosas. Cuenta desde que nace (creadoEn), asi una mascota que ya existe
+// (o un backup restaurado) no espera nada.
+const CALMA_MS = { tienda: 2 * 60000, deseo: 3 * 60000, visita: 5 * 60000 };
+const enCalma = (que) => !!mascota && Date.now() - (mascota.creadoEn || 0) < CALMA_MS[que];
+
 function contextoDeseos(ahora = new Date()) {
   return {
     hora: ahora.getHours(),
@@ -1108,7 +1115,7 @@ function elegirDeseo() {
 
 /** Algo paso en el juego: ¿se cumplio el deseo? (solo guarda si cambio algo) */
 function eventoDeseo(ev) {
-  if (!mascota) return;
+  if (!mascota || enCalma("deseo")) return; // v36: todavia no lo conto
   elegirDeseo();
   const antes = deseos.progreso;
   if (deseos.evento({ hora: new Date().getHours(), ...ev })) cumplirDeseo();
@@ -1381,7 +1388,7 @@ function aplicarCuarto() {
 
 /** Baozi avisa una vez por entrega que hay cosas nuevas en la tienda. */
 function talVezAvisarTienda() {
-  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
+  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar() || enCalma("tienda")) return false;
   if (["armado", "pedido", "en_curso"].includes(Final.fase())) return false;
   const semana = tienda.semanaActual();
   if (semana <= tienda.avisoSemana || !tienda.nuevas().length) return false;
@@ -1506,7 +1513,7 @@ function tocarVentana() {
 
 // Visitas: de vez en cuando un amigo golpea la ventana (antes pasaba caminando).
 function talVezVisita() {
-  if (!mascota || mascota.dormida || visita || controller.vista !== "cara") return;
+  if (!mascota || mascota.dormida || visita || controller.vista !== "cara" || enCalma("visita")) return;
   if (["armado", "pedido", "en_curso"].includes(Final.fase())) return;
   // un amigo con un regalo viene enseguida, y espera en la ventana hasta que ella abra
   const conRegalo = amigos.regaloPendiente();
@@ -2542,7 +2549,7 @@ function renderConsulta() {
   else if (tipo === "stats") {
     elegirDeseo();
     const d = deseos.actual();
-    R.renderStats(tmp, mascota, { deseo: d && !finalEnMarcha() ? { texto: d.texto, real: !!d.real, estado: deseos.estado, progreso: deseos.progreso, meta: d.meta || 0 } : null });
+    R.renderStats(tmp, mascota, { deseo: d && !finalEnMarcha() && !enCalma("deseo") ? { texto: d.texto, real: !!d.real, estado: deseos.estado, progreso: deseos.progreso, meta: d.meta || 0 } : null });
   }
   else if (tipo === "traits") R.renderTraits(tmp, mascota);
   else if (tipo === "npcs") R.renderNpcs(tmp, npcsReg, amigos, { progreso: (m) => progresoDe(m, contextoAmigos()) });

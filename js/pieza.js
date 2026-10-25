@@ -43,6 +43,34 @@ function img(rel) {
 }
 const listo = (i) => i && i.complete && i.naturalWidth > 0;
 
+// v36: una cara nueva (sorprendido al llegar una visita, etc.) puede tardar
+// en cargar la primera vez que se usa en la sesion. Mientras tanto se sigue
+// dibujando la ultima que si estaba lista en ese mismo lugar (ojos, boca,
+// cara de Mantou), en vez de dejar el cuerpo sin cara.
+const ultimaLista = new Map();
+function imgOAnterior(lugar, rel) {
+  const i = img(rel);
+  if (listo(i)) {
+    ultimaLista.set(lugar, i);
+    return i;
+  }
+  return ultimaLista.get(lugar) || null;
+}
+
+/** Pide de antemano todas las caras, asi el primer cambio ya las tiene. */
+function precargarCaras() {
+  const especiales = ["aburrido", "asqueado", "asustado", "curioso", "decepcionado", "enamorado", "euforico", "hambriento", "sorprendido"];
+  const lista = [
+    "caras/ojo_base_energia_alta.png", "caras/ojo_base_energia_baja.png", "caras/ojo_base_energia_neutral.png",
+    "caras/boca_base_feliz.png", "caras/boca_base_neutral.png", "caras/boca_base_triste.png",
+    "caras/cuerpo.png", "caras/cuerpo_sentado.png", "caras/cuerpo_dormido.png", "mantou/cuerpo.png", "mantou/cuerpo_sentado.png",
+    "caras/ojo_dormida.png", "caras/boca_dormida.png", "caras/ojo_enferma.png", "caras/boca_enferma.png",
+    ...especiales.flatMap((n) => [`caras/ojo_especial_${n}.png`, `caras/boca_especial_${n}.png`]),
+    ...[...Personaje.CARAS_MANTOU].map((n) => `mantou/cara_${n}.png`),
+  ];
+  for (const rel of lista) img(rel);
+}
+
 // ------------------------------------------------------------------
 // Iluminacion
 // ------------------------------------------------------------------
@@ -377,6 +405,7 @@ const FOCOS_FAROLITOS = [8, 22, 36, 50].map((lx) => [lx, Math.round(1 + 3 * Math
  *             globo: "texto" }
  */
 export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
+  precargarCaras();
   contenedor.innerHTML = `
     <div class="pieza" id="pieza">
       <canvas class="pieza-lienzo"></canvas>
@@ -693,9 +722,12 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     const clave = `${pose}|${cara}|${tinte.join(",")}`;
     if (compuestos.has(clave)) return compuestos.get(clave);
     const capasM = Personaje.capas("", "", pose === "parado" ? "parado" : "sentado", "mantou");
-    const cuerpo = img(capasM[0].src);
-    const caraImg = img(cara);
+    const cuerpo = imgOAnterior("cuerpo-alta", capasM[0].src);
+    const real = img(cara);
+    // si la cara nueva todavia carga, se arma con la anterior (sin guardarla)
+    const caraImg = imgOAnterior("cara-alta", cara);
     if (!listo(cuerpo) || !listo(caraImg)) return null;
+    const provisoria = caraImg !== real || cuerpo !== img(capasM[0].src);
     const c = document.createElement("canvas");
     c.width = cuerpo.naturalWidth;
     c.height = cuerpo.naturalHeight;
@@ -707,6 +739,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     x.fillRect(0, 0, c.width, c.height);
     x.globalCompositeOperation = "destination-in";
     x.drawImage(cuerpo, 0, 0);
+    if (provisoria) return c;
     if (compuestos.size > 10) compuestos.delete(compuestos.keys().next().value);
     compuestos.set(clave, c);
     return c;
@@ -1505,7 +1538,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       // se arma en un lienzo propio de 96x96 (cuerpo + cara) y despues se
       // pone en el cuarto con el espejo y el estiramiento
       const capasP = Personaje.capas(e.ojos, e.boca, pose);
-      const cuerpo = img(capasP[0].src);
+      const cuerpo = imgOAnterior("cuerpo", capasP[0].src);
       act.clearRect(0, 0, 96, 96);
       if (listo(cuerpo)) act.drawImage(cuerpo, 0, 0);
       // los ojos miran hacia donde va (o hacia la ventana/la tele)
@@ -1513,8 +1546,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       const my = actor.mira[1];
       if (capasP[1] && capasP[1].tipo === "ojos") {
         // Baozi: ojos y boca en capas separadas
-        const ojos = img(capasP[1].src);
-        const boca = img(capasP[2].src);
+        const ojos = imgOAnterior("ojos", capasP[1].src);
+        const boca = imgOAnterior("boca", capasP[2].src);
         if (listo(ojos)) {
           if (alto === 1) act.drawImage(ojos, mx, my);
           else {
@@ -1529,7 +1562,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
         // horizontal/vertical por mirada: algunas bocas ('sonrisa', 'abierta',
         // 'o') tienen puntos que llegan a la fila 38 (dentro de esta franja) y
         // un corrimiento ahi las partia en dos, dejando la boca con un hueco.
-        const cara = img(capasP[1].src);
+        const cara = imgOAnterior("cara", capasP[1].src);
         if (listo(cara)) {
           const CORTE = 39;
           const h = Math.max(1, Math.round(CORTE * alto));
