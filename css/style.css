@@ -76,6 +76,40 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* ♥ ♪ ✓ → en pixel: las dos fuentes no los traen y salian con la del sistema
+   (lisos en medio del texto pixel). Fuentitas de 4 letras con los mismos
+   pixeles que los glifos de la interfaz, enganchadas a las mismas familias
+   con unicode-range (embebidas: andan sin señal). Las arma tools/glifos_fuente.py */
+@font-face {
+  font-family: "Press Start 2P";
+  src: url("data:font/woff2;base64,d09GMgABAAAAAAH8AAoAAAAABHwAAAGxAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAATAqDPIJ+ATYCJAMOCwwABCAFgQoHRBt/AyieA+7qCKs2IeXEzCj2/DQvK0ZELVfPBqJFmFMKiRQUKjjKB43HWITHh/9c/t/e9ss5QFCAbDH+CrhbhJdUylN1lfKrEnXfF3b2woSfuJm2zjdgFycWZ7YGj3neRenYGE2ELgwDfvHtjw/y6qaWHkVBKCpKhBLZK+z4tk9X6yFHnZRTtyBwyQaGc9gi+YVcuciB4wIqWJAQ1e9JVcCMkph4OIe2Qvthy/8/i2c8Tn+5Ff5HdcAMDOAArgAagAktJVlLyVakock0j8n1Po/BMjqLaNwpuOTXZI7z6OSgAkSqtRBUQ6dCjWowgRGbLAJZxZ35Ql1D2GFUWpEJc++Engt6RZ85IjjWjF5EjIzRCAjWlWkUmY8i9WEQS94Q1LgydatzKHwWuPwkEcjt7wEICJxMq6cMjX9lrb/A22MPOdxXBu+txIDAlTD7yiBCTPN3Q2DoLkM74LdqSkSAsIEACgUbCVGbEonxLo7E9EYrvrd9dPaJXn5L7dzkr66LGOP2bDtyJmji1JazxJ47t+bUuZHD4CzdcYGjDWJ63iElNS29b3KlUrEHu1g5mw+y1RwAAA==") format("woff2");
+  font-display: block;
+  unicode-range: U+2192, U+2665, U+266A, U+2713;
+}
+/* (en Pixelify, uno por cada peso que ya esta declarado: el navegador elige
+   primero el grupo por peso y recien despues mira el unicode-range) */
+@font-face {
+  font-family: "Pixelify Sans";
+  font-weight: 400;
+  src: url("data:font/woff2;base64,d09GMgABAAAAAAIAAAoAAAAABHgAAAG3AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAATAqDPIJ3ATYCJAMOCwwABCAFgQcHRBt1AyAuCuyGY4fUTgsVAREn7LGKGtd4eP5+1Lnv/z/VVo0RiUnTtqmFCVSWwIENshxtQ0u7uuN/bPNDFY2eIJt1jgrT1yZiLS/UhbTUwoRPDDvIBJGz/ftT9Q+QzPMIRTSGuXsZEyQXkDk40agsjLZcKsnyxcXavGaN1sN2k0o8vHl2WXodK+QgvgcvLNJ5v1/L+n9GlwWAduAkZWhyg1+Xm0SFMknqvN+3cLeedn7O9BY/+vz4c58W6I8qQAU6cQ/PATmgTJUyRY7oJDiVorwaEis4TfaCc4UgbFKFUHO5TvgG3sNXabVe9JTZheBY5u+FVx4142d/GDSP8cSjIp35719gRLysAtQ0Y22C6Ll9HemuyHoCPXFs2AxkAV8BiHjlH+0Qfj8AnATMMF5OBIFgM7qPJ7XVv7LIzuD3J7fktFnSixSSSSC4G5X0BzfdBQPISPG3fwkQKAyqAgmulRsXIDQhQFKqSSbycmFA83QvqbGysd8sT7cvz9XW+Tjd5Hh7n+tMqu1tLJ3cOLZsvC3MP+HDsWvi6Ka1sPKwN3HFouOCSJFFHkVxbTgZH1PwEpsOjQT+1DA=") format("woff2");
+  font-display: block;
+  unicode-range: U+2192, U+2665, U+266A, U+2713;
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  font-weight: 600;
+  src: url("data:font/woff2;base64,d09GMgABAAAAAAIAAAoAAAAABHgAAAG3AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAATAqDPIJ3ATYCJAMOCwwABCAFgQcHRBt1AyAuCuyGY4fUTgsVAREn7LGKGtd4eP5+1Lnv/z/VVo0RiUnTtqmFCVSWwIENshxtQ0u7uuN/bPNDFY2eIJt1jgrT1yZiLS/UhbTUwoRPDDvIBJGz/ftT9Q+QzPMIRTSGuXsZEyQXkDk40agsjLZcKsnyxcXavGaN1sN2k0o8vHl2WXodK+QgvgcvLNJ5v1/L+n9GlwWAduAkZWhyg1+Xm0SFMknqvN+3cLeedn7O9BY/+vz4c58W6I8qQAU6cQ/PATmgTJUyRY7oJDiVorwaEis4TfaCc4UgbFKFUHO5TvgG3sNXabVe9JTZheBY5u+FVx4142d/GDSP8cSjIp35719gRLysAtQ0Y22C6Ll9HemuyHoCPXFs2AxkAV8BiHjlH+0Qfj8AnATMMF5OBIFgM7qPJ7XVv7LIzuD3J7fktFnSixSSSSC4G5X0BzfdBQPISPG3fwkQKAyqAgmulRsXIDQhQFKqSSbycmFA83QvqbGysd8sT7cvz9XW+Tjd5Hh7n+tMqu1tLJ3cOLZsvC3MP+HDsWvi6Ka1sPKwN3HFouOCSJFFHkVxbTgZH1PwEpsOjQT+1DA=") format("woff2");
+  font-display: block;
+  unicode-range: U+2192, U+2665, U+266A, U+2713;
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  font-weight: 700;
+  src: url("data:font/woff2;base64,d09GMgABAAAAAAIAAAoAAAAABHgAAAG3AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAATAqDPIJ3ATYCJAMOCwwABCAFgQcHRBt1AyAuCuyGY4fUTgsVAREn7LGKGtd4eP5+1Lnv/z/VVo0RiUnTtqmFCVSWwIENshxtQ0u7uuN/bPNDFY2eIJt1jgrT1yZiLS/UhbTUwoRPDDvIBJGz/ftT9Q+QzPMIRTSGuXsZEyQXkDk40agsjLZcKsnyxcXavGaN1sN2k0o8vHl2WXodK+QgvgcvLNJ5v1/L+n9GlwWAduAkZWhyg1+Xm0SFMknqvN+3cLeedn7O9BY/+vz4c58W6I8qQAU6cQ/PATmgTJUyRY7oJDiVorwaEis4TfaCc4UgbFKFUHO5TvgG3sNXabVe9JTZheBY5u+FVx4142d/GDSP8cSjIp35719gRLysAtQ0Y22C6Ll9HemuyHoCPXFs2AxkAV8BiHjlH+0Qfj8AnATMMF5OBIFgM7qPJ7XVv7LIzuD3J7fktFnSixSSSSC4G5X0BzfdBQPISPG3fwkQKAyqAgmulRsXIDQhQFKqSSbycmFA83QvqbGysd8sT7cvz9XW+Tjd5Hh7n+tMqu1tLJ3cOLZsvC3MP+HDsWvi6Ka1sPKwN3HFouOCSJFFHkVxbTgZH1PwEpsOjQT+1DA=") format("woff2");
+  font-display: block;
+  unicode-range: U+2192, U+2665, U+266A, U+2713;
+}
+
 :root {
   /* Paleta "tinta y papel" (elegida por rom, sep 2026): casi monocromo
      calido. El color lo pone el arte; la interfaz se corre del medio.
@@ -106,7 +140,7 @@
   --fondo-default: rgb(34, 32, 34);
   --fondo: var(--fondo-default);
 
-  --fondo-camino: url("../assets/fondo_caminar.png");
+  --fondo-camino: url("../assets/fondo_caminar.webp"); /* v35: webp (~100 KB en vez de 1.3 MB; iOS 14+) */
 
   --cielo-alto: rgb(40, 38, 40);
   --cielo-bajo: rgb(16, 15, 16);
@@ -1858,14 +1892,14 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   background: rgba(22, 20, 22, 0.75);
   color: var(--crema);
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
 }
 
 .polaroid figcaption { padding-top: 8px; }
 
 .fecha-polaroid {
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   line-height: 1.5;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2236,7 +2270,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   align-items: center;
   gap: 6px;
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   letter-spacing: 0.08em;
   color: rgba(244, 238, 226, 0.9);
   text-shadow: 1px 1px 0 #000;
@@ -2914,6 +2948,18 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 
 .pieza-toques { position: absolute; inset: 0; }
 
+/* sonda invisible: pieza.js lee de aca cuanto pisan el notch y la rayita de abajo */
+.pieza-sonda {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* los toques: invisibles, el dibujo es el boton */
 .toque-objeto {
   position: absolute;
@@ -2942,6 +2988,9 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .globo-baozi {
   position: absolute;
   transform: translate(-50%, -100%);
+  /* el ancho del texto (no lo que sobra hasta el borde: cerca de la tele
+     quedaba angostito); pieza.js lo corre para que no se salga */
+  width: max-content;
   max-width: min(60%, 320px);
   padding: 7px 11px 8px;
   background: rgb(16, 16, 26);
@@ -2961,7 +3010,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .globo-baozi::after {
   content: "";
   position: absolute;
-  left: 50%;
+  left: calc(50% + var(--cola, 0px)); /* si el globo se corrio, la colita sigue apuntando al personaje */
   bottom: -8px;
   width: 8px;
   height: 6px;
@@ -2999,7 +3048,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   image-rendering: pixelated;
 }
 
-.volver-flotante { position: absolute; top: 10px; left: 10px; z-index: 2; }
+.volver-flotante { position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); z-index: 2; }
 
 .estantes-heladera {
   position: absolute;
@@ -3049,7 +3098,8 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px 12px;
+  /* el corcho llega al borde; la flecha, los botones y el mapa no van debajo del notch */
+  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   background:
     repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 10px),
     rgb(62, 41, 31);
@@ -3114,6 +3164,17 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .sello-mapa.falta.elegido { width: 7%; z-index: 2; }
 .sello-mapa.falta.elegido span { border-width: 2px; background: rgba(252, 248, 236, 0.85); font-size: 9px; }
 .sello-mapa.hecho { z-index: 1; }
+/* los puntitos que faltan miden ~11 px: el toque es un circulo invisible de 32 */
+.sello-mapa.falta::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
 
 .mapa-cabecera { flex-wrap: wrap; }
 .colecciones { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; }
@@ -3245,7 +3306,8 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 10px 8px 10px 12px;
+  /* la tapa llega al borde; la hoja, las pestañas y la X quedan fuera del notch */
+  padding: max(10px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   background: rgb(78, 60, 70);
   color: var(--tinta);
 }
@@ -3284,14 +3346,16 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .cuaderno-pestanas {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 0 0;
+  gap: 8px;
+  padding: 8px 0 0;
   margin-left: -2px;
 }
 
+/* pestañas de 36 px de alto (antes 22: dificiles de acertar con el dedo) */
 .pestana {
   position: relative;
   border: none;
+  min-height: 36px;
   padding: 7px 10px 7px 8px;
   font-family: var(--fuente-display);
   font-size: 8px;
@@ -3310,7 +3374,19 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .pestana:nth-child(5) { background: rgb(186, 214, 232); }
 .pestana.activa { opacity: 1; transform: translateX(-6px); padding-right: 16px; }
 
-.cuaderno-cerrar { position: absolute; right: 10px; bottom: 10px; }
+/* en el telefono mas bajo (375) las 7 pestañas mas juntas: si no, la ultima
+   llegaba a la X */
+@media (max-height: 380px) {
+  .cuaderno-pestanas { gap: 6px; padding-top: 4px; }
+}
+
+.cuaderno-cerrar {
+  position: absolute;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  width: 44px;
+  height: 44px;
+}
 
 /* lo de adentro, ahora en papel: tinta oscura sobre hoja clara */
 .cuaderno .lista-journal { color: var(--tinta); }
@@ -3775,7 +3851,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   transform: translateX(-50%);
   white-space: nowrap;
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   color: var(--tinta);
   background: rgba(252, 250, 244, 0.9);
   padding: 2px 4px;
@@ -3831,7 +3907,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   border: none;
   padding: 6px 8px;
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   letter-spacing: 0.06em;
   color: rgba(244, 238, 226, 0.7);
   background: transparent;
@@ -3908,7 +3984,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.15);
 }
 .semana-dias { display: flex; gap: 4px; }
-.dia-semana { display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--fuente-display); font-size: 7px; color: rgba(22, 20, 22, 0.5); }
+.dia-semana { display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--fuente-display); font-size: 8px; color: rgba(22, 20, 22, 0.5); }
 .dia-semana.hoy span { color: var(--rosa-oscuro); }
 .racha { font-family: var(--fuente-cuerpo); font-size: 12px; color: var(--rosa-oscuro); text-align: center; }
 
@@ -4278,7 +4354,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   background: transparent;
   color: rgba(244, 238, 226, 0.7);
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   cursor: pointer;
 }
 .pestana-sticker .sprite-cara, .pestana-sticker .sticker-extra { width: 26px; height: 26px; }
@@ -4633,7 +4709,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   left: -7px;
   padding: 3px 4px;
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   color: #fff;
   background: rgb(226, 80, 63);
   box-shadow: 0 0 0 2px var(--tinta);
@@ -4841,7 +4917,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
   background: var(--papel);
   color: var(--tinta);
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   line-height: 1.2;
   white-space: nowrap;
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
@@ -4886,7 +4962,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 }
 .mapa-dia-fecha {
   font-family: var(--fuente-display);
-  font-size: 7px;
+  font-size: 8px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--iris-oscuro);
@@ -4988,6 +5064,35 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 }
 .pantalla-juego .juego-hud,
 .pantalla-pesca .juego-hud { left: calc(max(12px, env(safe-area-inset-left)) + 52px); }
+
+/* v35 — la pausa de los juegos (segundo plano, telefono bloqueado, vertical):
+   tapa todo menos la flechita de volver; tocarla sigue */
+.juego-pausa {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(14, 12, 16, 0.6);
+  touch-action: none;
+  cursor: pointer;
+}
+.juego-pausa-titulo {
+  font-family: var(--fuente-display);
+  font-size: clamp(22px, 9vh, 40px);
+  color: var(--papel);
+  text-shadow: 0 4px 0 var(--tinta);
+}
+.juego-pausa-texto {
+  font-family: var(--fuente-display);
+  font-size: 12px;
+  color: var(--crema);
+  animation: pausa-late 1.2s steps(2) infinite;
+}
+@keyframes pausa-late { 50% { opacity: 0.45; } }
 
 /* ------------------------------------------------------------------
    v31 — el mapa real del corcho (corchoReal.js): se mueve y se acerca con los dedos
