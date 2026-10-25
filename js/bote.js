@@ -30,7 +30,7 @@
  *
  * El bote es nuevo (tools/juegos_arte.py), no el del final.
  */
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, imagen, lista, flotante, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, imagen, lista, flotante, HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_bote";
 const ALTO = 168;
@@ -130,7 +130,10 @@ export function iniciarBote(contenedor, opts) {
   // olitas del agua (se mueven con el bote, mas rapido las de mas cerca)
   for (let i = 0; i < 46; i++) st.olas.push({ x: Math.random() * 420, y: HORIZONTE + 4 + Math.random() * (ALTO - HORIZONTE - 6), largo: 2 + Math.floor(Math.random() * 5) });
 
-  const segundos = () => (performance.now() - st.t0) / 1000;
+  // F33: segundo plano / vertical -> el bote se frena. reloj(): performance.now() sin las pausas
+  const pausa = crearPausa(area, { activa: () => st.vivo && st.estado === "remando" });
+  const reloj = () => pausa.ahora();
+  const segundos = () => (reloj() - st.t0) / 1000;
   /** 0 al empezar -> 1 a los T segundos: cuantos lotos hay, que tan juntos vienen y lo rapido que va. */
   const intensidad = () => Math.min(1, segundos() / D.T);
   const velocidad = () => Math.min(D.vmax, D.v0 + D.dv * intensidad() + Math.max(0, segundos() - D.T) * 0.5);
@@ -147,7 +150,7 @@ export function iniciarBote(contenedor, opts) {
     dif = d;
     D = DIFICULTADES_BOTE[dif];
     $("bote-record").textContent = `${dif.toUpperCase()} · BEST ${leerRecordBote(dif)} m`;
-    st.t0 = performance.now();
+    st.t0 = reloj();
     st.estado = "remando";
     sonar("tocar");
     setTimeout(() => {
@@ -164,7 +167,7 @@ export function iniciarBote(contenedor, opts) {
 
   /** Al carril n (tocando el agua: directo; con las flechas: de a uno). */
   function irA(n) {
-    if (st.estado !== "remando") return;
+    if (st.estado !== "remando" || pausa.pausado()) return;
     n = Math.max(0, Math.min(CARRILES.length - 1, n));
     if (n === st.carril) return;
     st.carril = n;
@@ -175,6 +178,10 @@ export function iniciarBote(contenedor, opts) {
   area.addEventListener("pointerdown", (e) => {
     if (e.target.closest("button")) return;
     e.preventDefault();
+    // v35: tocar el HUD (o la franja de arriba, donde estan el HUD y la flechita) no mueve el bote
+    if (e.target.closest(".juego-hud, .juego-record")) return;
+    const hud = area.querySelector(".juego-hud");
+    if (hud && e.clientY <= hud.getBoundingClientRect().bottom + 4) return;
     const r = area.getBoundingClientRect();
     irA(carrilDeAltura((e.clientY - r.top) / fondo.escala));
   });
@@ -256,10 +263,10 @@ export function iniciarBote(contenedor, opts) {
   }
 
   function chocar(c) {
-    if (performance.now() < st.invulnerable) return;
+    if (reloj() < st.invulnerable) return;
     c.hecha = true;
     st.corazones -= 1;
-    st.invulnerable = performance.now() + 1300;
+    st.invulnerable = reloj() + 1300;
     sonar("no");
     vibrar([30, 40, 30]);
     cara("ojo_especial_asustado.png", "boca_especial_asustado.png", 800);
@@ -294,6 +301,10 @@ export function iniciarBote(contenedor, opts) {
   function cuadro(t) {
     if (!st.vivo) return;
     requestAnimationFrame(cuadro);
+    if (pausa.pausado()) {
+      ultimo = 0;
+      return;
+    }
     const dt = Math.min(50, t - (ultimo || t)) / 1000;
     ultimo = t;
     if (st.caraHasta && performance.now() > st.caraHasta) {
@@ -397,7 +408,7 @@ export function iniciarBote(contenedor, opts) {
     // el bote, su carril y lo de los otros carriles (lo de mas abajo va adelante)
     const carrilBote = carrilCercano();
     for (const c of st.cosas) dibujarCosa(c.carril <= carrilBote ? a : f, c, t);
-    const parpadeo = performance.now() < st.invulnerable && Math.floor(performance.now() / 110) % 2 === 0;
+    const parpadeo = reloj() < st.invulnerable && Math.floor(reloj() / 110) % 2 === 0;
     const balanceo = st.estado === "remando" ? Math.floor(t / 500) % 2 : 0;
     const by = Math.round(st.y - FLOTA + balanceo);
     if (!parpadeo) {
@@ -423,6 +434,7 @@ export function iniciarBote(contenedor, opts) {
   function terminar() {
     if (!st.vivo) return;
     st.vivo = false;
+    pausa.destruir();
     window.removeEventListener("keydown", teclas);
     window.removeEventListener("resize", fondo.medir);
     window.removeEventListener("resize", frente.medir);
@@ -439,9 +451,15 @@ export function iniciarBote(contenedor, opts) {
     terminar,
     destruir: () => {
       st.vivo = false;
+      pausa.destruir();
       window.removeEventListener("keydown", teclas);
       window.removeEventListener("resize", fondo.medir);
       window.removeEventListener("resize", frente.medir);
+    },
+    _pausado: () => pausa.pausado(),
+    _limpiar: () => {
+      st.cosas = [];
+      st.cola = [];
     },
     // para las pruebas: poner algo en un carril, delante del bote
     _poner: (tipo, carril, x = BX + BOTE_W + 40) => st.cosas.push({ tipo, carril, x }),

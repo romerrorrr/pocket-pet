@@ -21,6 +21,26 @@ import { Diario } from "./diario.js";
 const CLAVE_GUARDADO = "mochi_progreso_v1"; // la clave NO cambia: cambiaria el guardado de nadie
 const CLAVE_ANTERIOR = "mochi_progreso_previo"; // copia del guardado anterior, red de contencion
 const CLAVE_RESCATE = "mochi_progreso_roto"; // si algo no se pudo leer, se conserva crudo
+// v35: la copia "de ayer". La anterior va segundos atras del principal (se
+// copia en cada guardado): si algo sale mal, puede estar igual de mal. Esta
+// se rota una vez por dia de calendario: guarda como estaba todo al primer
+// guardado de hoy (o sea, el final de la ultima vez que jugo).
+const CLAVE_DIA = "mochi_progreso_dia";
+const CLAVE_DIA_FECHA = "mochi_progreso_dia_fecha";
+// v35: la ultima vez que guardo un backup (para el aviso semanal de Baozi)
+export const CLAVE_ULTIMO_BACKUP = "baozi_ultimo_backup";
+
+// v35: si esta sesion NO pudo leer el guardado principal, el primer
+// guardado no lo corre a la copia anterior (pisaria una copia buena, o la
+// ultima esperanza, con uno roto). Y si no se pudo leer nada, la app no
+// arranca de cero en silencio: main.js ofrece restaurar (ver estadoDeCarga).
+let principalIlegible = false;
+let cargaFallida = false;
+
+const hoyLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 // Version del ESQUEMA. Se escribia desde el dia uno pero nunca se leia:
 // si el esquema cambiaba, cargar() devolvia null y la app arrancaba de
@@ -47,8 +67,11 @@ export function guardar(mascota, npcs, lugares, diario = null, cartasEntregadas 
     // si una escritura sale mal o el esquema resulta ilegible, siempre
     // queda una version buena atras.
     try {
-      const actual = localStorage.getItem(CLAVE_GUARDADO);
-      if (actual) localStorage.setItem(CLAVE_ANTERIOR, actual);
+      const actual = principalIlegible ? null : localStorage.getItem(CLAVE_GUARDADO);
+      if (actual) {
+        rotarCopiaDelDia(actual);
+        localStorage.setItem(CLAVE_ANTERIOR, actual);
+      }
     } catch (e) {
       // sin lugar para la copia: se borra la vieja y se guarda igual lo importante
       try {
@@ -58,10 +81,35 @@ export function guardar(mascota, npcs, lugares, diario = null, cartasEntregadas 
       }
     }
     localStorage.setItem(CLAVE_GUARDADO, JSON.stringify(datos));
+    principalIlegible = false; // desde aca el principal vuelve a ser bueno
+    // (si no se pudo leer nada y ella eligio empezar de nuevo, lo crudo sigue en CLAVE_RESCATE)
+    cargaFallida = false;
     return true;
   } catch (e) {
     console.error("No se pudo guardar el progreso:", e);
     return false;
+  }
+}
+
+/**
+ * v35: una vez por dia de calendario, el guardado que habia (el del final
+ * de la ultima vez) pasa a ser la copia del dia. Solo si se puede leer: una
+ * copia rota no sirve de red. Sin lugar, queda la copia vieja (una mas
+ * vieja es mejor que ninguna) y no se reintenta hasta mañana.
+ */
+let rotacionIntentada = "";
+function rotarCopiaDelDia(actual) {
+  const hoy = hoyLocal();
+  if (rotacionIntentada === hoy) return;
+  try {
+    if (localStorage.getItem(CLAVE_DIA_FECHA) === hoy) return;
+    rotacionIntentada = hoy;
+    const datos = JSON.parse(actual);
+    if (!datos || !datos.mascota) return;
+    localStorage.setItem(CLAVE_DIA, actual);
+    localStorage.setItem(CLAVE_DIA_FECHA, hoy);
+  } catch (e) {
+    /* sin lugar o ilegible: lo importante es el principal */
   }
 }
 
@@ -111,26 +159,46 @@ export function cargar() {
   if (!crudo) return null;
 
   try {
-    return intentarCargar(crudo);
+    const r = intentarCargar(crudo);
+    principalIlegible = false;
+    cargaFallida = false;
+    return r;
   } catch (e) {
     console.error("El guardado principal no se pudo leer:", e);
-    // No se pierde: se conserva crudo para poder recuperarlo a mano, y
-    // se intenta con la copia anterior antes de darse por vencido.
+    principalIlegible = true;
+    // No se pierde: se conserva crudo para poder recuperarlo a mano (en su
+    // propio try: si no hay lugar para el rescate, igual se prueban las
+    // copias), y se intenta con la copia anterior y la del dia antes de
+    // darse por vencido.
     try {
       localStorage.setItem(CLAVE_RESCATE, crudo);
-      const previo = localStorage.getItem(CLAVE_ANTERIOR);
-      if (previo) {
-        const recuperado = intentarCargar(previo);
-        if (recuperado) {
-          console.warn("Se recupero el guardado anterior.");
-          return recuperado;
-        }
-      }
     } catch (e2) {
-      /* no hay nada mas que hacer */
+      console.error("No hubo lugar para guardar el rescate:", e2);
     }
+    for (const [clave, nombre] of [[CLAVE_ANTERIOR, "anterior"], [CLAVE_DIA, "del dia"]]) {
+      try {
+        const copia = localStorage.getItem(clave);
+        const recuperado = copia ? intentarCargar(copia) : null;
+        if (recuperado) {
+          console.warn(`Se recupero la copia ${nombre}.`);
+          return { ...recuperado, recuperadoDe: clave === CLAVE_ANTERIOR ? "previo" : "dia" };
+        }
+      } catch (e3) {
+        console.error(`La copia ${nombre} tampoco se pudo leer:`, e3);
+      }
+    }
+    cargaFallida = true;
     return null;
   }
+}
+
+/**
+ * v35: como salio la carga de esta sesion. { fallida: true } = habia un
+ * guardado y no se pudo leer NI el principal NI las copias: main.js no
+ * arranca de cero en silencio, ofrece restaurar un backup.
+ */
+export function estadoDeCarga() {
+  return { fallida: cargaFallida, principalIlegible };
 }
 
 /**
@@ -197,7 +265,8 @@ const LARGO_PREFIJO = MAGIA.length + 11;
 
 // Lo que es de ESTE telefono (un permiso, un cache, el ajuste de los
 // auriculares) no viaja: en el otro telefono no vale.
-const CLAVES_QUE_NO_VIAJAN = new Set([CLAVE_GUARDADO, CLAVE_ANTERIOR, CLAVE_RESCATE, "baozi_ultima_vista", "baozi_prueba_mic", "baozi_clima", "baozi_ubicacion", "baozi_ritmo_ajuste"]);
+// (v35: las copias de este telefono tampoco: duplicarian el backup)
+const CLAVES_QUE_NO_VIAJAN = new Set([CLAVE_GUARDADO, CLAVE_ANTERIOR, CLAVE_RESCATE, CLAVE_DIA, CLAVE_DIA_FECHA, CLAVE_ULTIMO_BACKUP, "baozi_ultima_vista", "baozi_prueba_mic", "baozi_clima", "baozi_ubicacion", "baozi_ritmo_ajuste"]);
 
 function otrasClaves() {
   const otras = {};
@@ -243,6 +312,24 @@ export function armarBackup({ fotos = [], videos = [] } = {}) {
 
 export function nombreDelBackup() {
   return `baozi-backup-${new Date().toISOString().slice(0, 10)}.baozi`;
+}
+
+/** v35: anota que hoy hay un backup (lo guardo, o lo acaba de restaurar). */
+export function marcarBackup(ahoraMs = Date.now()) {
+  try {
+    localStorage.setItem(CLAVE_ULTIMO_BACKUP, String(ahoraMs));
+  } catch (e) {
+    /* nada */
+  }
+}
+
+/** v35: cuando fue el ultimo backup (ms), o 0 si nunca. */
+export function ultimoBackup() {
+  try {
+    return Number(localStorage.getItem(CLAVE_ULTIMO_BACKUP)) || 0;
+  } catch (e) {
+    return 0;
+  }
 }
 
 function leerTexto(blob) {
@@ -308,9 +395,31 @@ export async function leerBackup(archivo) {
  */
 export function restaurarBackup({ progreso, otras = {} }) {
   const migrado = migrar(progreso);
-  const actual = localStorage.getItem(CLAVE_GUARDADO);
-  if (actual) localStorage.setItem(CLAVE_ANTERIOR, actual);
-  localStorage.setItem(CLAVE_GUARDADO, JSON.stringify(migrado));
+  // (v35: un principal que no se pudo leer no pisa la copia anterior: ya esta en el rescate)
+  const actual = principalIlegible ? null : localStorage.getItem(CLAVE_GUARDADO);
+  if (actual) {
+    try {
+      localStorage.setItem(CLAVE_ANTERIOR, actual);
+    } catch (e) {
+      /* sin lugar para la copia: lo que importa es restaurar */
+    }
+  }
+  const texto = JSON.stringify(migrado);
+  try {
+    localStorage.setItem(CLAVE_GUARDADO, texto);
+  } catch (e) {
+    // sin lugar: la copia del dia es lo unico prescindible (el principal sigue intacto)
+    try {
+      localStorage.removeItem(CLAVE_DIA);
+      localStorage.removeItem(CLAVE_DIA_FECHA);
+    } catch (e2) {
+      /* nada */
+    }
+    localStorage.setItem(CLAVE_GUARDADO, texto);
+  }
+  principalIlegible = false;
+  cargaFallida = false;
+  marcarBackup();
   for (const [k, v] of Object.entries(otras)) {
     try {
       localStorage.setItem(k, v);

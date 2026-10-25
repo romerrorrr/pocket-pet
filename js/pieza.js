@@ -152,6 +152,11 @@ function mascara(clave, amb, lamparas, tele, fuego = 0) {
   if (mascaras.has(clave)) return mascaras.get(clave);
   const LUCES = lucesDelCuarto();
   const h = huecoVentana();
+  // sin el arte todavia (o si no carga nunca) se guarda aparte: antes se
+  // recalculaba la mascara entera en cada cuadro. Cuando carga el arte, el
+  // hueco ya existe y se arma (una vez) la de verdad, con su clave
+  const claveSin = `${clave}|sinHueco`;
+  if (!h && mascaras.has(claveSin)) return mascaras.get(claveSin);
   const c = document.createElement("canvas");
   c.width = MW;
   c.height = MH;
@@ -209,7 +214,8 @@ function mascara(clave, amb, lamparas, tele, fuego = 0) {
     }
   }
   ctx.putImageData(im, 0, 0);
-  if (h) mascaras.set(clave, c); // sin el hueco todavia: se rehace cuando cargue el arte
+  mascaras.set(h ? clave : claveSin, c);
+  if (h) for (const k of mascaras.keys()) if (k.startsWith(`${clave}|`)) mascaras.delete(k); // la provisoria ya no hace falta
   return c;
 }
 
@@ -377,8 +383,11 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       <div class="pieza-toques"></div>
       <div class="globo-baozi oculto" id="linea-mochi" aria-live="polite"></div>
       <div class="globo-baozi oculto" id="linea-companero" aria-live="polite"></div>
+      <div class="pieza-sonda" aria-hidden="true"></div>
     </div>`;
   const raiz = contenedor.querySelector("#pieza");
+  // la sonda lee env(safe-area-inset-*): el notch y las esquinas redondas
+  const sonda = raiz.querySelector(".pieza-sonda");
   const canvas = raiz.querySelector("canvas");
   const g = canvas.getContext("2d");
   const mundo = document.createElement("canvas");
@@ -405,7 +414,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     const b = document.createElement("button");
     b.className = `toque-objeto${id === "baozi" ? " caja-cara" : ""}`;
     b.id = id === "reloj" ? "reloj" : `obj-${id}`;
-    b.setAttribute("aria-label", ETIQUETAS[id] || id);
+    // (con Mantou: "Camera: Mantou's Lens", "Mantou")
+    b.setAttribute("aria-label", Personaje.conNombre(ETIQUETAS[id] || id));
     b.dataset.objeto = id;
     b.addEventListener("click", () => {
       golpe(id);
@@ -438,6 +448,82 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   let proximoDestello = performance.now() + 2500;
   const parpadeo = { t: 0 };
 
+  // lo que el notch, las esquinas redondas y la rayita de abajo le pisan al
+  // cuarto, en px (solo lo que cae adentro del cuarto: en el aparato es 0)
+  let M = { l: 0, t: 0, r: 0, b: 0 };
+  function margenes(r) {
+    const cs = getComputedStyle(sonda);
+    const px = (v) => parseFloat(v) || 0;
+    return {
+      l: Math.max(0, px(cs.paddingLeft) - r.left),
+      t: Math.max(0, px(cs.paddingTop) - r.top),
+      r: Math.max(0, px(cs.paddingRight) - (window.innerWidth - r.right)),
+      b: Math.max(0, px(cs.paddingBottom) - (window.innerHeight - r.bottom)),
+    };
+  }
+
+  // los botones de los objetos chicos (la radio, la camara, el balde) se
+  // agrandan hasta 44 px alrededor de su centro, sin meterse en los vecinos
+  const MIN_TOQUE = 44;
+  const FIJOS = Object.keys(PIEZA.objetos).concat("ventana");
+  function cajasDeToque() {
+    const { s, ox, oy } = T;
+    const orig = {};
+    for (const id of FIJOS) {
+      const [x0, y0, x1, y1] = botones[id].caja;
+      orig[id] = [ox + x0 * s, oy + y0 * s, ox + (x1 + 1) * s, oy + (y1 + 1) * s];
+    }
+    const res = {};
+    for (const id of FIJOS) {
+      const o = orig[id];
+      let [l, t, r, b] = o;
+      const fw = MIN_TOQUE - (r - l);
+      const fh = MIN_TOQUE - (b - t);
+      if (fw > 0) { l -= fw / 2; r += fw / 2; }
+      if (fh > 0) { t -= fh / 2; b += fh / 2; }
+      if (fw <= 0 && fh <= 0) {
+        res[id] = o;
+        continue;
+      }
+      const recortar = () => {
+        for (const otro of FIJOS) {
+          if (otro === id) continue;
+          const n = orig[otro];
+          if (!(l < n[2] - 0.5 && r > n[0] + 0.5 && t < n[3] - 0.5 && b > n[1] + 0.5)) continue;
+          // se corta del lado del vecino (el corte que menos pierde)
+          const cortes = [];
+          if (n[3] <= o[1] + 0.5) cortes.push(["t", n[3] - t]);
+          if (n[1] >= o[3] - 0.5) cortes.push(["b", b - n[1]]);
+          if (n[2] <= o[0] + 0.5) cortes.push(["l", n[2] - l]);
+          if (n[0] >= o[2] - 0.5) cortes.push(["r", r - n[0]]);
+          if (!cortes.length) continue;
+          cortes.sort((a, c) => a[1] - c[1]);
+          const lado = cortes[0][0];
+          if (lado === "t") t = n[3];
+          else if (lado === "b") b = n[1];
+          else if (lado === "l") l = n[2];
+          else r = n[0];
+        }
+      };
+      recortar();
+      // si de un lado no habia lugar, crece para el otro
+      if (b - t < MIN_TOQUE) {
+        const falta = MIN_TOQUE - (b - t);
+        if (t > o[1] - fh / 2 + 0.5) b += falta;
+        else t -= falta;
+      }
+      if (r - l < MIN_TOQUE) {
+        const falta = MIN_TOQUE - (r - l);
+        if (l > o[0] - fw / 2 + 0.5) r += falta;
+        else l -= falta;
+      }
+      recortar();
+      // nunca mas chico que el dibujo
+      res[id] = [Math.min(l, o[0]), Math.min(t, o[1]), Math.max(r, o[2]), Math.max(b, o[3])];
+    }
+    return res;
+  }
+
   function medir() {
     const r = raiz.getBoundingClientRect();
     vw = Math.max(1, r.width);
@@ -447,32 +533,52 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     canvas.height = Math.round(vh * dpr);
     canvas.style.width = `${vw}px`;
     canvas.style.height = `${vh}px`;
-    // la zona segura entra entera; el resto del cuarto asoma si hay lugar
-    const s = Math.min(vw / (SX1 - SX0), vh / (SY1 - SY0));
+    M = margenes(r);
+    // la zona segura (donde estan todos los objetos) entra entera en lo que
+    // se ve sin notch; el resto del cuarto asoma si hay lugar, aunque sea
+    // debajo del notch (el dibujo llega hasta el borde)
+    const aw = Math.max(1, vw - M.l - M.r);
+    const ah = Math.max(1, vh - M.t - M.b);
+    const s = Math.min(aw / (SX1 - SX0), ah / (SY1 - SY0));
     const cx = (SX0 + SX1) / 2;
     const cy = (SY0 + SY1) / 2;
-    let ox = vw / 2 - cx * s;
-    let oy = vh / 2 - cy * s;
+    let ox = M.l + aw / 2 - cx * s;
+    let oy = M.t + ah / 2 - cy * s;
     // sin mostrar mas alla del mundo si se puede evitar
     ox = MW * s >= vw ? Math.min(0, Math.max(vw - MW * s, ox)) : (vw - MW * s) / 2;
     oy = MH * s >= vh ? Math.min(0, Math.max(vh - MH * s, oy)) : (vh - MH * s) / 2;
+    // ...pero la zona segura manda: nada que se toque queda debajo del notch
+    ox = Math.max(M.l - SX0 * s, Math.min(vw - M.r - SX1 * s, ox));
+    oy = Math.max(M.t - SY0 * s, Math.min(vh - M.b - SY1 * s, oy));
     T = { s, ox, oy };
-    for (const { el, caja } of Object.values(botones)) {
-      const [x0, y0, x1, y1] = caja;
-      el.style.left = `${ox + x0 * s}px`;
-      el.style.top = `${oy + y0 * s}px`;
-      el.style.width = `${(x1 - x0 + 1) * s}px`;
-      el.style.height = `${(y1 - y0 + 1) * s}px`;
+    const toque = cajasDeToque();
+    for (const [id, { el, caja }] of Object.entries(botones)) {
+      const [x0, y0, x1, y1] = toque[id] || [ox + caja[0] * s, oy + caja[1] * s, ox + (caja[2] + 1) * s, oy + (caja[3] + 1) * s];
+      el.style.left = `${x0}px`;
+      el.style.top = `${y0}px`;
+      el.style.width = `${x1 - x0}px`;
+      el.style.height = `${y1 - y0}px`;
     }
     ubicarGlobo();
     dibujar(performance.now());
   }
 
+  /** Pone un globo arriba de x (mundo), sin que se salga de lo que se ve; la colita sigue apuntando. */
+  function ponerGlobo(el, x, top) {
+    const cx = T.ox + x * T.s;
+    const w = el.offsetWidth;
+    const lo = M.l + 6 + w / 2;
+    const hi = vw - M.r - 6 - w / 2;
+    const c = w && lo <= hi ? Math.max(lo, Math.min(hi, cx)) : cx;
+    el.style.left = `${Math.round(c)}px`;
+    el.style.top = `${Math.round(top)}px`;
+    el.style.setProperty("--cola", `${Math.round(Math.max(-w / 2 + 12, Math.min(w / 2 - 12, cx - c)))}px`);
+  }
+
   function ubicarGlobo() {
     const f = Personaje.figura(actor.pose);
     const arriba = PIE - (f.pies - Math.max(f.arriba, 8));
-    globo.style.left = `${T.ox + actor.x * T.s}px`;
-    globo.style.top = `${T.oy + arriba * T.s}px`;
+    ponerGlobo(globo, actor.x, T.oy + arriba * T.s);
   }
 
   // ------------------------------------------------------------------
@@ -653,15 +759,21 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   function aviso(id, ahora) {
     const caja = cajas[id];
     if (!caja) return;
+    // lo que se ve del mundo (con el cuarto ampliado a lo ancho, arriba queda
+    // un pedazo afuera de la pantalla, y a los costados puede estar el notch)
+    const yMin = Math.ceil((M.t - T.oy) / T.s) + 2;
+    const xMin = Math.ceil((M.l - T.ox) / T.s) + 6;
+    const xMax = Math.floor((vw - M.r - T.ox) / T.s) - 6;
     let cx = Math.round((caja[0] + caja[2]) / 2);
     let y = caja[1] - 9 + (Math.floor(ahora / 400) % 2);
     let lado = "abajo"; // hacia donde apunta la colita del globo (el objeto)
-    if (y < 2) {
-      // lo que cuelga del techo: el aviso va al costado
+    if (y < yMin) {
+      // lo que cuelga del techo (o queda muy arriba): el aviso va al costado
       cx = caja[2] + 7;
-      y = Math.round((caja[1] + caja[3]) / 2) - 4 + (Math.floor(ahora / 400) % 2);
+      y = Math.max(yMin, Math.round((caja[1] + caja[3]) / 2) - 4 + (Math.floor(ahora / 400) % 2));
       lado = "izquierda";
     }
+    if (xMin <= xMax) cx = Math.max(xMin, Math.min(xMax, cx));
     m.fillStyle = TINTA;
     m.fillRect(cx - 4, y - 1, 9, 9);
     m.fillStyle = "rgb(252,248,238)";
@@ -762,10 +874,9 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       globoComp.textContent = texto;
       globoComp.classList.toggle("oculto", !texto);
     }
-    globoComp.style.left = `${T.ox + x * T.s}px`;
     // si los dos hablan a la vez, el globo de el va un poco mas arriba (no se pisan)
     const encima = e.globo ? 30 : 0;
-    globoComp.style.top = `${T.oy + (PIE - (fig.pies - Math.max(fig.arriba, 8))) * T.s - encima}px`;
+    if (texto) ponerGlobo(globoComp, x, T.oy + (PIE - (fig.pies - Math.max(fig.arriba, 8))) * T.s - encima);
     // de vez en cuando se miran y sale un corazoncito entre los dos
     if (!dormido && !e.dormido && comp.pose === "sentado" && ahora > comp.proxCorazon) {
       comp.corazon = ahora;
@@ -931,8 +1042,57 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     }
   }
 
-  // v25: el fuego de la chimenea (cabana): llamitas que titilan, despues de la luz
-  function llamas([x0, x1], ahora, dormido) {
+  // v25: el fuego de la chimenea (cabana): llamitas que titilan, despues de la luz.
+  // Se dibujan en un lienzo aparte y se les borra la silueta del personaje
+  // (agrandada 2 px): sentado delante de la boca, las llamas que asomaban
+  // pegadas a su contorno parecian salirle del cuerpo; con el huequito
+  // oscuro se lee que el fuego esta atras.
+  const fuegoC = document.createElement("canvas");
+  fuegoC.width = MW;
+  fuegoC.height = MH;
+  const f = fuegoC.getContext("2d");
+  let silueta = null; // { c, tx, ty, sx, sy, pies } del ultimo cuadro, en px de mundo
+  const silC = document.createElement("canvas");
+  silC.width = MW;
+  silC.height = MH;
+  const sil = silC.getContext("2d", { willReadFrequently: true });
+  function llamas(fuegoXs, ahora, dormido) {
+    f.clearRect(0, 0, MW, MH);
+    dibujarLlamas(fuegoXs, ahora, dormido);
+    if (silueta) {
+      // por columna, desde lo mas alto de la silueta para abajo se borra el
+      // fuego (asi tambien quedan tapados los huecos entre el brazo y el
+      // cuerpo), y 2 px de mas a cada lado
+      const { c, tx, ty, sx, sy, pies } = silueta;
+      const zx0 = Math.max(0, fuegoXs[0] - 4);
+      const zx1 = Math.min(MW - 1, fuegoXs[1] + 4);
+      const zy0 = 40;
+      const zh = PIEZA.piso - zy0;
+      sil.setTransform(1, 0, 0, 1, 0, 0);
+      sil.clearRect(zx0, zy0, zx1 - zx0 + 1, zh);
+      sil.setTransform(sx, 0, 0, sy, tx, ty);
+      sil.drawImage(c, -48, -pies, 96, 96);
+      sil.setTransform(1, 0, 0, 1, 0, 0);
+      const d = sil.getImageData(zx0, zy0, zx1 - zx0 + 1, zh).data;
+      const w = zx1 - zx0 + 1;
+      const arriba = new Array(w).fill(Infinity);
+      for (let i = 0; i < w; i++) {
+        for (let j = 0; j < zh; j++) {
+          if (d[(j * w + i) * 4 + 3] > 40) {
+            arriba[i] = zy0 + j;
+            break;
+          }
+        }
+      }
+      for (let i = 0; i < w; i++) {
+        let top = Infinity;
+        for (let k = Math.max(0, i - 2); k <= Math.min(w - 1, i + 2); k++) top = Math.min(top, arriba[k]);
+        if (top !== Infinity) f.clearRect(zx0 + i, top - 2, 1, MH);
+      }
+    }
+    m.drawImage(fuegoC, 0, 0);
+  }
+  function dibujarLlamas([x0, x1], ahora, dormido) {
     const base = PIEZA.piso - 11;
     const n = Math.floor((x1 - x0 - 8) / 5);
     for (let i = 0; i <= n; i++) {
@@ -946,8 +1106,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
         const dx = Math.round(Math.sin(t * 1.3 + k * 0.5) * (k / alto) * 1.5);
         for (let xx = cx - ancho; xx <= cx + ancho; xx++) {
           const borde = Math.abs(xx - cx) >= ancho;
-          m.fillStyle = dormido ? "rgb(200,70,40)" : k < 2 || !borde ? (k > alto * 0.6 ? "rgb(255,170,70)" : "rgb(255,226,140)") : "rgb(236,104,48)";
-          m.fillRect(xx + dx, base - k, 1, 1);
+          f.fillStyle = dormido ? "rgb(200,70,40)" : k < 2 || !borde ? (k > alto * 0.6 ? "rgb(255,170,70)" : "rgb(255,226,140)") : "rgb(236,104,48)";
+          f.fillRect(xx + dx, base - k, 1, 1);
         }
       }
     }
@@ -956,8 +1116,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       for (let i = 0; i < 3; i++) {
         const t = ((ahora / 1100 + i * 0.37) % 1);
         const x = x0 + 12 + ((i * 17 + Math.floor(ahora / 1100) * 7) % (x1 - x0 - 20));
-        m.fillStyle = `rgba(255,200,110,${(1 - t).toFixed(2)})`;
-        m.fillRect(Math.round(x + Math.sin(t * 9) * 2), Math.round(base - 18 - t * 20), 1, 1);
+        f.fillStyle = `rgba(255,200,110,${(1 - t).toFixed(2)})`;
+        f.fillRect(Math.round(x + Math.sin(t * 9) * 2), Math.round(base - 18 - t * 20), 1, 1);
       }
     }
   }
@@ -1001,14 +1161,15 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     m.rect(vx0, vy0, w, h);
     m.clip();
     // el cielo tapado
-    const velo = { nublado: "rgba(150,156,170,0.38)", niebla: "rgba(200,204,212,0.55)", llovizna: "rgba(110,120,140,0.42)", lluvia: "rgba(80,90,112,0.5)", tormenta: "rgba(50,56,78,0.6)", nieve: "rgba(200,206,220,0.4)" }[clima];
+    const velo = { nublado: "rgba(150,156,170,0.38)", niebla: "rgba(200,204,212,0.55)", llovizna: "rgba(110,120,140,0.42)", lluvia: "rgba(80,90,112,0.5)", tormenta: "rgba(50,56,78,0.6)", nieve: "rgba(200,206,220,0.4)", ventisca: "rgba(88,96,120,0.55)" }[clima];
+    const conRayos = clima === "tormenta" || clima === "ventisca";
     if (velo) {
       m.fillStyle = velo;
       m.fillRect(vx0, vy0, w, h);
     }
     // nubes que pasan
     if (clima !== "niebla") {
-      m.fillStyle = clima === "tormenta" ? "rgba(40,44,60,0.7)" : "rgba(170,176,190,0.6)";
+      m.fillStyle = conRayos ? "rgba(40,44,60,0.7)" : "rgba(170,176,190,0.6)";
       for (let k = 0; k < 3; k++) {
         const cx = vx0 + ((ahora / 900 + k * 29) % (w + 30)) - 15;
         const cy = vy0 + 4 + k * 7;
@@ -1035,13 +1196,15 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       }
     }
     // nieve
-    if (clima === "nieve") {
+    if (clima === "nieve" || clima === "ventisca") {
+      // la ventisca: el doble de copos, mas rapido y tirados por el viento
+      const fuerte = clima === "ventisca";
       m.fillStyle = "rgb(244,246,252)";
-      for (let i = 0; i < 26; i++) {
+      for (let i = 0; i < (fuerte ? 48 : 26); i++) {
         const g = gotas[i];
-        const y = vy0 + ((g.y + ahora / 1000 * 10 * g.v) % h);
-        const x = vx0 + ((g.x + Math.sin(ahora / 700 + i) * 2) % w + w) % w;
-        m.fillRect(Math.round(x), Math.round(y), 1, 1);
+        const y = vy0 + ((g.y + ahora / 1000 * (fuerte ? 26 : 10) * g.v) % h);
+        const x = vx0 + ((g.x + (fuerte ? -(y - vy0) * 0.6 : 0) + Math.sin(ahora / 700 + i) * 2) % w + w) % w;
+        m.fillRect(Math.round(x), Math.round(y), fuerte && i % 3 === 0 ? 2 : 1, 1);
       }
     }
     // gotas pegadas en el vidrio
@@ -1053,7 +1216,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       }
     }
     // el rayo en el cielo
-    if (clima === "tormenta" && ahora < rayo.hasta) {
+    if (conRayos && ahora < rayo.hasta) {
       m.fillStyle = "rgba(240,244,255,0.9)";
       m.fillRect(vx0, vy0, w, h);
       m.fillStyle = "rgb(255,255,255)";
@@ -1102,7 +1265,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     }
     // 1b. el clima de afuera
     // en la cabana (nieve afuera) la lluvia cae como nieve
-    if (gris) climaVentana(cuarto === "cabana" && (clima === "lluvia" || clima === "llovizna") ? "nieve" : clima, ahora);
+    // (y la tormenta, como ventisca: nieve tupida con viento, y los rayos igual)
+    if (gris) climaVentana(cuarto === "cabana" && (clima === "lluvia" || clima === "llovizna") ? "nieve" : cuarto === "cabana" && clima === "tormenta" ? "ventisca" : clima, ahora);
     // 2. el cuarto
     sprite(rutaCuarto("fondo.png"), 0, 0);
     sprite(rutaCuarto("cortinas.png"), 0, 0);
@@ -1111,7 +1275,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     for (const [id, caja] of Object.entries(PIEZA.objetos)) {
       let rel = rutaCuarto(`${id}.png`);
       if (id === "farol" && !lamparas) rel = rutaCuarto("farol_apagado.png");
-      if (id === "radio" && !e.sonido) rel = rutaCuarto("radio_apagada.png");
+      if (id === "radio" && (!e.sonido || e.dormido)) rel = rutaCuarto("radio_apagada.png"); // dormido: la radio se calla (main.js)
       let dx = 0;
       if (id === "farol") dx = Math.floor(ahora / 1400) % 4 === 1 ? 1 : Math.floor(ahora / 1400) % 4 === 3 ? -1 : 0;
       sprite(rel, caja[0] + dx, caja[1] + offsetGolpe(id, ahora));
@@ -1180,7 +1344,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       pixel(cx1 - 3, cy0 + 20, "rgb(230,180,70)");
     }
     // el disco gira mientras hay sonido
-    if (e.sonido) {
+    if (e.sonido && !e.dormido) {
       const [dx0, dy0] = PIEZA.objetos.radio;
       const a = ahora / 160;
       pixel(dx0 + 11 + Math.cos(a) * 7, dy0 + 4 + Math.sin(a) * 2, "rgb(96,96,108)");
@@ -1399,6 +1563,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       m.translate(-48, -fig.pies);
       m.drawImage(actC, 0, 0);
       m.restore();
+      silueta = { c: actC, tx: x0 + 48, ty: y0 + fig.pies, sx: volteado ? -ex : ex, sy: ey, pies: fig.pies };
     }
     personajeAlta = !pixelado ? { x0, y0, pose, volteado, ex, ey, fig, alto } : null;
 
@@ -1408,7 +1573,16 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     // 6. avisos de lo que necesita
     for (const id of e.avisos) aviso(id, ahora);
     // v24: el deseo del dia, una nubecita con un corazon arriba de la cabeza
-    if (e.deseo === "nuevo" && !e.dormido) nubeDeseo(Math.round(actor.x) + 20, y0 + fig.arriba - 16, ahora);
+    if (e.deseo === "nuevo" && !e.dormido) {
+      let yNube = y0 + fig.arriba - 16;
+      // si esta hablando, la nube va arriba del globo (antes el globo la tapaba);
+      // y si arriba no entra, espera a que termine de hablar
+      if (e.globo && globo.offsetHeight) {
+        const arribaGlobo = (parseFloat(globo.style.top) - globo.offsetHeight - T.oy) / T.s;
+        yNube = Math.min(yNube, Math.floor(arribaGlobo) - 21);
+      }
+      if (yNube >= Math.ceil((M.t - T.oy) / T.s) + 1) nubeDeseo(Math.round(actor.x) + 20, yNube, ahora);
+    }
 
     // 7. las zetas
     if (e.dormido) {
@@ -1425,10 +1599,11 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
 
     // 8. un destellito cada tanto sobre algo que se puede tocar
     if (ahora > proximoDestello) {
-      const ids = Object.keys(cajas).filter((k) => k !== "baozi");
+      // solo lo que esta (el companero y la mascota no siempre), donde esta ahora
+      const ids = Object.keys(botones).filter((k) => k !== "baozi" && !botones[k].el.hidden);
       const id = ids[Math.floor(Math.random() * ids.length)];
-      const c = cajas[id];
-      destello = { x: c[2] - 1, y: c[1] + 1, hasta: ahora + 600 };
+      const c = botones[id].caja;
+      destello = { x: c[2] - 1, y: Math.max(c[1] + 1, Math.ceil((M.t - T.oy) / T.s) + 3), hasta: ahora + 600 };
       proximoDestello = ahora + 2600 + Math.random() * 2400;
     }
     if (destello && ahora < destello.hasta && !e.dormido) {
@@ -1461,6 +1636,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
         g.scale(p.volteado ? -p.ex : p.ex, p.ey * (p.alto < 1 ? 1 : 1));
         g.drawImage(comp, -48 * k, -p.fig.pies * k, 96 * k, 96 * k);
         g.restore();
+        silueta = { c: comp, tx: p.x0 + 48, ty: p.y0 + p.fig.pies, sx: p.volteado ? -p.ex : p.ex, sy: p.ey, pies: p.fig.pies };
       }
     }
 
@@ -1469,6 +1645,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     if (globo.textContent !== texto2) {
       globo.textContent = texto2;
       globo.classList.toggle("oculto", !texto2);
+      ubicarGlobo(); // con el ancho del texto nuevo
     }
     globo.classList.toggle("rosa", !!e.globoRosa);
   }

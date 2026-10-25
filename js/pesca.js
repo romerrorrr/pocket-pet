@@ -17,7 +17,7 @@
  * sentado en la punta del muelle.
  */
 
-import { HTML_VOLVER, cablearVolver } from "./juegoComun.js";
+import { HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
 
 const DURACION_MS = 60000;
 const CLAVE_RECORD = "baozi_record_pesca_";
@@ -174,7 +174,10 @@ export function iniciarPesca(contenedor, opts) {
     clearTimeout(cartel._t);
     cartel._t = setTimeout(() => c.classList.add("oculto"), ms);
   };
-  const cambiar = (estado, ahora = performance.now()) => {
+  // F33: segundo plano / vertical -> pausa. Todo el juego usa reloj(): performance.now() sin las pausas
+  const pausa = crearPausa(area, { activa: () => st.vivo && st.estado !== "eligiendo" && st.estado !== "fin" });
+  const reloj = () => pausa.ahora();
+  const cambiar = (estado, ahora = reloj()) => {
     st.estado = estado;
     st.t = ahora;
   };
@@ -191,7 +194,7 @@ export function iniciarPesca(contenedor, opts) {
         /* nada */
       }
       $("pesca-dificultad").remove();
-      st.empezo = performance.now();
+      st.empezo = reloj();
       cambiar("listo");
       sonar("tocar");
     });
@@ -199,7 +202,8 @@ export function iniciarPesca(contenedor, opts) {
 
   // ---- el toque ----
   const tocar = () => {
-    const ahora = performance.now();
+    if (pausa.pausado()) return;
+    const ahora = reloj();
     if (st.estado === "listo") {
       const x = 175 + Math.random() * 130;
       const y = 92 + Math.random() * 40;
@@ -379,7 +383,11 @@ export function iniciarPesca(contenedor, opts) {
   // ---- el tiempo ----
   function paso() {
     if (!st.vivo) return;
-    const ahora = performance.now(); // (el mismo reloj que los toques)
+    if (pausa.pausado()) {
+      requestAnimationFrame(paso); // queda el ultimo cuadro, quieto
+      return;
+    }
+    const ahora = reloj(); // (el mismo reloj que los toques)
     if (st.estado !== "eligiendo" && st.estado !== "fin") {
       const queda = Math.max(0, DURACION_MS - (ahora - st.empezo));
       $("pesca-tiempo").textContent = Math.ceil(queda / 1000);
@@ -410,6 +418,7 @@ export function iniciarPesca(contenedor, opts) {
   function terminar() {
     if (st.estado === "fin") return;
     st.vivo = false;
+    pausa.destruir();
     cambiar("fin");
     const record = leerRecordPesca(dif);
     const nuevoRecord = st.puntos > record;
@@ -437,8 +446,10 @@ export function iniciarPesca(contenedor, opts) {
     terminar,
     destruir: () => {
       st.vivo = false;
+      pausa.destruir();
       window.removeEventListener("resize", encuadrar);
     },
+    _pausado: () => pausa.pausado(),
     // para los tests: que pique ya (y que pez)
     _picarYa: (id) => {
       st.forzado = id;

@@ -16,7 +16,7 @@
  * record por dificultad. Termina a los 40 s o sin corazones.
  */
 
-import { HTML_VOLVER, cablearVolver } from "./juegoComun.js";
+import { HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
 
 const DURACION_MS = 40000;
 const CORAZONES = 3;
@@ -84,6 +84,11 @@ function multiplicador(combo) {
  *   alTerminar({ puntos, atrapadas, record, nuevoRecord })
  *   alSalir()                 volvio antes de empezar (sin jugar)
  *   bannerMotion (html opcional para pedir el permiso de movimiento)
+ *   alElegir()                v35 (F31): se llama DENTRO del toque que elige la
+ *                             dificultad (ahi se pide el permiso del sensor); si
+ *                             devuelve una promesa, la cuenta espera a que termine
+ *   alEmpezar()               v35 (F37): en el "GO!" y al volver de una pausa
+ *                             (ahi se recalibra el volante)
  */
 export function iniciarJuego(contenedor, opts) {
   const { arte, sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, alTerminar = () => {}, alSalir = () => {} } = opts;
@@ -135,6 +140,22 @@ export function iniciarJuego(contenedor, opts) {
     terminado: false,
     caraHasta: 0,
   };
+  let contando = false; // la cuenta 3-2-1
+
+  // v35 (F33): segundo plano / telefono bloqueado / vertical -> pausa. Al
+  // seguir se corren el principio y la proxima comida (el reloj es el del rAF)
+  const pausa = crearPausa(area, {
+    activa: () => st.vivo && !st.terminado && (st.empezo > 0 || contando),
+    alSeguir: (ms) => {
+      if (st.empezo) {
+        st.empezo += ms;
+        st.proximo += ms;
+      }
+      if (st.caraHasta) st.caraHasta += ms;
+      st.ultimo = 0;
+      if (st.empezo && opts.alEmpezar) opts.alEmpezar();
+    },
+  });
 
   // ---- controles ----
   const mover = (clientX) => {
@@ -147,6 +168,12 @@ export function iniciarJuego(contenedor, opts) {
     dedoHasta = performance.now() + 1200;
     mover(e.clientX);
   });
+  // v35 (F42): al soltar el dedo, el volante sigue desde ahi (main recentra la base)
+  const soltarDedo = () => {
+    dedoHasta = Math.min(dedoHasta, performance.now() + 250);
+  };
+  area.addEventListener("pointerup", soltarDedo);
+  area.addEventListener("pointercancel", soltarDedo);
   area.addEventListener("pointermove", (e) => {
     if (e.buttons || e.pointerType === "touch") {
       dedoHasta = performance.now() + 1200;
@@ -256,6 +283,10 @@ export function iniciarJuego(contenedor, opts) {
     if (!st.vivo) return;
     requestAnimationFrame(cuadro);
     if (!st.empezo) return;
+    if (pausa.pausado()) {
+      st.ultimo = 0;
+      return;
+    }
     const dt = Math.min(50, t - (st.ultimo || t)) / 1000;
     st.ultimo = t;
     if (st.terminado) return;
@@ -299,6 +330,7 @@ export function iniciarJuego(contenedor, opts) {
   function terminar() {
     if (st.terminado) return;
     st.terminado = true;
+    pausa.destruir();
     const nuevoRecord = st.puntos > record;
     if (nuevoRecord) guardarRecord(dif, st.puntos);
     for (const it of st.items) it.el.remove();
@@ -311,27 +343,34 @@ export function iniciarJuego(contenedor, opts) {
 
   function detener() {
     st.vivo = false;
+    pausa.destruir();
     window.removeEventListener("keydown", teclas);
   }
 
   // cuenta regresiva 3-2-1, despues de elegir la dificultad
   function arrancar() {
+    if (!st.vivo || st.terminado) return;
     const cuenta = $("juego-cuenta");
     cuenta.classList.remove("oculto");
+    contando = true;
     let n = 3;
     const tic = setInterval(() => {
-      n -= 1;
-      if (!st.vivo) {
+      if (!st.vivo || st.terminado) {
         clearInterval(tic);
         return;
       }
+      if (pausa.pausado()) return; // en pausa la cuenta espera
+      n -= 1;
       if (n > 0) cuenta.textContent = String(n);
       else {
         clearInterval(tic);
+        contando = false;
         cuenta.textContent = "GO!";
         setTimeout(() => cuenta.remove(), 500);
         st.empezo = performance.now();
         st.proximo = st.empezo + 200;
+        // F37: el volante toma como "derecho" la postura de ahora, no la de cuando abrio el juego
+        if (opts.alEmpezar) opts.alEmpezar();
         const pista = $("juego-pista");
         if (pista) setTimeout(() => pista.classList.add("oculto"), 3500);
       }
@@ -352,12 +391,29 @@ export function iniciarJuego(contenedor, opts) {
       $("juego-record").textContent = `${D.nombre} · BEST ${record}`;
       $("juego-dificultad").remove();
       sonar("tocar");
-      arrancar();
+      // F31: el permiso del sensor se pide aca, dentro de este toque (el
+      // cartel de dificultad tapaba el boton del permiso)
+      let espera = null;
+      try {
+        espera = opts.alElegir ? opts.alElegir() : null;
+      } catch (err) {
+        espera = null;
+      }
+      if (espera && typeof espera.then === "function") espera.then(arrancar, arrancar);
+      else arrancar();
     });
   }
   requestAnimationFrame(cuadro);
 
-  return { detener, inclinar, terminar, estado: () => st };
+  return {
+    detener,
+    inclinar,
+    terminar,
+    estado: () => st,
+    /** v35 (F42): si ahora manda el dedo (main recentra el volante para que siga desde aca). */
+    usandoDedo: () => performance.now() < dedoHasta,
+    _pausado: () => pausa.pausado(),
+  };
 }
 
 // ------------------------------------------------------------------
@@ -376,37 +432,98 @@ export function ejesDePantalla(ax, ay, az, angulo = 90) {
   const a = ((Math.round(angulo / 90) * 90) % 360 + 360) % 360;
   const der = { 0: [1, 0], 90: [0, -1], 180: [-1, 0], 270: [0, 1] }[a];
   const arr = { 0: [0, 1], 90: [1, 0], 180: [0, -1], 270: [-1, 0] }[a];
-  return { lateral: -(ax * der[0] + ay * der[1]) / g, arriba: (ax * arr[0] + ay * arr[1] + az) / g };
+  const vertical = (ax * arr[0] + ay * arr[1]) / g;
+  return { lateral: -(ax * der[0] + ay * der[1]) / g, arriba: vertical + az / g, vertical, z: az / g };
+}
+
+// v35 (F36): la convencion de signos es del telefono (no de la postura):
+// cuando se pudo saber seguro, queda guardada para la proxima.
+const CLAVE_SIGNO = "baozi_volante_signo";
+function signoGuardado() {
+  try {
+    const s = Number(localStorage.getItem(CLAVE_SIGNO));
+    return s === 1 || s === -1 ? s : null;
+  } catch (e) {
+    return null;
+  }
+}
+function guardarSigno(s) {
+  try {
+    localStorage.setItem(CLAVE_SIGNO, String(s));
+  } catch (e) {
+    /* nada */
+  }
 }
 
 /**
  * Convierte lecturas del acelerometro en una posicion 0..1. Las primeras
  * lecturas calibran: como lo esta agarrando ella es "derecho", y de ahi se
- * saca tambien el signo. ~25 grados de inclinacion = de punta a punta.
+ * saca tambien el signo. ~17 grados de inclinacion = de punta a punta
+ * (v35, F42: antes 25, era mucho).
+ *
+ * v35 (F36): el signo. La inclinacion "lateral" esta bien para cualquier
+ * postura (el borde derecho baja = derecha, con la pantalla para arriba o
+ * para abajo); lo unico que cambia es la convencion del telefono (algunos
+ * dan la gravedad al reves). Se saca del eje vertical de la PANTALLA: nadie
+ * juega con el telefono cabeza abajo, asi que si ese eje marca algo claro
+ * (|vertical| >= 0,3 g) su signo es la convencion, y queda guardada. Antes
+ * se sumaba z: acostada boca arriba con la pantalla mirando al piso, z
+ * daba vuelta el signo y el volante quedaba invertido. Si la pantalla esta
+ * casi horizontal (no se puede saber), se usa la guardada; si no hay, se
+ * supone la pantalla para arriba (signo de z).
+ *
+ * recalibrar(): vuelve a tomar la postura de ahora como "derecho" (en el GO!).
+ * centrarEn(pos): mueve la base para que la inclinacion de ahora sea `pos`
+ * (al soltar el dedo el personaje no salta a donde dice el telefono).
  */
 export class Volante {
-  constructor({ rango = 0.42, calibrar = 8 } = {}) {
+  constructor({ rango = 0.3, calibrar = 8, signo = undefined } = {}) {
     this.rango = rango;
-    this.faltan = calibrar;
+    this.calibrar = calibrar;
+    this.signoConocido = signo === undefined ? signoGuardado() : signo;
+    this.signo = this.signoConocido || 1;
+    this.seguro = false; // si el signo salio de una lectura clara
+    this.recalibrar();
+  }
+
+  recalibrar() {
+    this.faltan = this.calibrar;
     this.suma = 0;
-    this.sumaArriba = 0;
+    this.sumaVertical = 0;
+    this.sumaZ = 0;
     this.n = 0;
     this.base = 0;
-    this.signo = 1;
     this.suave = null;
+  }
+
+  /** La posicion de ahora pasa a ser `pos` (0..1), sin mover nada. */
+  centrarEn(pos) {
+    if (this.faltan > 0 || this.suave === null || !Number.isFinite(pos)) return;
+    const f = Math.max(-1, Math.min(1, (pos - 0.5) / 0.44));
+    const quiero = f * this.rango;
+    this.base += this.suave - quiero;
+    this.suave = quiero;
   }
 
   /** Devuelve la posicion (0..1) o null mientras calibra. */
   leer(ax, ay, az, angulo) {
     if (![ax, ay, az].every(Number.isFinite)) return null;
-    const { lateral, arriba } = ejesDePantalla(ax, ay, az, angulo);
+    const { lateral, vertical, z } = ejesDePantalla(ax, ay, az, angulo);
     if (this.faltan > 0) {
       this.suma += lateral;
-      this.sumaArriba += arriba;
+      this.sumaVertical += vertical;
+      this.sumaZ += z;
       this.n++;
       this.faltan--;
       if (this.faltan === 0) {
-        this.signo = this.sumaArriba / this.n < -0.2 ? -1 : 1;
+        const ver = this.sumaVertical / this.n;
+        if (Math.abs(ver) >= 0.3) {
+          this.signo = ver < 0 ? -1 : 1;
+          this.seguro = true;
+          if (this.signo !== this.signoConocido) guardarSigno(this.signo);
+          this.signoConocido = this.signo;
+        } else if (this.signoConocido) this.signo = this.signoConocido;
+        else this.signo = this.sumaZ / this.n < 0 ? -1 : 1;
         this.base = (this.suma / this.n) * this.signo;
       }
       return null;

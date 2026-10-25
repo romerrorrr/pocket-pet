@@ -90,8 +90,55 @@ function tipoSoportado() {
 
 const RESTRICCIONES = {
   video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-  audio: { echoCancellation: true, noiseSuppression: true },
+  // v35: sin el procesado "de llamada". Con cancelacion de eco / supresion de
+  // ruido / ganancia automatica, iOS trata la musica del final que sale por
+  // el parlante como "eco" y la borra, y aplasta el ambiente del lago: en el
+  // video quedaba solo la voz, entrecortada. Crudo se escucha todo.
+  audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
 };
+
+// v35: getUserMedia a veces no vuelve nunca (iOS con un cartel trabado, otra
+// app usando la camara). Nada del final puede quedarse esperandolo.
+export const TOPE_PERMISOS_MS = 8000;
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * getUserMedia con tope: si no contesta en `ms`, rechaza con "timeout". Si
+ * despues contesta igual, ese stream se cierra (nadie lo esta usando).
+ */
+function pedirMedios(restricciones, ms = TOPE_PERMISOS_MS) {
+  return new Promise((resolve, reject) => {
+    let listo = false;
+    const tm = setTimeout(() => {
+      listo = true;
+      reject(Object.assign(new Error("timeout"), { name: "TimeoutError" }));
+    }, ms);
+    navigator.mediaDevices.getUserMedia(restricciones).then(
+      (s) => {
+        if (restricciones.video) camaraOk = true;
+        if (listo) {
+          for (const t of s.getTracks()) t.stop();
+          return;
+        }
+        listo = true;
+        clearTimeout(tm);
+        resolve(s);
+      },
+      (e) => {
+        if (listo) return;
+        listo = true;
+        clearTimeout(tm);
+        reject(e);
+      },
+    );
+  });
+}
+
+// v35: true si alguna vez (en esta carga de la app) la camara se abrio bien.
+// Solo entonces se reintenta grabar solo (sin toque): asi un reintento nunca
+// le hace aparecer a ella un cartel de permisos en medio del final.
+let camaraOk = false;
+export const camaraConcedida = () => camaraOk;
 
 // v21.1 (rom: "el video salio sin audio; solo pidio permiso de camara").
 // En iPhone, el microfono se pide APARTE y dentro del toque, y el microfono
@@ -203,7 +250,8 @@ export async function probarMicrofono({ ctx = null, alNivel = null, ms = 4000 } 
   actualizarCaptura(); // antes de pedir el microfono
   let s = null;
   try {
-    s = await navigator.mediaDevices.getUserMedia({ audio: RESTRICCIONES.audio });
+    // (con tope: el boton del director no se puede quedar trabado)
+    s = await pedirMedios({ audio: RESTRICCIONES.audio });
   } catch (e) {
     probandoMic = false;
     actualizarCaptura();
@@ -268,25 +316,49 @@ export async function estadoPermisos() {
   return "prompt";
 }
 
+// v35: un solo pedido de microfono a la vez (un doble toque abria dos y
+// iOS cortaba el primero: el video salia mudo).
+let abriendoMic = null;
+let generacionMic = 0; // cerrarMicrofono() la sube: un microfono que llega tarde se descarta
+
 /** Abre el microfono (dentro de un toque) y lo deja abierto para la grabacion. */
-export async function abrirMicrofono() {
-  if (microAbierto()) return true;
+export function abrirMicrofono() {
+  if (microAbierto()) return Promise.resolve(true);
+  if (abriendoMic) return abriendoMic;
   if (microVivo) cerrarMicrofono(); // uno cortado o silenciado no sirve: se abre otro
+  if (!sePuedeGrabar()) return Promise.resolve(false);
   capturaDeAudio(true); // la sesion de iOS lista para grabar ANTES de pedirlo
+  const gen = generacionMic;
+  let intento;
   try {
-    microVivo = await navigator.mediaDevices.getUserMedia({ audio: RESTRICCIONES.audio });
+    intento = navigator.mediaDevices.getUserMedia({ audio: RESTRICCIONES.audio }).then(
+      (s) => {
+        // llego tarde (ya se cerro, o ya hay otro abierto): no se usa
+        if (gen !== generacionMic || microAbierto()) for (const t of s.getTracks()) t.stop();
+        else microVivo = s;
+      },
+      () => {},
+    );
   } catch (e) {
-    microVivo = null;
+    intento = Promise.resolve();
   }
-  actualizarCaptura();
-  return microAbierto();
+  const fin = intento.then(() => {
+    actualizarCaptura();
+    return microAbierto();
+  });
+  // con tope: si iOS no contesta, se sigue sin microfono (si contesta despues, igual queda)
+  abriendoMic = Promise.race([fin, esperar(TOPE_PERMISOS_MS).then(() => microAbierto())]).finally(() => {
+    abriendoMic = null;
+  });
+  return abriendoMic;
 }
 
 export function soltarMicrofono() {
-  if (!actual) cerrarMicrofono();
+  if (!actual && !arrancando) cerrarMicrofono();
 }
 
 function cerrarMicrofono() {
+  generacionMic += 1;
   if (microVivo) for (const t of microVivo.getTracks()) t.stop();
   microVivo = null;
   actualizarCaptura();
@@ -299,14 +371,19 @@ function cerrarMicrofono() {
  */
 export async function pedirPermisos({ dejarMicAbierto = false } = {}) {
   if (!sePuedeGrabar()) return { camara: false, microfono: false };
-  const microfono = await abrirMicrofono();
+  const microfono = await abrirMicrofono(); // (ya tiene tope)
   let camara = false;
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({ video: RESTRICCIONES.video });
-    for (const p of s.getTracks()) p.stop();
-    camara = true;
-  } catch (e) {
-    camara = false;
+  // si ya se esta grabando, la camara ya esta concedida (y pedirla de nuevo
+  // en iOS le cortaria la imagen a la grabacion)
+  if (actual) camara = true;
+  else {
+    try {
+      const s = await pedirMedios({ video: RESTRICCIONES.video });
+      for (const p of s.getTracks()) p.stop();
+      camara = true;
+    } catch (e) {
+      camara = false;
+    }
   }
   if (!dejarMicAbierto) cerrarMicrofono();
   return { camara, microfono };
@@ -316,10 +393,14 @@ export async function pedirPermisos({ dejarMicAbierto = false } = {}) {
  * Justo antes de la secuencia, en el toque de "Take the photo" (rom:
  * "verificamos que tengamos los permisos, si no los pedimos otra vez").
  * Abre el microfono ahi mismo y lo deja listo para el video.
+ * v35: nunca tarda mas de `tope` ms (y nunca rechaza): pase lo que pase,
+ * el final sigue — a lo sumo sin video.
  */
-export async function asegurarPermisos() {
-  const r = await pedirPermisos({ dejarMicAbierto: true });
-  return r.camara && r.microfono;
+export function asegurarPermisos({ tope = TOPE_PERMISOS_MS } = {}) {
+  const pedido = pedirPermisos({ dejarMicAbierto: true })
+    .then((r) => r.camara && r.microfono)
+    .catch(() => false);
+  return Promise.race([pedido, esperar(tope).then(() => false)]);
 }
 
 export const grabando = () => !!actual;
@@ -346,19 +427,38 @@ function puntoRec(si) {
   } else if (!si && p) p.remove();
 }
 
-async function empezarDeVerdad({ ensayo = false, ctxMedidor = null } = {}) {
+// v35: detener() sube este numero. Si llega mientras empezarDeVerdad esta
+// esperando (la camara, el microfono, IndexedDB), ese arranque se cancela:
+// antes seguia y grababa sobre un stream muerto con el punto rojo trabado.
+let generacion = 0;
+
+async function empezarDeVerdad({ ensayo = false, ctxMedidor = null, alEmpezar = null } = {}) {
   if (actual || !sePuedeGrabar()) return !!actual;
+  const gen = generacion;
+  const cancelado = () => gen !== generacion;
   capturaDeAudio(true); // v21.2: sin esto iOS corta el microfono (ver sonido.js)
   // la imagen, y el sonido: el microfono que quedo abierto desde el toque
   // (o, si no hay, se intenta abrir ahora); sin microfono, igual se graba
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: RESTRICCIONES.video });
+    stream = await pedirMedios({ video: RESTRICCIONES.video });
   } catch (e) {
     actualizarCaptura();
     return false;
   }
+  const soltarImagen = () => {
+    for (const p of stream.getVideoTracks()) p.stop();
+    actualizarCaptura();
+  };
+  if (cancelado()) {
+    soltarImagen();
+    return false;
+  }
   if (!microAbierto()) await abrirMicrofono();
+  if (cancelado()) {
+    soltarImagen();
+    return false;
+  }
   if (microAbierto()) for (const t of microVivo.getAudioTracks()) if (pistaSana(t)) stream.addTrack(t);
   const conAudio = stream.getAudioTracks().length > 0;
   const mime = tipoSoportado();
@@ -371,20 +471,33 @@ async function empezarDeVerdad({ ensayo = false, ctxMedidor = null } = {}) {
     return false;
   }
   const id = `video_${Date.now()}`;
-  const g = { id, rec, stream, n: 0, empezo: Date.now(), mime: rec.mimeType || mime || "video/mp4", ensayo, timerTope: 0, conAudio, medidor: ctxMedidor ? medidor(stream, ctxMedidor) : null };
-  actual = g;
+  const g = { id, rec, stream, n: 0, empezo: Date.now(), mime: rec.mimeType || mime || "video/mp4", ensayo, timerTope: 0, conAudio, medidor: null };
   if (ensayo) await borrarEnsayos(id);
   await tx(VIDEOS, "readwrite", (s) => s.put({ id, mime: g.mime, empezo: g.empezo, termino: null, ensayo, pedazos: 0, conAudio }));
+  if (cancelado()) {
+    // se pidio detener mientras se preparaba: nada de grabar (la fila vacia no molesta: sin pedazos no se ofrece)
+    for (const p of stream.getTracks()) p.stop();
+    cerrarMicrofono();
+    return false;
+  }
+  // recien ahora, sin mas esperas por delante, pasa a ser la grabacion actual
+  g.medidor = ctxMedidor ? medidor(stream, ctxMedidor) : null;
+  actual = g;
   rec.ondataavailable = (ev) => {
     if (!ev.data || !ev.data.size) return;
     const n = g.n++;
     tx(PEDAZOS, "readwrite", (s) => s.put({ clave: [id, n], id, n, blob: ev.data }));
     tx(VIDEOS, "readwrite", (s) => s.put(metaDe(g, Date.now())));
   };
-  rec.onerror = () => detener();
+  // (solo si sigue siendo ESTA grabacion: uno viejo no puede cortar una nueva)
+  const detenerEsta = () => {
+    if (actual === g) detener();
+  };
+  rec.onerror = detenerEsta;
   // si le cortan la camara (una llamada), se cierra lo que haya; si se
-  // corta solo el microfono, el video sigue (mejor mudo que nada)
-  for (const p of stream.getVideoTracks()) p.addEventListener("ended", () => detener());
+  // corta solo el microfono, el video sigue (mejor mudo que nada).
+  // v35: final.js vuelve a arrancar otra grabacion (otro pedazo del mismo dia)
+  for (const p of stream.getVideoTracks()) p.addEventListener("ended", detenerEsta);
   try {
     rec.start(MS_PEDAZO);
   } catch (e) {
@@ -394,9 +507,17 @@ async function empezarDeVerdad({ ensayo = false, ctxMedidor = null } = {}) {
     cerrarMicrofono();
     return false;
   }
-  g.timerTope = setTimeout(() => detener(), TOPE_MS);
-  window.addEventListener("pagehide", detener, { once: true });
+  g.timerTope = setTimeout(detenerEsta, TOPE_MS);
+  window.addEventListener("pagehide", detenerEsta, { once: true });
   puntoRec(true);
+  // v35: final.js anota el id (los videos de la propuesta se buscan por id)
+  if (alEmpezar) {
+    try {
+      alEmpezar(id);
+    } catch (e) {
+      /* nada */
+    }
+  }
   return true;
 }
 
@@ -412,6 +533,7 @@ export function nivelActual() {
 
 /** Corta la grabacion (el ultimo pedacito se guarda solo). */
 export function detener() {
+  generacion += 1; // (si habia un arranque a medias, se cancela)
   const g = actual;
   if (!g) return Promise.resolve(null);
   actual = null;
@@ -455,16 +577,52 @@ async function borrarEnsayos(salvo) {
   }
 }
 
-/** El ultimo video (el de la propuesta; con ensayo=true, el del ensayo), como { blob, mime, empezo } o null. */
-export async function ultimoVideo({ ensayo = false } = {}) {
-  const vs = (await listarVideos()).filter((v) => !!v.ensayo === !!ensayo && v.pedazos > 0);
-  const v = vs[vs.length - 1];
+/** Un video entero (sus pedacitos en orden), como { id, blob, mime, empezo, termino, conAudio, picoAudio } o null. */
+async function armarVideo(v) {
   if (!v) return null;
   const pedazos = await tx(PEDAZOS, "readonly", (s) => s.index("id").getAll(v.id));
   if (!pedazos || !pedazos.length) return null;
   pedazos.sort((a, b) => a.n - b.n);
   const tipo = (v.mime || "video/mp4").split(";")[0];
-  return { blob: new Blob(pedazos.map((p) => p.blob), { type: tipo }), mime: tipo, empezo: v.empezo, conAudio: v.conAudio !== false, picoAudio: typeof v.picoAudio === "number" ? v.picoAudio : null };
+  return { id: v.id, blob: new Blob(pedazos.map((p) => p.blob), { type: tipo }), mime: tipo, empezo: v.empezo, termino: v.termino || null, conAudio: v.conAudio !== false, picoAudio: typeof v.picoAudio === "number" ? v.picoAudio : null };
+}
+
+/**
+ * El ultimo video (con ensayo=true, el del ensayo), o null.
+ * OJO: para el video de la propuesta usar videosPorId() con los ids que
+ * guarda final.js — si la app se reabrio despues del si, el ultimo es un
+ * pedacito nuevo, no el del momento.
+ */
+export async function ultimoVideo({ ensayo = false } = {}) {
+  const vs = (await listarVideos()).filter((v) => !!v.ensayo === !!ensayo && v.pedazos > 0);
+  return armarVideo(vs[vs.length - 1]);
+}
+
+/** v35: el id de la grabacion en curso (o null). */
+export const idActual = () => (actual ? actual.id : null);
+
+/** v35: los videos con esos ids (en ese orden; los que no estan o estan vacios, se saltean). */
+export async function videosPorId(ids) {
+  const quiero = (Array.isArray(ids) ? ids : []).filter(Boolean);
+  if (!quiero.length) return [];
+  const todos = await listarVideos();
+  const lista = [];
+  for (const id of quiero) {
+    const v = await armarVideo(todos.find((x) => x.id === id && x.pedazos > 0));
+    if (v) lista.push(v);
+  }
+  return lista;
+}
+
+/** v35: los videos de verdad (no ensayos) que empezaron desde `desde` (ms), en orden. Respaldo si no hay ids. */
+export async function videosDesde(desde) {
+  const vs = (await listarVideos()).filter((v) => !v.ensayo && v.pedazos > 0 && v.empezo >= desde);
+  const lista = [];
+  for (const v of vs) {
+    const armado = await armarVideo(v);
+    if (armado) lista.push(armado);
+  }
+  return lista;
 }
 
 /** v33, para el backup: los videos de verdad (no los ensayos), con sus pedacitos en orden. */

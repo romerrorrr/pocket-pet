@@ -28,6 +28,21 @@ export function claveDelDia(fecha = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * v35: el dia "logico" de la pagina que ella escribe: cambia a las 4 de la
+ * mañana, no a la medianoche. La ventana para escribir es de 19 a 3, asi
+ * que escribir a la 1 de la mañana es la pagina de AYER (antes caia en el
+ * dia siguiente, la pregunta de la noche se repetia y la racha se cortaba).
+ * Solo para la pagina escrita (escribir, hoyEscrito, racha, la pregunta y
+ * el pedido de la noche); los pasos, las fotos y el mapa siguen con el dia
+ * de calendario (claveDelDia).
+ */
+export const HORA_CAMBIO_DIA = 4;
+export function claveDelDiaLogico(fecha = new Date()) {
+  if (fecha.getHours() >= HORA_CAMBIO_DIA) return claveDelDia(fecha);
+  return claveDelDia(new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - 1));
+}
+
 const DIAS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MESES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -66,7 +81,7 @@ export const ANIMOS = [
   { id: "triste", nombre: "Sad", ojo: "ojo_especial_decepcionado.png", boca: "boca_especial_decepcionado.png" },
 ];
 
-// Una pregunta por dia (la misma todo el dia, cambia a la medianoche).
+// Una pregunta por dia (la misma todo el dia, cambia a las 4 de la mañana: el dia logico).
 export const PREGUNTAS = [
   "What made you smile today?",
   "What did you eat that was really good?",
@@ -98,7 +113,7 @@ export const PREGUNTAS = [
   "Who do you miss today?",
 ];
 
-export function preguntaDelDia(clave = claveDelDia()) {
+export function preguntaDelDia(clave = claveDelDiaLogico()) {
   let h = 0;
   for (const c of clave) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return PREGUNTAS[h % PREGUNTAS.length];
@@ -118,16 +133,45 @@ export class Diario {
 
   /** La entrada de hoy, creandola si es el primer evento del dia. */
   hoy(fecha = new Date()) {
-    const clave = claveDelDia(fecha);
+    return this._entradaCreando(claveDelDia(fecha));
+  }
+
+  /** La entrada de un dia (clave), creandola si no esta. */
+  _entradaCreando(clave) {
     let entrada = this.entradas.find((e) => e.fecha === clave);
     if (!entrada) {
       entrada = entradaVacia(clave);
       this.entradas.push(entrada);
-      if (this.entradas.length > MAX_ENTRADAS) {
-        this.entradas = this.entradas.slice(-MAX_ENTRADAS);
-      }
+      if (this.entradas.length > MAX_ENTRADAS) this._recortar(entrada);
     }
     return entrada;
+  }
+
+  /**
+   * v35: con demasiadas entradas, se van primero las mas viejas que ella NO
+   * escribio (las automaticas sin pagina); una pagina escrita es lo ultimo
+   * que se borra. (Antes se cortaban las mas viejas, escritas o no.)
+   */
+  _recortar(nueva = null) {
+    let sobran = this.entradas.length - MAX_ENTRADAS;
+    if (sobran <= 0) return;
+    const porFecha = [...this.entradas].sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    const fuera = new Set();
+    for (const e of porFecha) {
+      if (sobran <= 0) break;
+      if (e !== nueva && !escrita(e)) {
+        fuera.add(e);
+        sobran -= 1;
+      }
+    }
+    for (const e of porFecha) {
+      if (sobran <= 0) break;
+      if (e !== nueva && !fuera.has(e)) {
+        fuera.add(e);
+        sobran -= 1;
+      }
+    }
+    this.entradas = this.entradas.filter((e) => !fuera.has(e));
   }
 
   sumarPasos(cantidad, fecha = new Date()) {
@@ -194,9 +238,9 @@ export class Diario {
     if (!e.cartas.includes(idCarta)) e.cartas.push(idCarta);
   }
 
-  /** Ella escribe (o reescribe) la pagina de hoy. */
+  /** Ella escribe (o reescribe) la pagina de hoy (v35: del dia logico, ver claveDelDiaLogico). */
   escribirHoy({ animo = null, texto = "", pregunta = "" } = {}, fecha = new Date()) {
-    const e = this.hoy(fecha);
+    const e = this._entradaCreando(claveDelDiaLogico(fecha));
     e.animo = animo;
     e.texto = String(texto || "").slice(0, 400);
     e.pregunta = pregunta;
@@ -209,12 +253,12 @@ export class Diario {
   }
 
   hoyEscrito(fecha = new Date()) {
-    return escrita(this.entrada(claveDelDia(fecha)));
+    return escrita(this.entrada(claveDelDiaLogico(fecha)));
   }
 
-  /** Dias seguidos escribiendo (cuenta hasta hoy, o hasta ayer si hoy todavia no). */
+  /** Dias seguidos escribiendo (cuenta hasta hoy, o hasta ayer si hoy todavia no; dia logico). */
   racha(fecha = new Date()) {
-    let clave = claveDelDia(fecha);
+    let clave = claveDelDiaLogico(fecha);
     if (!escrita(this.entrada(clave))) clave = sumarDias(clave, -1);
     let n = 0;
     while (escrita(this.entrada(clave))) {
@@ -226,7 +270,7 @@ export class Diario {
 
   /** Los ultimos 7 dias (mas viejo primero), con su animo si lo hay. */
   semana(fecha = new Date()) {
-    const hoy = claveDelDia(fecha);
+    const hoy = claveDelDiaLogico(fecha); // (la tira de la racha: el mismo dia logico)
     return Array.from({ length: 7 }, (_, i) => {
       const clave = sumarDias(hoy, i - 6);
       const e = this.entrada(clave);
@@ -312,7 +356,8 @@ export function resumenDelDia(entrada, lugaresDelDia = 0) {
   if (partes.length === 0 && entrada.cuidados > 0) {
     partes.push("a quiet day at home");
   }
-  if (partes.length === 0) return "Nothing much happened today.";
+  // (v35: "today" solo si es hoy: en un dia viejo del album quedaba raro)
+  if (partes.length === 0) return entrada.fecha === claveDelDia() ? "Nothing much happened today." : "A quiet day.";
 
   const frase = unirEnIngles(partes);
   return frase.charAt(0).toUpperCase() + frase.slice(1) + ".";

@@ -24,7 +24,7 @@ import * as Sensores from "./sensores.js";
 import { vibrar } from "./actuadores.js";
 import * as Sonido from "./sonido.js";
 import * as Musica from "./musica.js";
-import { Diario, claveDelDia, fechaLegible, ANIMOS, preguntaDelDia } from "./diario.js";
+import { Diario, claveDelDia, claveDelDiaLogico, fechaLegible, ANIMOS, preguntaDelDia } from "./diario.js";
 import { cartaPendiente, cartaAtrasada } from "./cartas.js";
 import * as Camara from "./camara.js";
 import { abrirLente } from "./lente.js";
@@ -93,6 +93,22 @@ function guardarTodo() {
   return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla });
 }
 
+// v35: actualizaciones seguras (ver el comentario de arriba de sw.js).
+//  - Un deploy nuevo se baja en segundo plano y ESPERA: nunca cambia el
+//    codigo con el juego abierto. Se aplica en el proximo arranque en frio.
+//  - Instalada, iOS puede tener la app "abierta" (suspendida) por dias:
+//    si vuelve a primer plano tras >= 30 min guardada, esta en la cara de
+//    Baozi y el final no esta en juego, se aplica ahi: guarda, activa el
+//    sw nuevo y recarga (para ella es como abrirla de nuevo).
+//  - Buscar deploys nuevos (reg.update) como mucho cada 6 h: el navegador
+//    igual se fija solo en cada arranque.
+const SW_BUSCAR_CADA_MS = 6 * 60 * 60 * 1000;
+const SW_APLICAR_TRAS_MS = 30 * 60 * 1000;
+
+function momentoTranquiloParaActualizar() {
+  return !!mascota && controller.vista === "cara" && !lenteAbierto && !finalOcupado() && !Final.secuenciaEnCurso();
+}
+
 function registrarServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (!location.protocol.startsWith("http")) return;
@@ -100,10 +116,36 @@ function registrarServiceWorker() {
     navigator.serviceWorker
       .register("sw.js", { updateViaCache: "none" })
       .then((reg) => {
-        // instalada, la app puede quedar abierta dias: al volver a primer
-        // plano se fija si hay un deploy nuevo (se aplica la proxima vez que abra)
+        if (!reg) return; // (sin service worker: navegadores raros o pruebas)
+        let ultimaBusqueda = Date.now(); // register() recien se fijo
+        let guardadaDesde = 0;
+        let pedimosActivar = false;
+        const recargar = () => {
+          if (pedimosActivar === "recargando") return;
+          pedimosActivar = "recargando";
+          location.reload();
+        };
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (pedimosActivar) recargar();
+        });
         document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") reg.update().catch(() => {});
+          if (document.visibilityState === "hidden") {
+            guardadaDesde = Date.now();
+            return;
+          }
+          const largaPausa = guardadaDesde && Date.now() - guardadaDesde >= SW_APLICAR_TRAS_MS;
+          guardadaDesde = 0;
+          if (reg.waiting && largaPausa && !pedimosActivar && momentoTranquiloParaActualizar()) {
+            pedimosActivar = true;
+            guardarTodo();
+            reg.waiting.postMessage({ tipo: "activar" });
+            setTimeout(recargar, 4000); // por si controllerchange no llega
+            return;
+          }
+          if (Date.now() - ultimaBusqueda >= SW_BUSCAR_CADA_MS) {
+            ultimaBusqueda = Date.now();
+            reg.update().catch(() => {});
+          }
         });
       })
       .catch(() => {});
@@ -162,7 +204,7 @@ function cargarFechasDeElla(datos) {
   fechasDeElla = (Array.isArray(datos) ? datos : []).map(Fechas.fechaValida).filter(Boolean).slice(0, Fechas.MAX_FECHAS);
 }
 const todasLasFechas = () => [...Fechas.fechasDeConfig(FECHAS), ...fechasDeElla];
-const bodaLlego = () => Fechas.bodaLlego(fechasDeElla);
+const bodaEsHoy = () => Fechas.bodaEsHoy(fechasDeElla); // v35: la carta de la boda, solo ese dia
 let cartasEntregadas = [];
 let cartaActual = null;
 const controller = new ControladorVistas();
@@ -364,7 +406,7 @@ function guardarPasosAnotados(p, n) {
 function talVezPedirDiario() {
   if (!mascota || !diario || controller.vista !== "cara" || mascota.dormida || !puedeComentar()) return;
   if (!esHoraDeEscribir() || diario.hoyEscrito()) return;
-  const clave = claveDelDia();
+  const clave = claveDelDiaLogico(); // v35: pasada la medianoche sigue siendo la noche de "hoy"
   try {
     if (localStorage.getItem(CLAVE_PEDIDO_DIARIO) === clave) return;
     localStorage.setItem(CLAVE_PEDIDO_DIARIO, clave);
@@ -372,6 +414,27 @@ function talVezPedirDiario() {
     return;
   }
   decir(`How was your day, ${mascota.nombre}? Tell me in the notebook ♥`, 6000);
+}
+
+// v35: una vez por semana, si hace mas de 7 dias que no guarda un backup
+// (o nunca, despues de la primera semana), Baozi se lo recuerda. Despacito:
+// solo de dia, en el cuarto, sin nada mas pasando.
+const CLAVE_AVISO_BACKUP = "baozi_aviso_backup";
+const SEMANA_MS = 7 * 86400000;
+function talVezAvisarBackup(ahora = Date.now()) {
+  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar() || finalOcupado()) return false;
+  const hora = new Date(ahora).getHours();
+  if (hora < 10 || hora >= 22) return false;
+  const desde = storage.ultimoBackup() || mascota.creadoEn || ahora;
+  if (ahora - desde < SEMANA_MS) return false;
+  try {
+    if (ahora - (Number(localStorage.getItem(CLAVE_AVISO_BACKUP)) || 0) < SEMANA_MS) return false;
+    localStorage.setItem(CLAVE_AVISO_BACKUP, String(ahora));
+  } catch (e) {
+    return false;
+  }
+  decir("Psst… let's save a backup of me? Notebook → Settings → Save backup ♥", 7000);
+  return true;
 }
 
 // Si ella juega con Mantou, todo lo que la interfaz dice de "Baozi" pasa a
@@ -412,6 +475,7 @@ function arrancar() {
     abrirLente: (opts) => abrirLenteEnPantalla(opts),
     volverACasa: () => conTransicion(irACasa),
     abrirDirector: () => conTransicion(abrirDirector),
+    abrirPin: (opts) => conTransicion(() => abrirPin(opts)), // v35: la salida escondida del final
     guardarTodo,
     estadoPieza,
   });
@@ -433,14 +497,17 @@ function arrancar() {
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
-    mascota.actualizarTiempo(Date.now());
+    // v35: la noche con la app cerrada se pasa durmiendo (petState.js, por tramos)
+    mascota.actualizarTiempo(Date.now(), { suenioAuto: !["pedido", "en_curso"].includes(Final.fase()) });
     mascota.revisarSuenioAutomatico(Date.now());
+    mascota.decaerRasgosPorDias(Date.now());
     cuidarParaElFinal();
     programarProximoParpadeo();
     if (Final.hayQueRetomar()) {
       // La app se cerro en medio del final: se vuelve al mismo paso, pero
       // DESPUES de leer las fotos (si no, el montaje quedaria vacio).
-      Promise.race([fotosListas, new Promise((r) => setTimeout(r, 2500))]).then(() => Final.iniciarSecuencia({}));
+      // v35: primero "Tap to continue ♥" (en ese toque: pantalla, audio y microfono)
+      Promise.race([fotosListas, new Promise((r) => setTimeout(r, 2500))]).then(() => Final.pantallaRetomar());
       return;
     }
     const laExtrano = horasSinVerla >= 18 && !mascota.dormida && !mascota.enferma && !Final.fotoPedida() && !finalOcupado();
@@ -500,6 +567,20 @@ function wireHuevo() {
 }
 
 function wireElegir() {
+  // v35: "Restore from backup" en la primera pantalla (el mismo camino que Settings)
+  const input = document.getElementById("input-restaurar-inicio");
+  const mensajeEl = document.getElementById("mensaje-restaurar-inicio");
+  if (input && mensajeEl) {
+    input.addEventListener("change", () => {
+      const archivo = input.files[0];
+      input.value = "";
+      if (!archivo) return;
+      restaurarDesdeArchivo(archivo, (texto, clase = "") => {
+        mensajeEl.textContent = texto;
+        mensajeEl.className = `mensaje-backup ${clase}`;
+      });
+    });
+  }
   for (const b of screenEl.querySelectorAll("[data-personaje]")) {
     b.addEventListener("click", () => {
       Personaje.elegir(b.dataset.personaje);
@@ -599,6 +680,10 @@ function prepararVista(nombre) {
 
 function irACasa() {
   if (lenteAbierto) cerrarLente();
+  // v35: volver al cuarto es salir del paseo: si se llego desde Walk por un
+  // encuentro, un lugar cerca o una carta, el GPS, el acelerometro y la
+  // pantalla encendida quedaban prendidos (bateria). Apagar dos veces no hace nada.
+  detenerSensoresCaminar();
   controller.irACara();
   renderVistaActual();
   // v24: si un deseo se cumplio afuera del cuarto, se festeja al volver
@@ -612,7 +697,8 @@ function irACasa() {
  */
 function musicaDeFondo() {
   const est = Musica.estacionActual();
-  const enCasa = controller.vista === "cara" && !finalOcupado() && Sonido.sonidoHabilitado();
+  // mientras duerme, la radio se apaga (y vuelve sola cuando se despierta)
+  const enCasa = controller.vista === "cara" && !finalOcupado() && Sonido.sonidoHabilitado() && !(mascota && mascota.dormida);
   const sonando = Musica.escenaSonando();
   const esRadio = Musica.esEstacion(sonando);
   if (enCasa && est && (!sonando || (esRadio && sonando !== est.id))) Musica.tocar(est.id);
@@ -621,6 +707,7 @@ function musicaDeFondo() {
 
 function renderVistaActual() {
   musicaDeFondo();
+  sonidoDelClima(); // la lluvia se corta al salir del cuarto (antes seguia hasta el proximo tick)
   actualizarTabbar();
   actualizarMarco();
   screenEl.classList.toggle("sin-margen", VISTAS_SIN_MARGEN.has(controller.vista));
@@ -630,7 +717,7 @@ function renderVistaActual() {
       abrirEscribir();
       break;
     case "elegir":
-      R.renderElegir(screenEl);
+      R.renderElegir(screenEl, { cargaFallida: storage.estadoDeCarga().fallida });
       wireElegir();
       break;
     case "huevo":
@@ -894,7 +981,9 @@ function tocarObjeto(id) {
       } else est = Musica.siguienteEstacion();
       Sonido.sonar("tocar");
       musicaDeFondo();
-      decir(est ? `♪ ${est.nombre} (${Musica.numeroDeEstacion(est)})` : "Radio off. Shh…", 3200);
+      // v35: dormido no suena (musicaDeFondo): que el globo no prometa musica
+      if (est && mascota && mascota.dormida) decir(`♪ ${est.nombre}… I'll play it when I wake up.`, 3200);
+      else decir(est ? `♪ ${est.nombre} (${Musica.numeroDeEstacion(est)})` : "Radio off. Shh…", 3200);
       if (est) eventoDeseo({ tipo: "radio", estacion: est.id });
       break;
     }
@@ -1084,7 +1173,7 @@ function wireDeseo() {
         diario.anotarHito("A wish came true ♥");
         guardarTodo();
       }
-      conTransicion(irACasa);
+      volver(); // v35: abierto desde Stats, vuelve a Stats (como Back y Later)
     });
   }
 }
@@ -1506,7 +1595,9 @@ async function revisarClima() {
 /** La lluvia se escucha solo en el cuarto, con el sonido prendido. */
 function sonidoDelClima() {
   const t = Clima.tipo();
-  const nivel = controller.vista === "cara" && mascota && Clima.llueve(t) ? { llovizna: 0.3, lluvia: 0.7, tormenta: 1 }[t] : 0;
+  let nivel = controller.vista === "cara" && mascota && Clima.llueve(t) ? { llovizna: 0.3, lluvia: 0.7, tormenta: 1 }[t] : 0;
+  // v35: en la cabaña la lluvia se ve como nieve: la nieve no suena (la ventisca, apenas, como viento)
+  if (tienda && tienda.cuarto === "cabana") nivel = t === "tormenta" ? 0.25 : 0;
   Clima.sonidoLluvia(nivel);
 }
 
@@ -1532,8 +1623,9 @@ function wireHeladera() {
   }
   for (const b of screenEl.querySelectorAll("[data-comida]")) {
     b.addEventListener("click", () => {
-      if ((b.dataset.item || "").endsWith("bebida_te.png")) eventoAmigos({ tipo: "comer", item: "te" });
-      manejarTapItem(b.dataset.comida, { item: b.dataset.item });
+      // v35: la mision del te solo cuenta si de verdad se lo tomo (dormida, no)
+      const ok = manejarTapItem(b.dataset.comida, { item: b.dataset.item });
+      if (ok && (b.dataset.item || "").endsWith("bebida_te.png")) eventoAmigos({ tipo: "comer", item: "te" });
     });
   }
 }
@@ -1634,8 +1726,9 @@ function abrirMapa(seleccion = null) {
   formLugar = null;
   vistaMapa = null; // el mapa real abre centrado en el lugar elegido
   // v31: el mapa real del corcho (si falta o quedo chico, se arma en segundo plano)
-  Corcho.asegurar(LUGARES).then(() => {
-    if (controller.vista === "mapa" && !formLugar) renderMapaActual();
+  // (v35: solo se redibuja si de verdad se armo uno nuevo: redibujar igual cortaba el pellizco)
+  Corcho.asegurar(LUGARES).then((nuevo) => {
+    if (nuevo && controller.vista === "mapa" && !formLugar) renderMapaActual();
   });
   actualizarEstadoUbicacion().then(() => {
     conTransicion(() => {
@@ -1868,9 +1961,25 @@ function sellarLugarNuevo(f) {
   const ok = document.getElementById("btn-lugar-ok");
   if (ok) ok.disabled = true;
   avisoLugar("Finding where we are…");
-  navigator.geolocation.getCurrentPosition(
+  // v35: un lugar se sella para siempre: con una lectura mala (adentro, ±500 m)
+  // quedaba en cualquier lado. Se pide ≤ 100 m; si no, se reintenta una vez
+  // sin cache, y si sigue mal se le explica (nada se sella).
+  const pedir = (intento) => navigator.geolocation.getCurrentPosition(
     (pos) => {
       if (formLugar !== f) return; // cerro el formulario mientras buscaba
+      const precision = pos.coords.accuracy;
+      if (Number.isFinite(precision) && precision > PRECISION_LUGAR_PROPIO_M) {
+        if (intento < 2) {
+          avisoLugar("Getting a better signal…");
+          pedir(intento + 1);
+          return;
+        }
+        f.buscando = false;
+        f.aviso = `The signal is weak here (±${Math.round(precision)} m). Try again outside or near a window?`;
+        f.error = true;
+        renderMapaActual();
+        return;
+      }
       try {
         localStorage.setItem(CLAVE_UBICACION, "1");
       } catch (e) {
@@ -1899,9 +2008,11 @@ function sellarLugarNuevo(f) {
       f.error = true;
       renderMapaActual();
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: intento === 1 ? 30000 : 0 },
   );
+  pedir(1);
 }
+const PRECISION_LUGAR_PROPIO_M = 100;
 
 function guardarLugarEditado(f) {
   lugaresDeElla = lugaresDeElla.map((l) => (l.id === f.id ? lugarDeEllaValido({ ...l, nombre: f.nombre, recuerdo: f.recuerdo, sello: f.sello }) || l : l));
@@ -2015,11 +2126,15 @@ function lanzarCorazon(caja) {
 // Modo director
 // ------------------------------------------------------------------
 
-function abrirPin() {
+// opts.alSalir (v35, la salida escondida del final): true si se encargo de volver
+function abrirPin(opts = {}) {
   prepararVista("director");
   Director.renderPin(screenEl, {
     alOk: () => conTransicion(abrirDirector),
-    alSalir: () => conTransicion(irACasa),
+    alSalir: () =>
+      conTransicion(() => {
+        if (!(opts.alSalir && opts.alSalir())) irACasa();
+      }),
   });
 }
 
@@ -2028,14 +2143,19 @@ function abrirDirector() {
   prepararVista("director");
   Director.renderDirector(screenEl, {
     sonidoHabilitado: Sonido.sonidoHabilitado,
-    cerrar: () => conTransicion(irACasa),
+    // v35: con el final a medias, salir del director vuelve al final (no a la casa)
+    cerrar: () =>
+      conTransicion(() => {
+        if (!Final.retomarDespuesDelDirector()) irACasa();
+      }),
     probarGPS: probarGPSDirector,
     ensayar: () => conTransicion(() => Final.abrirPedido({ ensayo: true })),
     pedirYa: () => {
       if (Final.fase() === "dormido") Final.armar();
       conTransicion(() => Final.abrirPedido());
     },
-    empezarYa: () => Final.empezar({}),
+    // v35: dentro del toque: pantalla, audio, permisos (con tope) y recien ahi empieza
+    empezarYa: () => Final.empezarYa(),
     mudanza: {
       estado: () => mudanza.estado,
       previa: () => {
@@ -2124,7 +2244,7 @@ function probarGPSDirector(el) {
     (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       const d = Final.distanciaAlLugar(latitude, longitude);
-      const dentro = d - Math.min(accuracy || 0, 300) <= FINAL.lugar.radioMetros;
+      const dentro = Final.dentroDelLugar(latitude, longitude, accuracy); // (la misma cuenta que el disparo)
       el.textContent = `${Math.round(d)} m from ${FINAL.lugar.nombre} (±${Math.round(accuracy)} m) — ${dentro ? "INSIDE ✓" : "outside"}`;
       el.className = `director-gps ${dentro ? "ok" : ""}`;
     },
@@ -2229,7 +2349,8 @@ function abrirLenteEnPantalla(opts = {}) {
     },
     alGuardar: (foto) => {
       lenteAbierto = null;
-      if (opts.modo !== "pedido" && foto && !opts.ensayo) fotoParaAmigos(foto);
+      // (v35: la foto con el anillo no da monedas ni suena el "+N")
+      if (opts.modo !== "pedido" && opts.tipoFoto !== "final" && foto && !opts.ensayo) fotoParaAmigos(foto);
       (opts.alGuardar || (() => conTransicion(irACasa)))(foto);
     },
   });
@@ -2348,6 +2469,7 @@ function manejarTapItem(itemId, opts = {}) {
   } else if (resultado.tipo === "ajuste") {
     Sonido.alternarSonido();
     if (!Sonido.sonidoHabilitado()) Musica.detener(0.1);
+    sonidoDelClima();
     renderMenuActual();
   } else if (resultado.tipo === "consulta") {
     Sonido.sonar("tocar");
@@ -2476,6 +2598,7 @@ function renderConsulta() {
     document.getElementById("btn-ajuste-sonido").addEventListener("click", () => {
       Sonido.alternarSonido();
       if (!Sonido.sonidoHabilitado()) Musica.detener(0.1);
+      sonidoDelClima(); // apagado: la lluvia se calla ya, no al proximo tick
       renderConsulta();
     });
   }
@@ -2567,20 +2690,36 @@ function wireTienda() {
   }
 }
 
+let urlVideoDiario = null;
 function wireDiario() {
   // v21: despues del si, el video del momento arriba del diario (se ve y se guarda)
   if (Final.dijoQueSi()) {
-    Grabacion.ultimoVideo()
-      .then((v) => {
+    // v35: el video del si por id (no "el ultimo": si la app se reabrio
+    // despues del si, el ultimo es un pedacito); los otros pedazos, aparte
+    Final.videosDelSi()
+      .then((vs) => {
+        const v = vs.find((x) => x.principal) || vs[0];
+        const otros = vs.filter((x) => x !== v);
         const tira = screenEl.querySelector(".tira-diario");
         if (!v || !tira || screenEl.querySelector(".tarjeta-video")) return;
-        const url = URL.createObjectURL(v.blob);
+        // v35: una sola URL viva: la de la vez anterior se suelta (si no, cada
+        // vez que se abria el diario quedaba un video entero en memoria)
+        if (urlVideoDiario) URL.revokeObjectURL(urlVideoDiario);
+        const url = (urlVideoDiario = URL.createObjectURL(v.blob));
         const t = document.createElement("div");
         t.className = "tarjeta-video";
         t.innerHTML = `<video src="${url}" controls playsinline preload="metadata"></video>
           <div class="tarjeta-video-texto"><b>Our video ♥</b><span>${fechaLegible(claveDelDia(new Date(v.empezo)))}</span>
           <button class="boton chico boton-galeria" type="button">Save to Photos</button></div>`;
         t.querySelector("button").addEventListener("click", () => Galeria.guardarVideoEnGaleria(v.blob, "nuestro-video"));
+        for (const o of otros) {
+          const b = document.createElement("button");
+          b.className = "boton chico boton-fantasma boton-galeria";
+          b.type = "button";
+          b.textContent = `Save clip ${o.parte}`;
+          b.addEventListener("click", () => Galeria.guardarVideoEnGaleria(o.blob, `nuestro-video-${o.parte}`));
+          t.querySelector(".tarjeta-video-texto").appendChild(b);
+        }
         tira.parentNode.insertBefore(t, tira);
       })
       .catch(() => {});
@@ -2623,6 +2762,11 @@ function wirePolaroid(fig) {
 
 /** Un mapa quedo listo: si el diario esta abierto, su polaroid se rehace. */
 function refrescarPolaroid(dia) {
+  // (v35: con el mapa grande de ese dia abierto, se redibuja el grande)
+  if (controller.vista === "mapadia" && mapaDiaAbierto === dia) {
+    renderMapaDiaActual();
+    return;
+  }
   if (controller.vista !== "consulta" || controller.consultaActual !== "diary") return;
   const vieja = screenEl.querySelector(`.polaroid[data-dia="${dia}"]`);
   const e = diario && diario.entradaDe(dia);
@@ -2648,6 +2792,9 @@ function abrirMapaDia(dia) {
     prepararVista("mapadia");
     renderVistaActual();
   });
+  // v35: si el mapa guardado quedo viejo (hubo puntos nuevos), se rehace y,
+  // si sigue abierto, se vuelve a dibujar (las horas salen de los pines de ahora)
+  MapaDia.hacerPendientes([dia], refrescarPolaroid);
 }
 
 function volverAlDiario() {
@@ -2750,9 +2897,10 @@ function abrirEscribir() {
   actualizarTabbar();
   actualizarMarco();
   screenEl.classList.add("sin-margen");
-  const guardada = diario.entrada(claveDelDia());
+  // v35: la pagina es la del dia logico (a la 1 de la mañana, la de ayer)
+  const guardada = diario.entrada(claveDelDiaLogico());
   const entrada = borradorHoy ? { ...(guardada || {}), ...borradorHoy } : guardada;
-  const fotos = Camara.fotosDelDia(claveDelDia());
+  const fotos = [...Camara.fotosDelDia(claveDelDiaLogico()), ...(claveDelDiaLogico() !== claveDelDia() ? Camara.fotosDelDia(claveDelDia()) : [])];
   R.renderEscribir(screenEl, { entrada, foto: fotos.length ? fotos[fotos.length - 1] : null });
   let animo = entrada && entrada.animo ? entrada.animo : null;
   const texto = document.getElementById("texto-hoy");
@@ -2847,6 +2995,7 @@ function wireBackup() {
       return;
     }
     const r = await Galeria.guardarBlob(blob, storage.nombreDelBackup());
+    if (r === "compartido" || r === "descargado") storage.marcarBackup(); // v35: para el aviso semanal
     if (r === "compartido" || r === "descargado") mensaje(r === "compartido" ? "Backup ready ♥ Keep it somewhere safe (Files, iCloud…)." : "Backup saved in your downloads ♥", "ok");
     else if (r === "error") mensaje("Couldn't save the backup. Try again?", "error");
   });
@@ -2883,16 +3032,44 @@ function wireBackup() {
   }
 
   const inputArchivo = document.getElementById("input-importar-backup");
-  inputArchivo.addEventListener("change", async () => {
+  inputArchivo.addEventListener("change", () => {
     const archivo = inputArchivo.files[0];
     inputArchivo.value = ""; // asi se puede elegir el mismo archivo otra vez
-    if (!archivo) return;
+    if (archivo) restaurarDesdeArchivo(archivo, mensaje);
+  });
+}
+
+/**
+ * v35: lo que dice cuando un backup no se puede restaurar, sin repetir "that
+ * file" ni mostrar errores crudos del navegador (sin lugar, etc.).
+ */
+function mensajeErrorBackup(e) {
+  const m = String((e && e.message) || "");
+  if ((e && (e.name === "QuotaExceededError" || e.code === 22)) || /quota|exceeded|space/i.test(m)) {
+    return "There isn't enough space on this phone to restore it. Free up some space and try again?";
+  }
+  if (m === "vacio") return "That backup looks empty or damaged. Try another file?";
+  // los de storage.js ya vienen en ingles y para ella ("that backup is from a newer Baozi.")
+  if (/^that (file|backup) /.test(m)) return m.charAt(0).toUpperCase() + m.slice(1);
+  return "Couldn't read that file. Is it a Baozi backup?";
+}
+
+/**
+ * Restaura un backup elegido por ella (desde Settings o, v35, desde la
+ * primera pantalla). mensaje(texto, clase) muestra como va.
+ */
+async function restaurarDesdeArchivo(archivo, mensaje) {
+  {
     mensaje("Reading the backup…");
     try {
       const datos = await storage.leerBackup(archivo);
       storage.restaurarBackup(datos);
       const guardado = storage.cargar();
-      if (!guardado) throw new Error("empty backup");
+      // (si lo restaurado no se pudo leer y cargar() volvio a la copia anterior, NO es el backup)
+      if (!guardado || guardado.recuperadoDe) {
+        if (mascota) guardarTodo(); // el principal vuelve a ser lo de antes
+        throw new Error("vacio");
+      }
       const nFotos = await Camara.importarFotos(datos.fotos);
       await Grabacion.importarVideos(datos.videos);
       // lo de la memoria pasa a ser lo del backup (si algo guarda antes de
@@ -2912,9 +3089,10 @@ function wireBackup() {
       // se recarga para que todo (records, el cuarto, el album) arranque del backup
       setTimeout(() => location.reload(), 1800);
     } catch (e) {
-      mensaje("Couldn't read that file: " + e.message, "error");
+      console.warn("No se pudo restaurar el backup:", e);
+      mensaje(mensajeErrorBackup(e), "error");
     }
-  });
+  }
 }
 
 // ------------------------------------------------------------------
@@ -3208,9 +3386,13 @@ function diasTrasElSi(ahora = new Date()) {
 function talVezCartaAtrasada() {
   if (!mascota || controller.vista !== "cara" || visita || !puedeComentar()) return false;
   if (performance.now() - abiertaDesdeMs < 10000) return false; // primero el saludo
-  if (huboCartaHoy()) return false;
+  // (el dia de la boda su carta llega aunque hoy ya haya llegado otra: no hay otro dia para ella)
+  const boda = bodaEsHoy() && !cartasEntregadas.includes("boda");
+  if (huboCartaHoy() && !boda) return false;
   const enamorado = NPCS.some((n) => (npcsReg.vecesEncontrado[n.id] || 0) >= VECES_PARA_ENAMORADO);
-  const carta = cartaAtrasada(cartasEntregadas, { sellados: lugaresReg.desbloqueados, enamorado, diasTrasElSi: diasTrasElSi(), boda: bodaLlego() });
+  const carta = boda
+    ? cartaAtrasada(cartasEntregadas, { boda: true })
+    : cartaAtrasada(cartasEntregadas, { sellados: lugaresReg.desbloqueados, enamorado, diasTrasElSi: diasTrasElSi(), boda: false });
   if (!carta) return false;
   entregarCarta(carta);
   return true;
@@ -3403,17 +3585,28 @@ function iniciarMinijuego() {
   actualizarTabbar();
   actualizarMarco();
   screenEl.classList.add("sin-margen");
-  const banner =
-    permisoMotionEstado === "unknown" ? `<button class="banner-sensor" id="btn-habilitar-motion">Tap to steer by tilting your phone</button>` : "";
+  // v35 (F31): el banner del permiso quedaba debajo del cartel de dificultad.
+  // Ahora el permiso se pide en el mismo toque que elige la dificultad (iOS
+  // lo olvida en cada arranque de la app: el toque lo vuelve a pedir).
   minijuego = iniciarJuego(screenEl, {
     arte,
     sprite: (ojo, boca) => R.spriteCara(ojo, boca),
     cambiarCara: (el, ojo, boca) => R.cambiarCara(el, ojo, boca),
     sonar: (n) => Sonido.sonar(n),
     vibrar,
-    bannerMotion: banner,
     alTerminar: terminarMinijuego,
     alSalir: volverALaTele,
+    alElegir: () => {
+      if (permisoMotionEstado !== "unknown") return null;
+      return Sensores.pedirPermisoMotion().then((r) => {
+        permisoMotionEstado = r;
+        if (r === "granted" && minijuego) activarVolante();
+      });
+    },
+    // F37: en el GO! (y al volver de una pausa) la postura de ahora es "derecho"
+    alEmpezar: () => {
+      if (volanteJuego) volanteJuego.recalibrar();
+    },
   });
   wireMinijuego();
   if (permisoMotionEstado === "granted") activarVolante();
@@ -3447,7 +3640,11 @@ function activarVolante() {
   detenerMotionMinijuego = Sensores.iniciarEscuchaMotion((x, y, z) => {
     if (!minijuego || !volanteJuego) return;
     const pos = volanteJuego.leer(x, y, z, anguloPantalla());
-    if (pos !== null) minijuego.inclinar(pos);
+    if (pos === null) return;
+    // F42: mientras manda el dedo, la base del volante sigue al personaje:
+    // al soltar, inclinar mueve desde ahi (no salta a donde dice el telefono)
+    if (minijuego.usandoDedo && minijuego.usandoDedo()) volanteJuego.centrarEn(minijuego.estado().objetivo);
+    else minijuego.inclinar(pos);
   });
 }
 
@@ -3546,7 +3743,10 @@ function terminarJuegoTele(cual, r) {
     sub = `${r.faroles} lantern${r.faroles === 1 ? "" : "s"} · best ${r.record} m`;
   }
   if (r.nuevoRecord && puntos > 0) monedas += tienda.ganar("record");
-  mascota.resultadoMinijuego(bien ? 5 : 0, Date.now());
+  // v35 (F38): cuantas cosas buenas hizo de verdad (0 si salio enseguida con la flechita):
+  // pisos de la torre, notas acertadas / 4, farolitos del bote
+  const logros = cual === "torre" ? r.pisos || 0 : cual === "ritmo" ? Math.floor(((r.perfectos || 0) + (r.buenos || 0)) / 4) : r.faroles || 0;
+  mascota.resultadoMinijuego(logros, Date.now());
   diario.anotarJuego(puntos);
   eventoDeseo({ tipo: cual, puntos });
   guardarTodo();
@@ -3622,13 +3822,13 @@ function actualizarFondoPorHora() {
 // Tick periodico
 // ------------------------------------------------------------------
 
-let proximoDecaimientoRasgosMs = Date.now() + 86400000;
-
 function tick() {
   if (!mascota) return;
   const ahora = Date.now();
 
-  mascota.actualizarTiempo(ahora);
+  // (los dias del pedido y de la secuencia no se duerme sola)
+  const sinSuenioAuto = ["pedido", "en_curso"].includes(Final.fase());
+  const { suenio: suenioEnElTiempo } = mascota.actualizarTiempo(ahora, { suenioAuto: !sinSuenioAuto });
   actualizarFondoPorHora();
   if (!document.hidden) marcarVista();
 
@@ -3642,8 +3842,8 @@ function tick() {
   intentarPedido();
 
   cuidarParaElFinal();
-  // (los dias del pedido y de la secuencia no se duerme sola)
-  const cambioSuenio = ["pedido", "en_curso"].includes(Final.fase()) ? null : mascota.revisarSuenioAutomatico(ahora);
+  // (v35: el cambio puede haber pasado adentro de actualizarTiempo, en el corte de la hora)
+  const cambioSuenio = (sinSuenioAuto ? null : mascota.revisarSuenioAutomatico(ahora)) || suenioEnElTiempo;
   if (cambioSuenio) {
     Sonido.sonar(cambioSuenio === "durmio" ? "dormir" : "despertar");
     guardarTodo();
@@ -3657,10 +3857,8 @@ function tick() {
     revisarEspecialPorEstado(ahora);
   }
 
-  if (ahora >= proximoDecaimientoRasgosMs) {
-    mascota.decaerRecienteDiario();
-    proximoDecaimientoRasgosMs = ahora + 86400000;
-  }
+  // v35: una vez por dia de calendario, guardado en la mascota (antes solo en memoria)
+  mascota.decaerRasgosPorDias(ahora);
 
   if (visita && ahora > visita.hastaMs) {
     visita = null;
@@ -3672,7 +3870,7 @@ function tick() {
   // v22: la pregunta de los pasos va antes que una visita al azar (la visita puede esperar)
   elegirDeseo();
   if (deseos.pendiente() && amigos.puesto) eventoDeseo({ tipo: "estado", puesto: amigos.puesto });
-  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezAvisarTienda() && !celebrarDeseo() && !talVezCartaAtrasada()) {
+  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezAvisarTienda() && !celebrarDeseo() && !talVezCartaAtrasada() && !talVezAvisarBackup(ahora)) {
     talVezVisita();
     talVezPedirDiario();
   }

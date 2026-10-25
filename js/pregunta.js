@@ -88,31 +88,67 @@ export function lanzarPregunta(contenedor, texto, { estilo = "polvora", alFormar
   contenedor.appendChild(lienzo);
   const g = lienzo.getContext("2d");
 
-  // la grilla: ~170 celdas de ancho (o menos en vertical), cada celda = un pixel grande
-  const r = contenedor.getBoundingClientRect();
-  const vw = Math.max(1, r.width);
-  const vh = Math.max(1, r.height);
-  const celda = Math.max(2, Math.round(Math.min(vw / 210, vh / 96)));
-  const W = Math.ceil(vw / celda);
-  const H = Math.ceil(vh / celda);
-  lienzo.width = W;
-  lienzo.height = H;
-  const objetivos = celdasDelTexto(texto, W, H);
   const pal = PALETAS[estilo] || PALETAS.polvora;
-  const LAGO = Math.round(H * 0.7); // donde empieza el agua (de ahi salen cohetes y farolitos)
-
+  const tonos = LETRA[estilo] || LETRA.polvora;
   const t0 = performance.now();
   let formado = false;
   let vivo = true;
   let adelanto = 0; // completar() adelanta el reloj
   const chispas = []; // particulas libres (estallidos, estelas, chispitas)
+  const FORMA = estilo === "polvora" ? 6200 + 3300 : estilo === "farolitos" ? 600 + 3600 + 1600 + 6300 : 1800 + 6200 + 900;
 
-  // cada celda de la letra es una particula con su camino
-  const tonos = LETRA[estilo] || LETRA.polvora;
-  const letras = objetivos.map((o, i) => ({ ...o, i, color: tonos[Math.floor(Math.random() * tonos.length)], vuelo: pal[i % pal.length], fase: Math.random() * 6.28 }));
+  // v35: la grilla se mide de nuevo si el lienzo cambia de tamaño (el
+  // telefono rotado, o medido antes de tener tamaño): antes se media una
+  // sola vez y la pregunta quedaba estirada o cortada.
+  let W = 1;
+  let H = 1;
+  let LAGO = 1; // donde empieza el agua (de ahi salen cohetes y farolitos)
+  let letras = [];
+  let cohetes = [];
+  let medido = { w: 0, h: 0 };
+  let respaldo = null; // la pregunta en texto comun, si el pixelado no salio
 
-  // --- preparar cada estilo ---
-  const cohetes = [];
+  function armar() {
+    // la grilla: ~170 celdas de ancho (o menos en vertical), cada celda = un pixel grande
+    const r = contenedor.getBoundingClientRect();
+    const vw = Math.max(1, r.width);
+    const vh = Math.max(1, r.height);
+    medido = { w: Math.round(r.width), h: Math.round(r.height) };
+    const celda = Math.max(2, Math.round(Math.min(vw / 210, vh / 96)));
+    W = Math.ceil(vw / celda);
+    H = Math.ceil(vh / celda);
+    lienzo.width = W;
+    lienzo.height = H;
+    LAGO = Math.round(H * 0.7);
+    const objetivos = celdasDelTexto(texto, W, H);
+    // cada celda de la letra es una particula con su camino
+    letras = objetivos.map((o, i) => ({ ...o, i, color: tonos[Math.floor(Math.random() * tonos.length)], vuelo: pal[i % pal.length], fase: Math.random() * 6.28 }));
+    cohetes = [];
+    prepararEstilo();
+    // los cohetes que ya pasaron no vuelven a estallar
+    const t = performance.now() - t0 + adelanto;
+    for (const c of cohetes) if (t > c.t + c.dur) c.hecho = true;
+    // v35: si casi no salieron celdas (sin fuente, sin tamaño), la pregunta
+    // igual se lee: en texto comun encima del cielo
+    const pocas = letras.length < Math.max(40, texto.replace(/\s/g, "").length * 6);
+    ponerRespaldo(pocas);
+  }
+
+  function ponerRespaldo(si) {
+    if (si && !respaldo) {
+      respaldo = document.createElement("div");
+      respaldo.className = "pregunta-respaldo";
+      respaldo.textContent = texto;
+      respaldo.style.cssText =
+        "position:absolute;left:4%;right:4%;top:14%;text-align:center;color:#ffd76a;font-size:clamp(22px,6vw,44px);font-weight:700;line-height:1.25;text-shadow:2px 2px 0 rgba(8,6,20,.7);pointer-events:none;z-index:2";
+      contenedor.appendChild(respaldo);
+    } else if (!si && respaldo) {
+      respaldo.remove();
+      respaldo = null;
+    }
+  }
+
+  function prepararEstilo() {
   if (estilo === "polvora") {
     const cx = W / 2;
     const cy = Math.round(H * 0.3);
@@ -147,7 +183,22 @@ export function lanzarPregunta(contenedor, texto, { estilo = "polvora", alFormar
       l.dur = 500;
     });
   }
-  const FORMA = estilo === "polvora" ? 6200 + 3300 : estilo === "farolitos" ? 600 + 3600 + 1600 + 6300 : 1800 + 6200 + 900;
+  }
+
+  armar();
+  let observador = null;
+  try {
+    if (window.ResizeObserver) {
+      observador = new ResizeObserver(() => {
+        if (!vivo) return;
+        const r = contenedor.getBoundingClientRect();
+        if (Math.abs(Math.round(r.width) - medido.w) > 2 || Math.abs(Math.round(r.height) - medido.h) > 2) armar();
+      });
+      observador.observe(contenedor);
+    }
+  } catch (e) {
+    observador = null;
+  }
 
   function estallido(x, y, col, n = 46) {
     for (let k = 0; k < n; k++) {
@@ -273,7 +324,8 @@ export function lanzarPregunta(contenedor, texto, { estilo = "polvora", alFormar
       estallido(W * lado, H * azar(0.1, 0.32), pal[Math.floor(Math.random() * pal.length)], 30);
     }
 
-    if (!formado && listas === letras.length && t > 1000) {
+    // (con el texto de respaldo, se espera lo mismo que tardaria en formarse)
+    if (!formado && t > 1000 && (respaldo ? t >= FORMA : listas === letras.length)) {
       formado = true;
       alFormar();
     }
@@ -289,7 +341,9 @@ export function lanzarPregunta(contenedor, texto, { estilo = "polvora", alFormar
     },
     destruir() {
       vivo = false;
+      if (observador) observador.disconnect();
       lienzo.remove();
+      ponerRespaldo(false);
     },
     duracion: FORMA,
   };

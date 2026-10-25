@@ -588,9 +588,23 @@ export function abrirLente(contenedor, opts = {}) {
     });
     $("revelado-guardar").addEventListener("click", guardarRevelado);
     // v21: tambien a la galeria del telefono (no cierra: despues puede Keep)
-    $("revelado-galeria").addEventListener("click", () => {
+    // v35 (F39): un solo guardado a la vez, y un aviso cortito con lo que paso
+    let guardandoEnGaleria = false;
+    $("revelado-galeria").addEventListener("click", async () => {
+      const b = $("revelado-galeria");
+      if (guardandoEnGaleria || !b) return;
+      guardandoEnGaleria = true;
       Sonido.sonar("tocar");
-      guardarFotoEnGaleria($("revelado-lienzo"), lugar ? `baozi-${lugar}` : "baozi");
+      const r = await guardarFotoEnGaleria($("revelado-lienzo"), lugar ? `baozi-${lugar}` : "baozi");
+      guardandoEnGaleria = false;
+      const aviso = { compartido: "Saved ♥", descargado: "Downloaded ♥", error: "Couldn't save" }[r];
+      if (!aviso || !b.isConnected) return;
+      if (r !== "error") Sonido.sonar("guardado");
+      b.textContent = aviso;
+      clearTimeout(b._aviso);
+      b._aviso = setTimeout(() => {
+        b.textContent = "Save to Photos";
+      }, 1800);
     });
   }
   document.addEventListener("visibilitychange", alCambiarVisibilidad);

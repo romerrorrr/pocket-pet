@@ -19,8 +19,8 @@
  * diferencia (la mediana, sin los toques sueltos) queda como el ajuste
  * del juego. Es de este telefono: no viaja en el backup.
  */
-import { sonidoHabilitado } from "./sonido.js";
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, guardarDificultadDe, NOMBRES_DIFICULTAD, lienzoPixel, imagen, lista, flotante, multiplicador, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
+import { sonidoHabilitado, modoDeAudio } from "./sonido.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, guardarDificultadDe, NOMBRES_DIFICULTAD, lienzoPixel, imagen, lista, flotante, multiplicador, HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_ritmo"; // + "_<cancion>" (+ "_<dif>")
 const CLAVE_CANCION = "baozi_ritmo_cancion";
@@ -30,11 +30,22 @@ const ANCHO_CARRIL = 38;
 const SEPARACION = 41;
 const ADELANTO = 2.2; // segundos hasta la primera nota de la cancion
 
+// v35 (F34): antes NORMAL y HARD tenian las mismas notas (la corchea mas
+// corta, 0,278 s, pasaba los dos filtros). Ahora: EASY ~0,4-0,8 notas por
+// segundo (en el pulso, una cada ~1 s), NORMAL ~0,7-1,4 (la melodia, sin
+// las corcheas muy rapidas), HARD ~1,1-2,4 (toda la melodia y, en sus
+// huecos, el bajo y el arpegio: `relleno` = lo minimo entre dos notas).
 export const DIFICULTADES_RITMO = {
-  easy: { separacion: 0.55, caida: 2.2, perfecto: 0.09, bien: 0.17, enTiempo: true },
-  normal: { separacion: 0.27, caida: 1.7, perfecto: 0.07, bien: 0.14 },
-  hard: { separacion: 0.18, caida: 1.25, perfecto: 0.055, bien: 0.11 },
+  easy: { separacion: 0.95, caida: 2.2, perfecto: 0.09, bien: 0.17, enTiempo: true },
+  normal: { separacion: 0.4, caida: 1.7, perfecto: 0.07, bien: 0.14 },
+  hard: { separacion: 0.2, relleno: 0.36, caida: 1.25, perfecto: 0.055, bien: 0.11 },
 };
+
+/** Las notas de una cancion (lo que devuelve melodiaDe) para una dificultad. */
+export function notasDeDificultad(m, D) {
+  const relleno = D.relleno && m.acompanamiento ? { notas: m.acompanamiento, gap: D.relleno } : null;
+  return notasDelJuego(m.melodia, m.paso, D.separacion, !!D.enTiempo, relleno);
+}
 
 const COMIDAS = ["comida/comida_dumpling.png", "comida/comida_bao.png", "comida/comida_onigiri.png"];
 const COLORES = ["rgb(232,142,160)", "rgb(244,238,226)", "rgb(246,200,92)"];
@@ -100,19 +111,45 @@ export const leerRecordRitmo = (cancion = null, dif = null) => {
 /**
  * Las notas que se juegan: una por nota de la melodia, salteando las que
  * quedan mas cerca que `separacion` de la anterior. Carril por altura.
+ *
+ * v35 (F34): `relleno` = { notas, gap } (HARD): en los huecos de la
+ * melodia (notas largas, silencios) entran notas del bajo y del arpegio,
+ * con al menos `gap` segundos de cualquier otra. Nunca dos a la vez.
  */
-export function notasDelJuego(melodia, paso, separacion, enTiempo = false) {
-  const frecs = [...new Set(melodia.map((n) => n.frec))].sort((a, b) => a - b);
-  const carril = (f) => Math.min(2, Math.floor((frecs.indexOf(f) / Math.max(1, frecs.length)) * 3));
-  const notas = [];
+export function notasDelJuego(melodia, paso, separacion, enTiempo = false, relleno = null) {
+  const porAltura = (lista) => {
+    const frecs = [...new Set(lista.map((n) => n.frec))].sort((a, b) => a - b);
+    return (f) => Math.min(2, Math.floor((frecs.indexOf(f) / Math.max(1, frecs.length)) * 3));
+  };
+  const carril = porAltura(melodia);
+  let elegidas = [];
   let ultima = -Infinity;
-  let ultimoCarril = -1;
-  let repetidas = 0;
   for (const n of melodia) {
     const t = n.inicio * paso;
     if (t - ultima < separacion - 1e-6) continue;
     if (enTiempo && n.inicio % 2 !== 0) continue; // EASY: solo las que caen en el pulso
-    let c = carril(n.frec);
+    elegidas.push({ t, c: carril(n.frec) });
+    ultima = t;
+  }
+  if (relleno && relleno.notas && relleno.notas.length) {
+    const carrilR = porAltura(relleno.notas);
+    const extra = [];
+    let j = 0; // la primera de la melodia que no paso todavia
+    for (const n of relleno.notas) {
+      const t = n.inicio * paso;
+      while (j < elegidas.length && elegidas[j].t < t) j++;
+      const antes = Math.max(j > 0 ? elegidas[j - 1].t : -Infinity, extra.length ? extra[extra.length - 1].t : -Infinity);
+      const despues = j < elegidas.length ? elegidas[j].t : Infinity;
+      if (t - antes < relleno.gap - 1e-6 || despues - t < relleno.gap - 1e-6) continue;
+      extra.push({ t, c: carrilR(n.frec) });
+    }
+    elegidas = [...elegidas, ...extra].sort((a, b) => a.t - b.t);
+  }
+  const notas = [];
+  let ultimoCarril = -1;
+  let repetidas = 0;
+  for (const { t, c: c0 } of elegidas) {
+    let c = c0;
     // no mas de 4 seguidas en el mismo carril (se aburre el dedo)
     repetidas = c === ultimoCarril ? repetidas + 1 : 0;
     if (repetidas >= 4) {
@@ -120,7 +157,6 @@ export function notasDelJuego(melodia, paso, separacion, enTiempo = false) {
       repetidas = 0;
     }
     notas.push({ t, carril: c });
-    ultima = t;
     ultimoCarril = c;
   }
   return notas;
@@ -249,6 +285,7 @@ export function iniciarRitmo(contenedor, opts) {
         e.stopPropagation();
         cerrar();
       });
+      sesionDeJuego();
       st.metro = musica.metronomo({ bpm: BPM_AJUSTE, golpes: GOLPES_AJUSTE });
       if (!st.metro) {
         cerrar();
@@ -347,7 +384,47 @@ export function iniciarRitmo(contenedor, opts) {
     timerAjuste: 0,
     timerAjuste2: 0,
     teclaAjuste: null,
+    retomando: false, // esperando que el audio vuelva despues de la pausa
+    relojVisto: null, // F35: el ultimo valor del reloj y cuando cambio
+    relojVistoEn: 0,
   };
+
+  // F32: con la sesion "ambient" el switch de silencio del iPhone calla la
+  // cancion. Mientras suena el juego (o el metronomo del Sync) va en
+  // "playback", como el final; al salir vuelve a "ambient".
+  let enPlayback = false;
+  function sesionDeJuego() {
+    if (enPlayback || !sonidoHabilitado()) return;
+    enPlayback = true;
+    modoDeAudio("playback");
+  }
+  function soltarSesion() {
+    if (!enPlayback) return;
+    enPlayback = false;
+    modoDeAudio("ambient");
+  }
+
+  // F33/F35: la pausa (segundo plano, telefono bloqueado, vertical, o el
+  // audio que se quedo frenado). La cancion se calla y retoma en la misma nota.
+  const pausa = crearPausa(area, {
+    activa: () => st.vivo && st.estado === "jugando",
+    alPausar: () => {
+      if (st.juego) st.juego.pausar();
+    },
+    alSeguir: () => {
+      if (!st.juego) return;
+      st.retomando = true;
+      st.juego
+        .seguir()
+        .catch(() => false)
+        .then(() => {
+          st.retomando = false;
+          st.relojVisto = null;
+          st.relojVistoEn = performance.now();
+        });
+    },
+  });
+  const quieto = () => pausa.pausado() || st.retomando;
 
   function soltarAjuste() {
     if (st.metro) st.metro.detener();
@@ -361,12 +438,14 @@ export function iniciarRitmo(contenedor, opts) {
     D = DIFICULTADES_RITMO[dif];
     const cartel = $("ritmo-cartel");
     if (cartel) cartel.remove();
+    sesionDeJuego();
     st.juego = musica.tocarParaJuego(cancion, { adelanto: ADELANTO });
     if (!st.juego) {
       terminar();
       return;
     }
-    st.notas = notasDelJuego(st.juego.melodia, st.juego.paso, D.separacion, !!D.enTiempo).map((n) => ({ ...n, t: n.t + st.juego.t0, hecha: null }));
+    st.notas = notasDeDificultad(st.juego, D).map((n) => ({ ...n, t: n.t + st.juego.t0, hecha: null }));
+    st.relojVistoEn = performance.now();
     st.fin = st.juego.t0 + st.juego.duracion + 0.8;
     st.estado = "jugando";
     $("ritmo-record").textContent = `♪ ${nombreDe(cancion).toUpperCase()} · BEST ${leerRecordRitmo(cancion, dif)}`;
@@ -396,7 +475,7 @@ export function iniciarRitmo(contenedor, opts) {
   }
 
   function tocar(carril) {
-    if (st.estado !== "jugando") return;
+    if (st.estado !== "jugando" || quieto()) return;
     const t = ahora();
     let mejor = null;
     for (const n of st.notas) {
@@ -470,7 +549,18 @@ export function iniciarRitmo(contenedor, opts) {
       const el = contenedor.querySelector("#ritmo-personaje .sprite-cara");
       if (el) cambiarCara(el, "ojo_base_energia_alta.png", "boca_base_feliz.png");
     }
-    if (st.estado === "jugando") {
+    // F35: si el reloj del audio no avanza (el AudioContext quedo suspendido),
+    // en vez de quedar congelado sin aviso: pausa, y el toque que lo reanima
+    // no cuenta como jugada
+    if (st.estado === "jugando" && !quieto() && !document.hidden) {
+      const crudo = st.juego.reloj();
+      const ya = performance.now();
+      if (crudo !== st.relojVisto) {
+        st.relojVisto = crudo;
+        st.relojVistoEn = ya;
+      } else if (ya - st.relojVistoEn > 500) pausa.pausar();
+    }
+    if (st.estado === "jugando" && !quieto()) {
       for (const n of st.notas) {
         if (n.hecha) continue;
         if (t - n.t > D.bien) {
@@ -545,9 +635,11 @@ export function iniciarRitmo(contenedor, opts) {
     st.vivo = false;
     st.estado = "fin";
     soltarAjuste();
+    pausa.destruir();
     window.removeEventListener("keydown", teclas);
     window.removeEventListener("resize", L.medir);
     if (st.juego) st.juego.detener();
+    soltarSesion();
     const record = leerRecordRitmo(cancion, dif);
     const nuevoRecord = st.puntos > record;
     if (nuevoRecord) guardarRecordDe(claveRecordRitmo(cancion), dif, st.puntos);
@@ -571,12 +663,15 @@ export function iniciarRitmo(contenedor, opts) {
     destruir: () => {
       st.vivo = false;
       soltarAjuste();
+      pausa.destruir();
       window.removeEventListener("keydown", teclas);
       window.removeEventListener("resize", L.medir);
       if (st.juego) st.juego.detener();
+      soltarSesion();
     },
     // para las pruebas
     _tocar: (carril) => tocar(carril),
+    _pausado: () => pausa.pausado() || st.retomando,
     _metro: () => (st.metro ? { tiempos: st.metro.tiempos, ahora: st.metro.reloj() } : null),
     _estado: () => ({ desfase: st.juego ? desfase() : null, estado: st.estado, puntos: st.puntos, combo: st.combo, perfectos: st.perfectos, buenos: st.buenos, fallados: st.fallados, total: st.notas.length, ahora: ahora(), proximas: st.notas.filter((n) => !n.hecha).slice(0, 3).map((n) => ({ t: n.t, carril: n.carril })) }),
   };

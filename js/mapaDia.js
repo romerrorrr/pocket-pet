@@ -338,10 +338,56 @@ export async function hacerMapa(dia, { pines, orden } = Donde.pinesDe(dia), { si
     if (raster) pintarRotulos(ctx, rotulosDelEncuadre(raster, enc), enc.w, enc.h);
     else pergamino(ctx, enc.w, enc.h, pos, semillaDe(dia));
     dibujarEncima(ctx, pos, orden, nombre === "mini");
+    if (raster) atribucion(ctx, enc.w, enc.h);
     salida[nombre] = lienzo.toDataURL("image/png");
     if (nombre === "grande") posGrande = pos;
   }
-  return { dia, firma: Donde.firma(dia), real: !!raster, mini: salida.mini, grande: salida.grande, pos: posGrande, t: Date.now() };
+  return { dia, firma: Donde.firma(dia), real: !!raster, osm: !!raster, mini: salida.mini, grande: salida.grande, pos: posGrande, t: Date.now() };
+}
+
+/**
+ * v35: el mapa real lleva "© OpenStreetMap" adentro (lo pide la licencia de
+ * los datos), chiquito en la esquina: asi va tambien en la polaroid, en la
+ * vista grande y en la imagen que se guarda.
+ */
+export function atribucion(ctx, w, h) {
+  const texto = "© OpenStreetMap";
+  ctx.save();
+  ctx.font = `${w >= 200 ? 7 : 6}px sans-serif`;
+  ctx.textBaseline = "bottom";
+  const ancho = Math.ceil(ctx.measureText(texto).width) + 4;
+  const alto = w >= 200 ? 9 : 8;
+  ctx.fillStyle = "rgba(255,251,240,0.8)";
+  ctx.fillRect(w - ancho, h - alto, ancho, alto);
+  ctx.fillStyle = "rgb(70,60,62)";
+  ctx.fillText(texto, w - ancho + 2, h);
+  ctx.restore();
+}
+
+/** v35: a un mapa real guardado antes de la atribucion se la agrega encima (sin bajar nada). */
+async function conAtribucion(m) {
+  const sellar = (dataUrl, w, h) =>
+    new Promise((ok) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const lienzo = document.createElement("canvas");
+          lienzo.width = w;
+          lienzo.height = h;
+          const ctx = lienzo.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          atribucion(ctx, w, h);
+          ok(lienzo.toDataURL("image/png"));
+        } catch (e) {
+          ok(dataUrl);
+        }
+      };
+      img.onerror = () => ok(dataUrl);
+      img.src = dataUrl;
+    });
+  const mini = await sellar(m.mini, MINI.w, MINI.h);
+  const grande = m.grande ? await sellar(m.grande, GRANDE.w, GRANDE.h) : m.grande;
+  return { ...m, mini, grande, osm: true };
 }
 
 // ------------------------------------------------------------------
@@ -372,15 +418,41 @@ function abrirDB() {
   return dbPromesa;
 }
 
+// v35: los mapas viejos se borran (antes se juntaban para siempre y se
+// cargaban TODOS a memoria al abrir). Un mapa se rehace solo con los puntos
+// del dia (dondeEstuvimos.js los guarda mas tiempo), si alguna vez hace falta.
+export const DIAS_DE_MAPAS = 120;
+
+/** "AAAA-MM-DD" de hace `dias` dias (el limite de lo que se conserva). */
+export function diaLimite(dias = DIAS_DE_MAPAS, ahora = new Date()) {
+  return Donde.claveDelDia(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - dias));
+}
+
 export async function precargarMapas() {
   const db = await abrirDB();
   if (!db) return;
+  const limite = diaLimite();
+  try {
+    // los de antes del limite se borran (las claves "AAAA-MM-DD" se ordenan como fechas)
+    db.transaction(TIENDA, "readwrite").objectStore(TIENDA).delete(IDBKeyRange.upperBound(limite, true));
+  } catch (e) {
+    /* nada: es limpieza */
+  }
   await new Promise((resolve) => {
     try {
-      const p = db.transaction(TIENDA, "readonly").objectStore(TIENDA).getAll();
+      // y a memoria solo los de los ultimos DIAS_DE_MAPAS dias
+      const p = db.transaction(TIENDA, "readonly").objectStore(TIENDA).getAll(IDBKeyRange.lowerBound(limite));
       p.onsuccess = () => {
         for (const m of p.result || []) if (m && m.dia && m.mini) porDia.set(m.dia, m);
         resolve();
+        // (despues, de a uno: los reales de antes de v35 no tenian la atribucion)
+        (async () => {
+          for (const m of [...porDia.values()]) {
+            if (!m.real || m.osm) continue;
+            const nuevo = await conAtribucion(m);
+            if (porDia.get(m.dia) === m) await guardarMapa(nuevo);
+          }
+        })().catch(() => {});
       };
       p.onerror = () => resolve();
     } catch (e) {

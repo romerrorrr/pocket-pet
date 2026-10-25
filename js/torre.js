@@ -12,7 +12,7 @@
  * Record por dificultad (EASY / NORMAL / HARD: lo rapido que va y cuanto
  * perdona el PERFECT).
  */
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante, HTML_VOLVER, cablearVolver } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante, HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_torre";
 const ALTO = 195; // pixeles de arte de alto (en un telefono, ~2 px de pantalla cada uno)
@@ -127,6 +127,8 @@ export function iniciarTorre(contenedor, opts) {
     vivo: true,
   };
   const cx = () => L.W / 2;
+  // F33: segundo plano / vertical -> la vaporera se queda quieta hasta que toque
+  const pausa = crearPausa(area, { activa: () => st.vivo && (st.estado === "moviendo" || st.estado === "cayendo") });
 
   function cara(ojo, boca, ms = 600) {
     const el = contenedor.querySelector("#torre-personaje .sprite-cara");
@@ -167,7 +169,7 @@ export function iniciarTorre(contenedor, opts) {
   });
 
   function soltar() {
-    if (st.estado !== "moviendo") return;
+    if (st.estado !== "moviendo" || pausa.pausado()) return;
     const m = st.mov;
     const abajo = st.pisos[st.pisos.length - 1];
     const izq = Math.max(m.x, abajo.x);
@@ -243,6 +245,10 @@ export function iniciarTorre(contenedor, opts) {
   function cuadro(t) {
     if (!st.vivo) return;
     requestAnimationFrame(cuadro);
+    if (pausa.pausado()) {
+      ultimo = 0;
+      return;
+    }
     const dt = Math.min(50, t - (ultimo || t)) / 1000;
     ultimo = t;
     if (st.caraHasta && t > st.caraHasta) {
@@ -307,6 +313,7 @@ export function iniciarTorre(contenedor, opts) {
   function terminar() {
     if (!st.vivo) return;
     st.vivo = false;
+    pausa.destruir();
     window.removeEventListener("keydown", teclas);
     window.removeEventListener("resize", L.medir);
     const record = leerRecordTorre(dif);
@@ -320,6 +327,7 @@ export function iniciarTorre(contenedor, opts) {
     terminar,
     destruir: () => {
       st.vivo = false;
+      pausa.destruir();
       window.removeEventListener("keydown", teclas);
       window.removeEventListener("resize", L.medir);
     },

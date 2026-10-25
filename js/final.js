@@ -37,7 +37,7 @@ import { FINAL } from "./config.js";
 import { arte } from "./arte.js";
 import { escribir, conNombre } from "./dialogo.js";
 import { todasLasFotos, cantidadDeFotos } from "./camara.js";
-import { LUGARES, NPCS, distanciaMetros } from "./mundo.js";
+import { LUGARES, NPCS, distanciaMetros, wgsAGcj } from "./mundo.js";
 import { claveDelDia, fechaLegible } from "./diario.js";
 import * as Musica from "./musica.js";
 import * as Sonido from "./sonido.js";
@@ -56,7 +56,11 @@ import { lanzarPregunta } from "./pregunta.js";
 const CLAVE = "mochi_final";
 
 // fase: "dormido" | "armado" | "pedido" | "en_curso" | "si"
-const ESTADO_INICIAL = { fase: "dormido", paso: 0, terminado: false, pedidoEn: null, empezoEn: null, siEn: null, armadoAutoHecho: false };
+// v35: videos = ids de TODAS las grabaciones de la secuencia de verdad (en
+// orden; si una llamada corta la camara o la app se reabre, hay varias);
+// videoDelSi = la que estaba grabando cuando ella toco el corazon (la
+// principal). Los videos se buscan por id: nunca "el ultimo".
+const ESTADO_INICIAL = { fase: "dormido", paso: 0, terminado: false, pedidoEn: null, empezoEn: null, siEn: null, armadoAutoHecho: false, videos: [], videoDelSi: null };
 let estado = { ...ESTADO_INICIAL };
 let ctx = null;
 let sesion = null;
@@ -127,7 +131,12 @@ export function desarmar() {
 }
 
 export function reiniciarTodo() {
-  estado = { ...ESTADO_INICIAL, armadoAutoHecho: estado.armadoAutoHecho };
+  // v35: si ya habia un si, los ids de ese video no se pierden (por las
+  // dudas: el video del si nunca puede quedar inalcanzable)
+  const conservar = estado.fase === "si" ? { videos: estado.videos || [], videoDelSi: estado.videoDelSi || null } : {};
+  if (sesion && !sesion.ensayo) cortarSesion();
+  Grabacion.detener();
+  estado = { ...ESTADO_INICIAL, videos: [], armadoAutoHecho: estado.armadoAutoHecho, ...conservar };
   guardarEstado();
 }
 
@@ -148,17 +157,44 @@ export function tocaPedirSinGPS(ahora = Date.now()) {
   return !Number.isNaN(t) && ahora >= t;
 }
 
-/** Distancia en metros al lugar del final (para el GPS y el modo director). */
+/**
+ * Distancia en metros al lugar del final (para el GPS y el modo director).
+ * v35: tolera el "corrimiento chino" (GCJ-02) en los dos sentidos, como
+ * mundo.js: el telefono puede dar la posicion corrida, o las coordenadas de
+ * config.js pueden venir de un mapa chino. Vale la menor.
+ */
 export function distanciaAlLugar(lat, lon) {
-  return distanciaMetros(lat, lon, FINAL.lugar.lat, FINAL.lugar.lon);
+  const { lat: llat, lon: llon } = FINAL.lugar;
+  const d = [distanciaMetros(lat, lon, llat, llon)];
+  try {
+    const [glat, glon] = wgsAGcj(llat, llon); // el lugar corrido (posicion en GCJ)
+    d.push(distanciaMetros(lat, lon, glat, glon));
+    const [plat, plon] = wgsAGcj(lat, lon); // la posicion corrida (lugar en GCJ)
+    d.push(distanciaMetros(plat, plon, llat, llon));
+  } catch (e) {
+    /* con la de siempre alcanza */
+  }
+  return Math.min(...d.filter(Number.isFinite));
 }
 
-/** Llamar con cada posicion GPS. true si justo ahora corresponde pedir la foto. */
+// v35: cuanto de la imprecision del GPS cuenta a favor. Antes eran 300 m
+// (con el radio de 1.8 km, cualquier punto de la costa del lago); ahora
+// como mucho 100 m.
+export const HOLGURA_GPS_MAX = 100;
+
+/** ¿Esa posicion (con su precision en metros) cuenta como "en el lugar"? */
+export function dentroDelLugar(lat, lon, precision = 0) {
+  return distanciaAlLugar(lat, lon) - Math.min(Math.max(0, precision || 0), HOLGURA_GPS_MAX) <= FINAL.lugar.radioMetros;
+}
+
+/**
+ * Llamar con cada posicion GPS. true si justo ahora corresponde pedir la foto.
+ * Solo con la busqueda ARMADA: sin armar, el GPS nunca dispara nada (rom
+ * la arranca a mano desde el director).
+ */
 export function posicionRecibida(lat, lon, precision = 0) {
   if (estado.fase !== "armado") return false;
-  // La precision cuenta a favor: arriba del agua el GPS suele ser malo,
-  // y el lago es grande — mejor pedir la foto un poco antes que nunca.
-  return distanciaAlLugar(lat, lon) - Math.min(precision || 0, 300) <= FINAL.lugar.radioMetros;
+  return dentroDelLugar(lat, lon, precision);
 }
 
 export function marcarPedido() {
@@ -184,6 +220,139 @@ export function hayQueRetomar() {
 export function iniciar(contexto) {
   ctx = contexto;
   cargarEstado();
+  if (!iniciado) {
+    iniciado = true;
+    // v35: al volver a primer plano (despues de una llamada, por ejemplo),
+    // si la grabacion se corto, se vuelve a grabar
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") setTimeout(vigilarGrabacion, 600);
+    });
+    engancharSalidaEscondida();
+  }
+}
+let iniciado = false;
+
+// ------------------------------------------------------------------
+// v35: la salida escondida. Una vez pedida la foto o empezada la
+// secuencia no habia forma de llegar al director. Ahora: mantener
+// apretada la esquina de arriba a la derecha 3 segundos -> el PIN.
+// (Ella nunca lo va a hacer por accidente: es un rincon vacio y hay
+// que quedarse quieto 3 s.)
+// ------------------------------------------------------------------
+
+const MS_SALIDA = 3000;
+const ESQUINA_PX = 76;
+
+function salidaDisponible() {
+  if (!ctx) return false;
+  if (ctx.pantalla.querySelector(".lente")) return false; // (con la camara abierta, no: quedaria prendida)
+  if (sesion) return !sesion.repeticion; // la secuencia (de verdad o ensayo)
+  return !!ctx.pantalla.querySelector("#escena-pedido, #final-retomar"); // el pedido de la foto
+}
+
+function engancharSalidaEscondida() {
+  let timer = 0;
+  let inicio = null;
+  const cancelar = () => {
+    clearTimeout(timer);
+    timer = 0;
+    inicio = null;
+  };
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      cancelar();
+      if (!salidaDisponible()) return;
+      if (e.clientX < window.innerWidth - ESQUINA_PX || e.clientY > ESQUINA_PX) return;
+      inicio = { x: e.clientX, y: e.clientY };
+      timer = setTimeout(() => {
+        timer = 0;
+        inicio = null;
+        if (!salidaDisponible()) return;
+        tragarProximoToque();
+        vibrar(40);
+        irAlDirectorEscondido();
+      }, MS_SALIDA);
+    },
+    { passive: true, capture: true },
+  );
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      if (inicio && Math.hypot(e.clientX - inicio.x, e.clientY - inicio.y) > 24) cancelar();
+    },
+    { passive: true, capture: true },
+  );
+  window.addEventListener("pointerup", cancelar, { passive: true, capture: true });
+  window.addEventListener("pointercancel", cancelar, { passive: true, capture: true });
+}
+
+/** El "click" de cuando se suelta el dedo no puede caer en el teclado del PIN. */
+function tragarProximoToque() {
+  // (solo un toque en la misma esquina: los del teclado del PIN pasan)
+  const tragar = (e) => {
+    if (e.clientX < window.innerWidth - ESQUINA_PX * 1.5 || e.clientY > ESQUINA_PX * 1.5) return;
+    e.stopPropagation();
+    e.preventDefault();
+    window.removeEventListener("click", tragar, { capture: true });
+  };
+  window.addEventListener("click", tragar, { capture: true });
+  setTimeout(() => window.removeEventListener("click", tragar, { capture: true }), 1500);
+}
+
+function irAlDirectorEscondido() {
+  const ensayo = !!(sesion && sesion.ensayo);
+  if (ensayo) {
+    // el ensayo se termina aca (sin guardar nada)
+    Grabacion.detener();
+    cortarSesion();
+    Musica.detener(0.4);
+    Despierto.soltar();
+    ctx.abrirPin();
+    return;
+  }
+  // lo de verdad queda en pausa: la grabacion sigue (si rom vuelve sin
+  // tocar nada, la secuencia sigue desde el mismo paso)
+  cortarSesion();
+  Musica.detener(0.4);
+  ctx.abrirPin({ alSalir: retomarDespuesDelDirector });
+}
+
+/**
+ * Al salir del director (o del PIN) con el final a medias: se vuelve a
+ * donde estaba. true si se encargo; false si no habia nada que retomar.
+ */
+export function retomarDespuesDelDirector() {
+  if (!ctx) return false;
+  if (hayQueRetomar()) {
+    pantallaRetomar(); // (con su toque: pantalla, audio y microfono)
+    return true;
+  }
+  if (estado.fase === "pedido") {
+    abrirPedido();
+    return true;
+  }
+  return false;
+}
+
+/**
+ * v35: "Pause: back to armed" del director. Del pedido o de la secuencia
+ * vuelve a ARMADO: corta la grabacion con cuidado (lo grabado queda, con
+ * su id anotado) y no muestra nada. Despues del si no hace nada.
+ */
+export async function pausar() {
+  if (!["pedido", "en_curso"].includes(estado.fase)) return false;
+  const s = sesion;
+  if (s && !s.ensayo) cortarSesion();
+  await Grabacion.detener().catch(() => null);
+  Musica.detener(0.4);
+  Despierto.soltar();
+  estado.fase = "armado";
+  estado.paso = 0;
+  estado.terminado = false;
+  guardarEstado();
+  if (ctx) ctx.guardarTodo();
+  return true;
 }
 
 function nombreDeElla() {
@@ -268,13 +437,20 @@ export function abrirPedido({ ensayo = false } = {}) {
       mostrar();
     }
   });
-  ctx.pantalla.querySelector("#pedido-abrir").addEventListener("click", () => {
+  const abrir = ctx.pantalla.querySelector("#pedido-abrir");
+  abrir.addEventListener("click", () => {
+    // v35: un solo toque cuenta (un doble toque pedia dos veces el microfono)
+    if (abrir.disabled) return;
+    abrir.disabled = true;
     Despierto.mantener(); // dentro del toque: es cuando iOS lo permite
     // v21: antes de la secuencia, revisar camara + microfono para el video
-    // (si faltan, se piden ahora, en el toque). Pase lo que pase, sigue.
+    // (si faltan, se piden ahora, en el toque). Pase lo que pase, sigue:
+    // v35: con tope de 8 s (si iOS no contesta, sigue sin video).
     Grabacion.asegurarPermisos()
       .catch(() => false)
-      .then(() => abrirSelfie({ ensayo }));
+      .then(() => {
+        if (ctx.pantalla.contains(abrir)) abrirSelfie({ ensayo });
+      });
   });
   mostrar();
 }
@@ -348,17 +524,97 @@ export function iniciarSecuencia({ ensayo = false, desde = null, repeticion = fa
   sesion = { pasos, i, ensayo: ensayo || repeticion, repeticion, selfie, escritor: null, timers: [], bloqueadoHasta: 0 };
   // v21: el video del momento (camara frontal + audio, sin filtro). Tambien
   // en el ensayo, para que rom lo pruebe. Si se retoma, se graba de nuevo
-  // desde ahi. Hasta la foto con el anillo o el final.
+  // desde ahi (v35: como OTRO video, anotado aparte: el del si nunca se
+  // reemplaza). Hasta la foto con el anillo o el final.
   const pasoActual = pasos[i] && pasos[i].tipo;
-  if (!repeticion && !["foto", "fin"].includes(pasoActual)) Grabacion.empezar({ ensayo }).catch(() => {});
+  if (!repeticion && !["foto", "fin"].includes(pasoActual)) grabar(sesion);
+  // v35: si la grabacion se corta sola (una llamada, el tope de 20 min), se reintenta
+  if (!sesion.ensayo) sesion.vigia = setInterval(vigilarGrabacion, 5000);
   ctx.prepararVista("final");
   mostrarPaso();
+}
+
+/** Empieza a grabar para esta sesion; en la de verdad, anota el id del video. */
+function grabar(s) {
+  return Grabacion.empezar({
+    ensayo: s.ensayo,
+    alEmpezar: (id) => {
+      if (s.ensayo) return;
+      const lista = Array.isArray(estado.videos) ? estado.videos : [];
+      if (!lista.includes(id)) estado.videos = [...lista, id];
+      guardarEstado();
+    },
+  }).catch(() => false);
+}
+
+/**
+ * v35: en la secuencia de verdad, antes de la foto con el anillo, tiene que
+ * estar grabando. Si no (una llamada corto la camara, se volvio de segundo
+ * plano), se arranca otra grabacion. Solo si la camara ya se abrio bien
+ * alguna vez: un reintento nunca le muestra a ella un cartel de permisos.
+ */
+function vigilarGrabacion() {
+  const s = sesion;
+  if (!s || s.ensayo || document.visibilityState !== "visible") return;
+  const iFoto = s.pasos.findIndex((p) => p.tipo === "foto");
+  if (iFoto >= 0 && s.i >= iFoto) return;
+  if (Grabacion.grabando() || !Grabacion.camaraConcedida()) return;
+  grabar(s);
+}
+
+/**
+ * v35: al abrir la app con el final a medias, ya no arranca solo: primero
+ * "Tap to continue ♥". En ese toque (el unico momento en que iOS deja):
+ * pantalla encendida, audio, microfono; y recien ahi sigue la secuencia.
+ */
+export function pantallaRetomar() {
+  if (sesion) cortarSesion();
+  ctx.prepararVista("final");
+  ctx.pantalla.innerHTML = `
+    <div class="final cine es-retomar" id="final-retomar" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div class="corazon-grande"><img src="${arte("final/corazon_rosa.png")}" alt="" draggable="false" /></div>
+      <div class="texto-cine" id="retomar-texto" style="font-size:28px;margin-top:18px">Tap to continue ♥</div>
+    </div>`;
+  const pantalla = ctx.pantalla.querySelector("#final-retomar");
+  let tocado = false;
+  pantalla.addEventListener("click", () => {
+    if (tocado) return;
+    tocado = true;
+    Despierto.mantener(); // dentro del toque
+    Sonido.sonar("tocar"); // (despierta el audio de la pagina dentro del toque)
+    const texto = pantalla.querySelector("#retomar-texto");
+    if (texto) texto.textContent = "♥";
+    const pasos = construirPasos();
+    let i = Math.max(0, Math.min(pasos.length - 1, estado.paso || 0));
+    if (estado.fase === "si") i = Math.max(i, pasos.findIndex((p) => p.tipo === "celebracion"));
+    const vaAGrabar = !["foto", "fin"].includes(pasos[i] && pasos[i].tipo);
+    // el microfono (y la camara) se piden aca adentro; con tope, nunca traba
+    const listo = vaAGrabar ? Grabacion.asegurarPermisos().catch(() => false) : Promise.resolve(false);
+    listo.then(() => {
+      if (ctx.pantalla.contains(pantalla)) iniciarSecuencia({});
+    });
+  });
+}
+
+/**
+ * v35: "Start the sequence now" del director (rom la va a arrancar asi, en
+ * el telefono de ella). Todo dentro de ese toque: pantalla encendida, audio,
+ * microfono + camara (con tope) y recien despues la secuencia.
+ */
+export function empezarYa() {
+  Despierto.mantener(); // dentro del toque
+  Sonido.sonar("tocar");
+  Musica.precargar("propuesta");
+  return Grabacion.asegurarPermisos()
+    .catch(() => false)
+    .then(() => empezar({}));
 }
 
 export const secuenciaEnCurso = () => !!sesion;
 
 function cortarSesion() {
   if (!sesion) return;
+  clearInterval(sesion.vigia);
   if (sesion.efectoPregunta) sesion.efectoPregunta.destruir();
   for (const tm of sesion.timers) clearTimeout(tm);
   if (sesion.escritor) sesion.escritor.cancelar();
@@ -405,6 +661,7 @@ function avanzar() {
 
 function mostrarPaso() {
   const paso = sesion.pasos[sesion.i];
+  vigilarGrabacion(); // v35: ¿se corto el video? (solo en la de verdad, antes de la foto)
   const trasElSi = ["celebracion", "foto", "fin"].includes(paso.tipo);
   // en el cuarto, silencio (solo el toc toc); la musica arranca con el mapa
   if (paso.tipo === "ventana") Musica.detener(0.4);
@@ -466,13 +723,18 @@ function otraMascota() {
   return Personaje.actual() === "mantou" ? "baozi" : "mantou";
 }
 
+/** v35: lo del atardecer solo cuando de verdad es la hora (16 a 19 h). */
+export function lineaDelLago(hora = new Date().getHours()) {
+  return hora >= 16 && hora < 19 ? "The sun is going down over the lake…" : "The lake looks so pretty right now…";
+}
+
 function lineasVentana() {
   const suya = Personaje.nombre();
   const otra = Personaje.nombre(otraMascota());
   return [
     { quien: otra, texto: "Knock knock! It's me!", cara: "curioso" },
-    { quien: otra, texto: "The sun is going down over the lake…", cara: "curioso" },
-    { quien: otra, texto: "Let's go for a walk? Just us two ♥", cara: "enamorado" },
+    { quien: otra, texto: lineaDelLago(), cara: "curioso" },
+    { quien: otra, texto: "Shall we go for a walk? Just the two of us ♥", cara: "enamorado" },
     { quien: suya, texto: "Yes!! Let's go!", cara: "euforico" },
   ];
 }
@@ -872,11 +1134,27 @@ function pasoCorazon() {
   );
   vibrar([60, 80, 60]);
   // Se toca cuando ella quiera — nunca pasa solo. El toque es el si.
+  // v35: solo un toque SOBRE el corazon (con margen generoso): rozar la
+  // pantalla al recibir el anillo no cuenta.
   const bloqueo = performance.now() + 4000;
-  cine.addEventListener("click", () => {
-    if (!sesion || performance.now() < bloqueo) return;
+  const corazon = cine.querySelector(".corazon-grande img") || cine.querySelector(".corazon-grande");
+  let hecho = false;
+  cine.addEventListener("click", (e) => {
+    if (!sesion || hecho || performance.now() < bloqueo) return;
+    if (!tocaElCorazon(corazon, e)) return;
+    hecho = true;
     dijoSi();
   });
+}
+
+/** ¿El toque cayo sobre el corazon? Margen: media vez su tamaño (y 48 px como minimo) para cada lado. */
+export function tocaElCorazon(el, e) {
+  if (!el || !e || typeof e.clientX !== "number") return true; // sin forma de saberlo: vale
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return true;
+  const mx = Math.max(48, r.width * 0.5);
+  const my = Math.max(48, r.height * 0.5);
+  return e.clientX >= r.left - mx && e.clientX <= r.right + mx && e.clientY >= r.top - my && e.clientY <= r.bottom + my;
 }
 
 function dijoSi() {
@@ -884,6 +1162,9 @@ function dijoSi() {
     estado.fase = "si";
     estado.siEn = Date.now();
     estado.terminado = false;
+    // v35: el video principal es el que estaba grabando en este momento
+    const lista = Array.isArray(estado.videos) ? estado.videos : [];
+    estado.videoDelSi = Grabacion.idActual() || lista[lista.length - 1] || null;
     const { diario } = ctx.datos();
     if (diario) diario.anotarHito("The day you said yes ♥");
     ctx.guardarTodo();
@@ -1010,17 +1291,65 @@ function pasoFin() {
   if (!sesion.repeticion) {
     const s = sesion;
     const ensayo = s.ensayo;
+    // v35: el de verdad se busca por id (el del si primero), nunca "el
+    // ultimo": si la app se reabrio despues del si, el ultimo es un pedacito
     Grabacion.detener()
-      .then(() => Grabacion.ultimoVideo({ ensayo }))
-      .then((v) => {
+      .then(() => (ensayo ? Grabacion.ultimoVideo({ ensayo: true }).then((v) => (v ? [{ ...v, principal: true }] : [])) : videosDelSi()))
+      .then((vs) => {
         const b = papel.querySelector("#fin-video");
-        if (!v || !b || sesion !== s) return;
+        if (!vs || !vs.length || !b || sesion !== s) return;
+        const principal = vs.find((v) => v.principal) || vs[0];
         if (ensayo) b.textContent = "Save the test video";
         b.classList.remove("oculto");
-        b.addEventListener("click", () => guardarVideoEnGaleria(v.blob, ensayo ? "ensayo-video" : "nuestro-video"));
+        b.addEventListener("click", () => guardarVideoEnGaleria(principal.blob, ensayo ? "ensayo-video" : "nuestro-video"));
+        // los otros pedazos (si hubo), cada uno por su lado (no se pegan MP4s)
+        const otros = vs.filter((v) => v !== principal);
+        if (otros.length) {
+          const extra = document.createElement("button");
+          extra.className = "boton boton-fantasma boton-galeria";
+          extra.type = "button";
+          extra.id = "fin-video-otros";
+          extra.textContent = otros.length === 1 ? "+1 more clip" : `+${otros.length} more clips`;
+          let k = 0;
+          extra.addEventListener("click", () => {
+            const v = otros[k % otros.length];
+            k += 1;
+            guardarVideoEnGaleria(v.blob, `nuestro-video-${k + 1}`);
+            if (otros.length > 1) extra.textContent = k < otros.length ? `Next clip (${k + 1}/${otros.length})` : "All clips saved ♥";
+          });
+          b.after(extra);
+        }
       })
       .catch(() => {});
   }
+}
+
+/**
+ * v35: los videos de la propuesta de verdad, en orden, cada uno
+ * { id, blob, mime, empezo, termino, conAudio, picoAudio, principal, parte }.
+ * principal = el que estaba grabando cuando ella dijo que si (si no se
+ * sabe, el mas largo). Por id; si no hay ids anotados (un guardado viejo),
+ * los que empezaron desde el arranque de la secuencia; y si tampoco, el
+ * ultimo de verdad, como antes.
+ */
+export async function videosDelSi() {
+  let lista = [];
+  try {
+    const ids = Array.isArray(estado.videos) ? estado.videos : [];
+    lista = await Grabacion.videosPorId(ids);
+    if (!lista.length && estado.empezoEn) lista = await Grabacion.videosDesde(estado.empezoEn - 60000);
+    if (!lista.length) {
+      const v = await Grabacion.ultimoVideo();
+      if (v) lista = [v];
+    }
+  } catch (e) {
+    return [];
+  }
+  lista.sort((a, b) => (a.empezo || 0) - (b.empezo || 0));
+  let principal = lista.find((v) => v.id && v.id === estado.videoDelSi);
+  // (el mas largo = el de mas bytes)
+  if (!principal) principal = lista.reduce((m, v) => (!m || v.blob.size > m.blob.size ? v : m), null);
+  return lista.map((v, k) => ({ ...v, principal: v === principal, parte: k + 1 }));
 }
 
 function terminar() {
@@ -1110,17 +1439,23 @@ export async function chequeos({ sonidoHabilitado }) {
     [!!nombreDeElla(), nombreDeElla() ? `Her name: ${nombreDeElla()}` : "No name set"],
     [cantidadDeFotos() > 0, `Photos for the montage: ${cantidadDeFotos()}`],
     [lineas > 0 && !relleno, lineas ? `Your dialogue: ${lineas} lines${relleno ? ` (+${relleno} placeholders, only in rehearsal)` : ""}` : relleno ? `Your dialogue: only ${relleno} placeholders (they don't show on the real day)` : "Your dialogue is empty (only photos + music)"],
+    [
+      estado.fase !== "armado",
+      `GPS trigger: ${Math.round(FINAL.lugar.radioMetros)} m around ${FINAL.lugar.nombre} (+ up to ${HOLGURA_GPS_MAX} m GPS error) — ` +
+        (estado.fase === "armado" ? "ARMED: it can start by itself there" : "only works when armed. Not armed = only you can start it"),
+    ],
     [FINAL.pin !== "0000", FINAL.pin !== "0000" ? "PIN changed" : "PIN is still 0000"],
+    [true, "Hidden exit: hold the top-right corner 3 s (photo request or sequence) → PIN"],
     [false, "On the day: Auto-Lock → Never, Low Power off, volume up"],
   ];
 }
 
 export function descripcionFase() {
   return {
-    dormido: "Sleeping — nothing happens until you arm it.",
-    armado: `ARMED — when she opens Baozi at ${FINAL.lugar.nombre}, Baozi asks for a photo of you two.`,
+    dormido: "Not armed — only you can start it (GPS does nothing). Use 'Start the sequence now' when you're ready.",
+    armado: `ARMED — when she opens Baozi within ${Math.round(FINAL.lugar.radioMetros)} m of ${FINAL.lugar.nombre}, Baozi asks for a photo of you two. Disarm to keep it manual.`,
     pedido: "Baozi already asked for the photo — waiting for her selfie.",
-    en_curso: "The ending is in progress.",
+    en_curso: "The ending is in progress (recording). 'Pause' goes back to armed and keeps the video.",
     si: `She said yes ♥ ${estado.siEn ? fechaLegible(claveDelDia(new Date(estado.siEn))) : ""}`,
   }[estado.fase];
 }

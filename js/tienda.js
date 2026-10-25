@@ -59,7 +59,8 @@ export const ACCESORIOS_TIENDA = Object.fromEntries(CATALOGO.filter((c) => c.tip
 export const porId = (id) => CATALOGO.find((c) => c.id === id) || null;
 
 /** Topes por dia de cada forma de ganar monedas (lo que no esta aca no tiene tope). */
-export const TOPES = { pasos: 10, diario: 5, cuidar: 5, juego: 10, foto: 6, saludo: 4, propio: 20 };
+// v35: record con tope (15 = 3 records por dia): sin tope, un juego facil se "farmeaba"
+export const TOPES = { pasos: 10, diario: 5, cuidar: 5, juego: 10, foto: 6, saludo: 4, propio: 20, record: 15 };
 // propio: un lugar que ella agrega desde el mapa (20 monedas, uno por dia: si no, se podrian "fabricar" monedas)
 export const PREMIOS = { diario: 5, cuidar: 1, foto: 2, saludo: 2, sello: 20, mision: 30, racha: 25, record: 5, propio: 20 };
 

@@ -123,14 +123,20 @@ export function cartaEscrita(carta) {
  * existiera, el primer In Love) y las del compromiso. Las de pasos no:
  * esas llegan solas la proxima vez que se anotan pasos.
  * pasado = { sellados: Set de ids, enamorado: bool, diasTrasElSi: numero|null, boda: bool }
+ * v35: boda = HOY es el dia de la boda (fechas.bodaEsHoy): la carta dice
+ * "Today is the day", asi que no llega otro dia; y ese dia va primero.
+ * Las del compromiso (un mes, 100 dias...) llegan hasta MAX_DIAS_TARDE
+ * despues de su fecha: "One month ago you said yes" a los tres meses no.
  */
+export const MAX_DIAS_TARDE = 14;
 export function cartaAtrasada(entregadas, { sellados = new Set(), enamorado = false, diasTrasElSi = null, boda = false } = {}) {
-  for (const carta of CARTAS) {
+  const lista = boda ? [...CARTAS].sort((a, b) => (b.condicion.tipo === "boda") - (a.condicion.tipo === "boda")) : CARTAS;
+  for (const carta of lista) {
     if (entregadas.includes(carta.id) || !cartaEscrita(carta)) continue;
     const c = carta.condicion;
     if (c.tipo === "lugar" && sellados.has(c.valor)) return carta;
     if (c.tipo === "enamorado" && enamorado) return carta;
-    if (c.tipo === "trasElSi" && diasTrasElSi != null && diasTrasElSi >= c.dias) return carta;
+    if (c.tipo === "trasElSi" && diasTrasElSi != null && diasTrasElSi >= c.dias && diasTrasElSi - c.dias <= MAX_DIAS_TARDE) return carta;
     if (c.tipo === "boda" && boda) return carta;
   }
   return null;

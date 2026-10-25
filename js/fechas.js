@@ -67,7 +67,10 @@ export function diasHasta(f, ahora = new Date()) {
 /** Cuantas veces se cumplio ya (los años desde la primera), o null si no tiene año. */
 export function vecesCumplidas(f, ahora = new Date()) {
   if (f.anio == null) return null;
-  return proximaVez(f, ahora).getFullYear() - f.anio;
+  // v35: los años YA cumplidos (antes contaba hasta la proxima vez: con un
+  // año cumplido decia "2 years"). El mismo dia ya cuenta.
+  const proxima = proximaVez(f, ahora).getFullYear() - f.anio;
+  return Math.max(0, diasHasta(f, ahora) === 0 ? proxima : proxima - 1);
 }
 
 /** Todas, de la mas cercana a la mas lejana. */
@@ -84,4 +87,14 @@ export function proxima(lista, ahora = new Date()) {
 /** ¿Ya llego el dia de la boda? (una fecha "boda" con año, de hoy o de antes) */
 export function bodaLlego(lista, ahora = new Date()) {
   return lista.some((f) => f.tipo === "boda" && f.anio != null && new Date(f.anio, f.mes - 1, f.dia) <= soloDia(ahora));
+}
+
+/**
+ * v35: ¿HOY es el dia de la boda? (con año; hasta las 4 de la mañana del
+ * dia siguiente sigue siendo "hoy", como la pagina del diario). La carta de
+ * la boda dice "Today is the day": solo llega ese dia.
+ */
+export function bodaEsHoy(lista, ahora = new Date()) {
+  const ref = ahora.getHours() < 4 ? new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - 1) : ahora;
+  return lista.some((f) => f.tipo === "boda" && f.anio != null && f.anio === ref.getFullYear() && f.mes === ref.getMonth() + 1 && f.dia === ref.getDate());
 }

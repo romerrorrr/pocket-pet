@@ -59,6 +59,23 @@ export function clamp(valor, minimo = 0, maximo = 100) {
   return Math.max(minimo, Math.min(maximo, valor));
 }
 
+/** v35: el proximo momento (ms) despues de t en que el reloj local marca hora:00. */
+function proximaHora(t, hora) {
+  const d = new Date(t);
+  let c = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hora).getTime();
+  if (c <= t) c = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, hora).getTime();
+  return c;
+}
+
+/** "AAAA-MM-DD" local (lo mismo que claveDelDia de diario.js, sin importarlo). */
+function diaLocal(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// v35: el premio de un minijuego. Lleno, a lo sumo uno cada 10 minutos.
+export const ENFRIAMIENTO_JUEGO_MS = 10 * 60000;
+
 export class PetState {
   constructor(nombre = "", ahoraMs = null) {
     const ahora = ahoraMs ?? Date.now();
@@ -89,6 +106,12 @@ export class PetState {
     this.traitsReciente = Object.fromEntries(TRAITS.map((t) => [t, 0]));
 
     this.pasosTotales = 0;
+
+    // v35: el ultimo dia en que se "olvido" un poco lo reciente (antes vivia
+    // solo en memoria de main.js y con la app cerrada nunca pasaba)
+    this.ultimoDecaimientoRasgos = diaLocal(ahora);
+    // v35: el ultimo minijuego que dio el premio lleno
+    this.ultimoBonusJuegoMs = 0;
   }
 
   // ------------------------------------------------------------------
@@ -97,41 +120,89 @@ export class PetState {
   // verdad — incluso si el celular estuvo con la pantalla apagada.
   // ------------------------------------------------------------------
 
-  actualizarTiempo(ahoraMs = null) {
+  /**
+   * v35: el tiempo con la app cerrada se procesa POR TRAMOS, cortando en
+   * las horas de dormir/despertar (y donde vence el toque manual de Sleep,
+   * o donde una siesta llena la energia). Antes, si ella cerraba a las 22
+   * y abria a las 8, se aplicaban 10 horas DESPIERTA (el dormir automatico
+   * solo corre con la app abierta) y amanecia destruida.
+   * Solo se aplica el deterioro de las ultimas MAX_HORAS_DECAY_OFFLINE
+   * horas; lo de antes solo sirve para saber si estaba dormida o no.
+   * suenioAuto = false: no se duerme ni se despierta sola (los dias del
+   * pedido y de la secuencia, como en el tick de main.js).
+   * Devuelve { horasReales, horasAplicadas, suenio: "durmio"|"desperto"|null }.
+   */
+  actualizarTiempo(ahoraMs = null, { suenioAuto = true } = {}) {
     const ahora = ahoraMs ?? Date.now();
-    const horasReales = (ahora - this.ultimaActualizacion) / 3600000.0;
+    const desde = this.ultimaActualizacion;
+    const horasReales = (ahora - desde) / 3600000.0;
     this.ultimaActualizacion = ahora;
 
-    if (horasReales <= 0) return { horasReales: 0, horasAplicadas: 0 };
+    if (!(horasReales > 0)) return { horasReales: 0, horasAplicadas: 0, suenio: null };
 
     // El deterioro va con tope; el tiempo real se devuelve igual, para
     // que main.js pueda saludarla distinto si volvio despues de un dia.
     const horasPasadas = Math.min(horasReales, MAX_HORAS_DECAY_OFFLINE);
+    const inicioDeterioro = ahora - horasPasadas * 3600000;
+    // el vinculo baja solo despues de 6 horas sin interactuar (y no durmiendo)
+    const inicioCastigo = (this.ultimaInteraccion || 0) + 6 * 3600000;
+    const dormidaAntes = this.dormida;
 
+    // Con un hueco largo, alcanza con simular el ultimo dia antes del tramo
+    // con deterioro (la noche y el dia se repiten); ahi se mira la hora.
+    let t = Math.max(desde, inicioDeterioro - 24 * 3600000);
+
+    let vueltas = 0;
+    while (t < ahora && vueltas++ < 200) {
+      // al principio de cada tramo, lo mismo que haria el tick con la app abierta
+      if (suenioAuto) this.revisarSuenioAutomatico(t, new Date(t));
+      // el proximo corte: dormir, despertar, fin del toque manual, el
+      // comienzo del tramo con deterioro, o una siesta que se llena
+      let fin = ahora;
+      const cortar = (c) => {
+        if (c > t && c < fin) fin = c;
+      };
+      cortar(inicioDeterioro);
+      if (suenioAuto) {
+        cortar(proximaHora(t, HORA_DORMIR));
+        cortar(proximaHora(t, HORA_DESPERTAR));
+        cortar((this.ultimoOverrideManualMs || 0) + GRACIA_OVERRIDE_MS);
+        if (t >= inicioDeterioro && this.dormida && !this.dormidaAuto && this.stats.energia < 100) {
+          cortar(t + Math.ceil(((100 - this.stats.energia) / ENERGIA_DURMIENDO_POR_HORA) * 3600000) + 1);
+        }
+      }
+
+      if (fin > inicioDeterioro) {
+        const tramoIni = Math.max(t, inicioDeterioro);
+        const horas = (fin - tramoIni) / 3600000.0;
+        this._aplicarDeterioro(horas);
+        if (!this.dormida) {
+          const horasCastigo = Math.max(0, fin - Math.max(tramoIni, inicioCastigo)) / 3600000.0;
+          if (horasCastigo > 0) this.stats.vinculo = clamp(this.stats.vinculo - 2 * horasCastigo);
+        }
+        this._revisarSalud(horas);
+      }
+
+      t = fin;
+    }
+
+    const suenio = this.dormida === dormidaAntes ? null : this.dormida ? "durmio" : "desperto";
+    return { horasReales, horasAplicadas: horasPasadas, suenio };
+  }
+
+  /** El deterioro de un tramo, dormida o despierta (sin cambiar de estado). */
+  _aplicarDeterioro(horas) {
     if (this.dormida) {
       // dormida recupera energia en vez de perderla, y casi no gasta nada mas
       // v21: antes +20/h (rom: "se demora mucho en recuperar energia")
-      this.stats.energia = clamp(this.stats.energia + ENERGIA_DURMIENDO_POR_HORA * horasPasadas);
-      this.stats.hambre = clamp(
-        this.stats.hambre - DECAY_POR_HORA.hambre * 0.3 * horasPasadas
-      );
+      this.stats.energia = clamp(this.stats.energia + ENERGIA_DURMIENDO_POR_HORA * horas);
+      this.stats.hambre = clamp(this.stats.hambre - DECAY_POR_HORA.hambre * 0.3 * horas);
     } else {
       for (const stat of ["hambre", "sed", "felicidad", "energia", "higiene"]) {
-        this.stats[stat] = clamp(this.stats[stat] - DECAY_POR_HORA[stat] * horasPasadas);
+        this.stats[stat] = clamp(this.stats[stat] - DECAY_POR_HORA[stat] * horas);
       }
-      this.stats.aburrimiento = clamp(
-        this.stats.aburrimiento + DECAY_POR_HORA.aburrimiento * horasPasadas
-      );
+      this.stats.aburrimiento = clamp(this.stats.aburrimiento + DECAY_POR_HORA.aburrimiento * horas);
     }
-
-    // vinculo baja solo si hace mucho que no interactuas (mas de 6 horas)
-    const horasSinInteractuar = (ahora - this.ultimaInteraccion) / 3600000.0;
-    if (horasSinInteractuar > 6) {
-      this.stats.vinculo = clamp(this.stats.vinculo - 2 * horasPasadas);
-    }
-
-    this._revisarSalud(horasPasadas);
-    return { horasReales, horasAplicadas: horasPasadas };
   }
 
   /**
@@ -220,6 +291,30 @@ export class PetState {
     }
   }
 
+  /**
+   * v35: aplica el olvido de lo reciente una vez por cada dia (de calendario)
+   * que paso desde la ultima vez, aunque la app haya estado cerrada.
+   * Devuelve cuantos dias aplico.
+   */
+  decaerRasgosPorDias(ahoraMs = null) {
+    const ahora = ahoraMs ?? Date.now();
+    const hoy = diaLocal(ahora);
+    const ultimo = typeof this.ultimoDecaimientoRasgos === "string" ? this.ultimoDecaimientoRasgos : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ultimo) || ultimo > hoy) {
+      // un guardado de antes (o un reloj que fue para atras): se empieza a contar hoy
+      this.ultimoDecaimientoRasgos = hoy;
+      return 0;
+    }
+    if (ultimo === hoy) return 0;
+    const [y, m, d] = ultimo.split("-").map(Number);
+    const [y2, m2, d2] = hoy.split("-").map(Number);
+    const dias = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y, m - 1, d)) / 86400000);
+    // (despues de ~20 dias lo reciente ya es casi cero: no hace falta seguir)
+    for (let i = 0; i < Math.min(dias, 30); i++) this.decaerRecienteDiario();
+    this.ultimoDecaimientoRasgos = hoy;
+    return dias;
+  }
+
   rasgoDominante() {
     const puntajes = {};
     for (const t of TRAITS) {
@@ -295,12 +390,24 @@ export class PetState {
   }
 
   resultadoMinijuego(bocadosAtrapados, ahoraMs = null) {
-    // Se llama cuando termina el minijuego de sacudir/atrapar.
-    const bonus = clamp(bocadosAtrapados * 4, 0, 40);
-    this.stats.felicidad = clamp(this.stats.felicidad + 35 + bonus);
+    // Se llama cuando termina un minijuego (bocadosAtrapados = cuantos
+    // resultados "buenos" hubo). v35: antes daba +35 aunque perdiera al
+    // instante o lo abandonara; ahora jugar da un poquito y el resto
+    // depende de como le fue. Y el premio lleno, uno cada 10 minutos:
+    // si no, diez partidas de un segundo la ponian al 100.
+    const ahora = ahoraMs ?? Date.now();
+    const buenos = Math.max(0, Number(bocadosAtrapados) || 0);
+    let ganancia = 10 + clamp(buenos * 6, 0, 40);
+    if (ahora - (this.ultimoBonusJuegoMs || 0) < ENFRIAMIENTO_JUEGO_MS) {
+      ganancia = Math.round(ganancia * 0.3);
+    } else if (buenos > 0) {
+      this.ultimoBonusJuegoMs = ahora;
+    }
+    this.stats.felicidad = clamp(this.stats.felicidad + ganancia);
     this.stats.hambre = clamp(this.stats.hambre + 5);
     this.stats.energia = clamp(this.stats.energia - 4); // v21: antes -8
-    this.registrarEventoRasgo("sociable", 1.0, ahoraMs);
+    this.registrarEventoRasgo("sociable", 1.0, ahora);
+    return ganancia;
   }
 
   registrarPasos(pasosNuevos, ahoraMs = null, { anotados = false } = {}) {
@@ -346,6 +453,8 @@ export class PetState {
       traitsHistorico: this.traitsHistorico,
       traitsReciente: this.traitsReciente,
       pasosTotales: this.pasosTotales,
+      ultimoDecaimientoRasgos: this.ultimoDecaimientoRasgos,
+      ultimoBonusJuegoMs: this.ultimoBonusJuegoMs,
     };
   }
 
@@ -358,6 +467,8 @@ export class PetState {
     obj.stats = { ...obj.stats, ...(stats || {}) };
     obj.traitsHistorico = { ...obj.traitsHistorico, ...(traitsHistorico || {}) };
     obj.traitsReciente = { ...obj.traitsReciente, ...(traitsReciente || {}) };
+    // un guardado de antes de v35 no sabe cuando se olvido lo reciente: se cuenta desde hoy
+    if (!datos.ultimoDecaimientoRasgos) obj.ultimoDecaimientoRasgos = diaLocal(Date.now());
     return obj;
   }
 }

@@ -71,9 +71,16 @@ export function anotar(lat, lon, precision = null, cuando = new Date()) {
   const clave = claveDelDia(cuando);
   const lista = Array.isArray(d[clave]) ? d[clave].filter(valido) : [];
   const ultimo = lista[lista.length - 1];
-  if (ultimo && distanciaMetros(ultimo[0], ultimo[1], lat, lon) < MOVIDA_MINIMA_M) return false;
+  // v35: dos lecturas imprecisas (adentro, 200 m cada una) podian "moverse"
+  // 300 m sin moverse: la distancia tiene que ganarle tambien a la suma de
+  // las dos precisiones (la del punto viejo va guardada en el 4to lugar)
+  const acc = Number.isFinite(precision) && precision > 0 ? Math.round(precision) : 0;
+  if (ultimo) {
+    const accPrevia = Number.isFinite(ultimo[3]) ? ultimo[3] : 0;
+    if (distanciaMetros(ultimo[0], ultimo[1], lat, lon) < Math.max(MOVIDA_MINIMA_M, accPrevia + acc)) return false;
+  }
   if (lista.length >= MAX_POR_DIA) return false;
-  lista.push([Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, cuando.getHours() * 60 + cuando.getMinutes()]);
+  lista.push([Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, cuando.getHours() * 60 + cuando.getMinutes(), acc]);
   d[clave] = lista;
   const dias = Object.keys(d).sort();
   for (const viejo of dias.slice(0, Math.max(0, dias.length - MAX_DIAS))) delete d[viejo];

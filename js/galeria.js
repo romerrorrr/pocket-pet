@@ -49,20 +49,43 @@ function nombreConFecha(base, ext) {
   return `${base}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
 }
 
+// v35 (F39): un toque doble con la hoja de compartir abierta tiraba
+// InvalidStateError y caia en la descarga (un archivo de mas, sin aviso).
+// Mientras hay una hoja abierta, el segundo toque no hace nada ("ocupado"),
+// y InvalidStateError / NotAllowedError (se perdio el toque) cuentan como
+// "cancelado": nada de descargar por las dudas.
+let compartiendo = false;
+const CANCELADO = new Set(["AbortError", "InvalidStateError", "NotAllowedError"]);
+
+/** Si hay una hoja de compartir abierta (para no abrir otra). */
+export const compartiendoAhora = () => compartiendo;
+
+async function compartir(datos) {
+  compartiendo = true;
+  try {
+    await navigator.share(datos);
+    return "compartido";
+  } catch (e) {
+    return e && CANCELADO.has(e.name) ? "cancelado" : null; // null: probar descargando
+  } finally {
+    compartiendo = false;
+  }
+}
+
 /**
  * Comparte (o descarga) un Blob. Devuelve "compartido" | "descargado" |
- * "cancelado" | "error".
+ * "cancelado" | "ocupado" | "error".
  */
 export async function guardarBlob(blob, nombre) {
   if (!blob) return "error";
+  if (compartiendo) return "ocupado";
   const archivo = new File([blob], nombre, { type: blob.type });
   try {
     if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
-      await navigator.share({ files: [archivo] });
-      return "compartido";
+      const r = await compartir({ files: [archivo] });
+      if (r) return r;
     }
   } catch (e) {
-    if (e && e.name === "AbortError") return "cancelado";
     // si compartir falla por otra cosa, se intenta descargar
   }
   try {
@@ -81,6 +104,7 @@ export async function guardarBlob(blob, nombre) {
 }
 
 export async function guardarFotoEnGaleria(fuente, base = "baozi") {
+  if (compartiendo) return "ocupado";
   try {
     const blob = await fotoParaGaleria(fuente);
     return guardarBlob(blob, nombreConFecha(base, "png"));
@@ -121,13 +145,14 @@ export async function prepararFotos(fotos, base = "baozi") {
 /** Comparte varios archivos juntos (o los descarga de a uno). Mismo resultado que guardarBlob. */
 export async function guardarVarios(archivos) {
   if (!archivos || !archivos.length) return "error";
+  if (compartiendo) return "ocupado";
   try {
     if (navigator.canShare && navigator.canShare({ files: archivos })) {
-      await navigator.share({ files: archivos });
-      return "compartido";
+      const r = await compartir({ files: archivos });
+      if (r) return r;
     }
   } catch (e) {
-    if (e && e.name === "AbortError") return "cancelado";
+    /* se intenta descargar */
   }
   try {
     for (const a of archivos) {

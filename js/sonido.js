@@ -251,7 +251,6 @@ export function despertarConPrimerToque() {
     // al detectar la tarjeta — lo encuentra despierto.
     if (c.state !== "running") c.resume().catch(() => {});
     if (desbloqueado) return;
-    desbloqueado = true;
     // iOS viejo: el contexto solo queda "desbloqueado" de verdad despues
     // de reproducir algo dentro del gesto. Un buffer mudo de 1 muestra.
     try {
@@ -263,9 +262,19 @@ export function despertarConPrimerToque() {
     } catch (e) {
       /* nada */
     }
+    // recien cuenta como desbloqueado cuando el contexto anda de verdad: en
+    // iOS el resume() de un touchstart a veces no alcanza (si el gesto fue
+    // un arrastre), y hay que volver a probar en el touchend o el click
+    if (c.state === "running") desbloqueado = true;
+    else
+      c.resume()
+        .then(() => {
+          if (c.state === "running") desbloqueado = true;
+        })
+        .catch(() => {});
   };
-  window.addEventListener("pointerdown", abrir, { passive: true });
-  window.addEventListener("touchstart", abrir, { passive: true });
+  // (en captura: que un stopPropagation de algun boton no lo deje sin enterarse)
+  for (const ev of ["pointerdown", "touchstart", "touchend", "click"]) window.addEventListener(ev, abrir, { passive: true, capture: true });
 }
 
 export function sonidoHabilitado() {

@@ -34,6 +34,14 @@ export const FINAL = {
   // Donde tiene que estar para que Baozi pida la foto. Por defecto:
   // todo West Lake (centro del lago, 1.8 km de radio). Si sabes el
   // muelle o la zona exacta, poné esas coordenadas y un radio menor.
+  //
+  // v35 — OJO CON EL RADIO: es un circulo de `radioMetros` alrededor de
+  // lat/lon, y a eso se le suma hasta 100 m de imprecision del GPS
+  // (final.js, HOLGURA_GPS_MAX). Con 1800 m entra TODO el lago y casi toda
+  // la costa (los paseos, Hubin, el puente roto...): si ella pasa por ahi
+  // con la busqueda armada, Baozi le pide la foto. SOLO dispara si esta
+  // ARMADA: sin armar, el GPS no hace nada y la arrancas vos desde el
+  // director ("Start the sequence now"). El director muestra el radio.
   lugar: { nombre: "West Lake", lat: 30.2455, lon: 120.1418, radioMetros: 1800 },
 
   // Si esta armada y a esta hora todavia no se pidio la foto, se pide
@@ -74,7 +82,7 @@ export const FINAL = {
     "Every second, every touch, every laugh, every fight even, has been absolutely incredible.",
     "You've made every aspect of my life brighter, every moment unforgettable.",
     "You've made me feel special, understood and most importantly, loved.",
-    "And what I want most in life, is to at least try to make you feel the same, hopefully for the rest of our lives.",
+    "And what I want most in life is to at least try to make you feel the same, hopefully for the rest of our lives.",
     "Our life together is just starting, and I couldn't be more excited about it...",
   ],
 

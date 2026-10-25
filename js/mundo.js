@@ -201,7 +201,7 @@ const LUGARES_BASE = [
     sello: "templo",
     color: "rgb(196,58,66)",
     frase: "Shhh… this place feels very old. And very calm.",
-    dialogo: "A huge laughing Buddha carved right into the cliff, monks still visit the cave.",
+    dialogo: "A huge laughing Buddha carved right into the cliff. Monks still visit the cave.",
   },
   {
     id: "leifeng",

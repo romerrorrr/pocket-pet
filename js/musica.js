@@ -290,7 +290,8 @@ function tocarNota(c, destino, voz, frec, inicio, dur) {
   osc.stop(inicio + sosten + 0.02);
 }
 
-function tocarTema(c, tema, maestro, alTerminar, t0Forzado = null) {
+// desdePaso (v35): retomar a mitad de la cancion (la pausa de Radio Beats)
+function tocarTema(c, tema, maestro, alTerminar, t0Forzado = null, desdePaso = 0) {
   const paso = 60 / tema.bpm / 2; // corchea
   // Todas las voces aplanadas en una sola lista de eventos ordenada por
   // paso de inicio. Un loop es "volver a recorrerla desde loopDesde".
@@ -310,6 +311,10 @@ function tocarTema(c, tema, maestro, alTerminar, t0Forzado = null) {
   const t0 = t0Forzado !== null ? t0Forzado : c.currentTime + 0.08;
   let base = 0; // pasos absolutos agregados por cada vuelta del loop
   let k = 0;
+  if (desdePaso > 0) {
+    k = eventos.findIndex((e) => e.inicio >= desdePaso - 1e-6);
+    if (k < 0) k = eventos.length;
+  }
   let vivo = true;
 
   const tick = () => {
@@ -522,14 +527,31 @@ export function melodiaDe(escena) {
     pos += n.pasos;
   }
   const largo = Math.max(...tema.voces.map((v) => parsear(v.notas).reduce((a, n) => a + n.pasos, 0)));
-  return { melodia, largo, paso: 60 / tema.bpm / 2, bpm: tema.bpm };
+  // v35: el bajo y el arpegio, para que HARD rellene los huecos de la melodia
+  const acompanamiento = [];
+  tema.voces.slice(1).forEach((v, i) => {
+    let p = 0;
+    for (const n of parsear(v.notas)) {
+      if (n.frec) acompanamiento.push({ inicio: p, pasos: n.pasos, frec: n.frec, voz: i + 1 });
+      p += n.pasos;
+    }
+  });
+  acompanamiento.sort((a, b) => a.inicio - b.inicio || a.voz - b.voz);
+  return { melodia, acompanamiento, largo, paso: 60 / tema.bpm / 2, bpm: tema.bpm };
 }
 
 /**
  * Toca la estacion una vez, empezando en `adelanto` segundos. Devuelve
- * { reloj(), t0, paso, melodia, duracion, latencia, conAudio, detener() }.
+ * { reloj(), t0, paso, melodia, acompanamiento, duracion, latencia,
+ *   conAudio, detener(), pausar(), seguir() }.
  * Sin sonido (apagado en Settings) el juego anda igual, con el reloj de
  * la pagina.
+ *
+ * v35 (F33/F35): pausar() calla la cancion y congela el reloj; seguir()
+ * (llamarlo dentro de un toque: reanima el AudioContext) la retoma desde
+ * la misma nota. Si el contexto no vuelve a "running" (iOS a veces lo
+ * deja "interrupted"), el juego sigue sin musica con el reloj de la
+ * pagina, desde donde estaba. Devuelve una promesa: true si suena.
  */
 export function tocarParaJuego(escena, { adelanto = 2 } = {}) {
   const m = melodiaDe(escena);
@@ -537,27 +559,90 @@ export function tocarParaJuego(escena, { adelanto = 2 } = {}) {
   detener(0.2);
   const c = contexto();
   const conAudio = !!c && sonidoHabilitado();
-  const base = { paso: m.paso, melodia: m.melodia, duracion: m.largo * m.paso, conAudio };
+  const base = { paso: m.paso, melodia: m.melodia, acompanamiento: m.acompanamiento, duracion: m.largo * m.paso, conAudio };
+  const pagina = () => performance.now() / 1000;
+  let fuente = conAudio ? () => c.currentTime : pagina;
+  let corrido = 0; // lo que se le resta a la fuente (las pausas, el cambio de reloj)
+  let pausaEn = null; // el reloj del juego cuando se pauso
+  const reloj = () => (pausaEn !== null ? pausaEn : fuente() - corrido);
   if (!conAudio) {
-    const t0 = performance.now() / 1000 + adelanto;
-    return { ...base, reloj: () => performance.now() / 1000, t0, latencia: 0, detener: () => {} };
+    return {
+      ...base,
+      reloj,
+      t0: pagina() + adelanto,
+      latencia: 0,
+      detener: () => {},
+      pausar: () => {
+        if (pausaEn === null) pausaEn = reloj();
+      },
+      seguir: async () => {
+        if (pausaEn !== null) corrido = fuente() - pausaEn;
+        pausaEn = null;
+        return true;
+      },
+    };
   }
   if (c.state !== "running") c.resume().catch(() => {});
-  const maestro = c.createGain();
-  maestro.gain.value = 1.8 * (VOLUMEN[escena] || 1);
-  maestro.connect(c.destination);
   const t0 = c.currentTime + adelanto;
-  const parar = tocarTema(c, { ...ESTACIONES_TEMAS[escena], loop: false }, maestro, null, t0);
-  const registro = { escena: `juego_${escena}`, maestro, cortar: parar };
-  actual = registro;
+  const tema = { ...ESTACIONES_TEMAS[escena], loop: false };
+  let registro = null;
+  // la cancion desde el segundo `desde` del juego (t0 = el principio)
+  const sonar = (desde) => {
+    const maestro = c.createGain();
+    maestro.gain.value = 1.8 * (VOLUMEN[escena] || 1);
+    maestro.connect(c.destination);
+    const parar = tocarTema(c, tema, maestro, null, t0 + corrido, Math.max(0, (desde - t0) / m.paso));
+    registro = { escena: `juego_${escena}`, maestro, cortar: parar };
+    actual = registro;
+  };
+  const callar = (fundido) => {
+    if (!registro) return;
+    if (actual === registro) detener(fundido);
+    else registro.cortar();
+    registro = null;
+  };
+  sonar(t0);
+  // F41: la latencia se lee de nuevo en cada cancion, y hasta que arranca
+  // la primera nota (con auriculares bluetooth a veces aparece tarde)
+  const leerLatencia = () => (Number.isFinite(c.outputLatency) ? c.outputLatency : Number.isFinite(c.baseLatency) ? c.baseLatency : 0);
+  let latencia = null;
   return {
     ...base,
-    reloj: () => c.currentTime,
+    reloj,
     t0,
-    latencia: Number.isFinite(c.outputLatency) ? c.outputLatency : Number.isFinite(c.baseLatency) ? c.baseLatency : 0,
-    detener: () => {
-      if (actual === registro) detener(0.3);
-      else parar();
+    get latencia() {
+      if (latencia !== null) return latencia;
+      const l = leerLatencia();
+      if (reloj() >= t0) latencia = l;
+      return l;
+    },
+    detener: () => callar(0.3),
+    pausar: () => {
+      if (pausaEn !== null) return;
+      pausaEn = reloj();
+      callar(0.05);
+    },
+    seguir: async () => {
+      if (pausaEn === null) return fuente !== pagina;
+      if (fuente !== pagina && c.state !== "running") {
+        try {
+          await Promise.race([c.resume(), new Promise((r) => setTimeout(r, 1200))]);
+        } catch (e) {
+          /* nada */
+        }
+      }
+      const desde = pausaEn;
+      if (fuente !== pagina && c.state !== "running") fuente = pagina; // respaldo: sin musica
+      if (fuente === pagina) {
+        corrido = fuente() - desde;
+        pausaEn = null;
+        return false;
+      }
+      // un poquito antes de donde quedo, asi la primera nota se agenda a tiempo
+      corrido = fuente() + 0.12 - desde;
+      pausaEn = null;
+      sonar(desde);
+      return true;
     },
   };
 }

@@ -30,7 +30,7 @@ import * as Personaje from "./personaje.js";
 import { buscarCategoria } from "./gameController.js";
 import { TRAITS, TRAIT_NOMBRES, PESO_HISTORICO, PESO_RECIENTE, FELICIDAD_A_BOCA } from "./petState.js";
 import { LUGARES, NPCS, VECES_PARA_ENAMORADO, CATEGORIAS, SELLOS_PROPIOS } from "./mundo.js";
-import { resumenDelDia, fotoDelDia, fechaLegible, ANIMOS, preguntaDelDia, claveDelDia } from "./diario.js";
+import { resumenDelDia, fotoDelDia, fechaLegible, ANIMOS, preguntaDelDia, claveDelDia, claveDelDiaLogico } from "./diario.js";
 import { buscarCarta } from "./cartas.js";
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
 import { RECORTES_MENU } from "./recortes.js";
@@ -160,7 +160,7 @@ function pips(valor) {
 // ------------------------------------------------------------------
 
 /** Lo primero de todo: con quien va a jugar (Baozi o Mantou). */
-export function renderElegir(container) {
+export function renderElegir(container, { cargaFallida = false } = {}) {
   const tarjeta = (quien, frase) => `
     <button class="tarjeta-personaje" data-personaje="${quien}" aria-label="${Personaje.nombre(quien)}">
       <div class="tarjeta-personaje-figura">${spriteCara("ojo_base_energia_neutral.png", "boca_base_neutral.png", false, "", { quien })}</div>
@@ -175,6 +175,20 @@ export function renderElegir(container) {
         ${tarjeta("mantou", "White, calm, a little bit judgy.")}
       </div>
       <div class="pista-huevo">you can only pick once</div>
+      <div class="restaurar-inicio" style="position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));max-width:46%;display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right;font-size:13px">
+        ${
+          // v35: volver con un backup desde la primera pantalla (otro telefono,
+          // datos borrados) y, si el guardado no se pudo leer, decirlo
+          cargaFallida
+            ? `<div class="mensaje-backup error" style="margin:0;font-size:13px">Your saved game couldn't be read. Restore a backup, or start again (the old data stays on this phone).</div>`
+            : ""
+        }
+        <div id="mensaje-restaurar-inicio" class="mensaje-backup" style="margin:0;font-size:13px" aria-live="polite"></div>
+        <label class="enlace-restaurar" style="text-decoration:underline;opacity:.8;cursor:pointer;padding:6px 0">
+          Restore from backup
+          <input type="file" id="input-restaurar-inicio" hidden />
+        </label>
+      </div>
     </div>`;
 }
 
@@ -1264,7 +1278,7 @@ export function renderLugarCerca(container, lugar) {
     <div class="pantalla-lugar">
       ${fotoLugarHtml(lugar)}
       <div class="franja-lugar">
-        <div class="etiqueta-lugar">You're nearby</div>
+        <div class="etiqueta-lugar">You're near</div>
         <div class="titulo-lugar">${esc(lugar.nombre)}</div>
         <div class="fila-botones">
           <button class="boton boton-fantasma" data-eleccion-lugar="not_now">Not now</button>
@@ -1480,7 +1494,7 @@ function caraAnimo(id, clase = "") {
 /** Arriba del diario: la pagina de hoy (o el boton para escribirla), la semana y un recuerdo. */
 function cabezaDiario(diario) {
   if (!diario) return "";
-  const hoy = diario.entrada(claveDelDia());
+  const hoy = diario.entrada(claveDelDiaLogico()); // v35: la pagina escrita va por dia logico
   const escrita = diario.hoyEscrito();
   const racha = diario.racha();
   const semana = diario.semana();
@@ -1489,7 +1503,7 @@ function cabezaDiario(diario) {
     .map((d) => {
       const [y, m, dd] = d.clave.split("-").map(Number);
       const letra = DIAS_1[new Date(y, m - 1, dd).getDay()];
-      return `<div class="dia-semana ${d.escrita ? "escrito" : ""} ${d.clave === claveDelDia() ? "hoy" : ""}">${caraAnimo(d.animo, "mini")}<span>${letra}</span></div>`;
+      return `<div class="dia-semana ${d.escrita ? "escrito" : ""} ${d.clave === claveDelDiaLogico() ? "hoy" : ""}">${caraAnimo(d.animo, "mini")}<span>${letra}</span></div>`;
     })
     .join("");
   const rachaTxt = racha > 1 ? `${racha} days in a row` : racha === 1 ? "1 day — keep it going" : "Start a streak tonight";
@@ -1604,7 +1618,7 @@ export function renderEscribir(container, { entrada = null, foto = null } = {}) 
     <div class="pantalla-escribir con-cuarto">
       <div class="escribir-personaje" id="escribir-personaje">${spriteCara(a.ojo, a.boca)}</div>
       <div class="hoja-escribir papel">
-        <div class="hoja-fecha">${esc(fechaLegible(claveDelDia()))}</div>
+        <div class="hoja-fecha">${esc(fechaLegible(claveDelDiaLogico()))}</div>
         <div class="hoja-pregunta">${esc(pregunta)}</div>
         <div class="fila-animos" role="radiogroup" aria-label="How was today?">
           ${ANIMOS.map((x) => `<button class="boton-animo ${x.id === animo ? "elegido" : ""}" data-animo="${x.id}" role="radio" aria-checked="${x.id === animo}" aria-label="${x.nombre}">${caraAnimo(x.id, "mini")}<span>${x.nombre}</span></button>`).join("")}
@@ -1658,7 +1672,7 @@ export function renderMapaDia(container, { dia, mapa, pines, puntos, fotos = 0 }
         <img class="mapa-dia-img" src="${mapa.grande}" alt="" draggable="false" />
         ${chips}
         <div class="mapa-dia-personaje" id="mapa-dia-personaje">${spriteCara("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
-        ${mapa.real ? `<span class="mapa-dia-credito">© OpenStreetMap</span>` : ""}
+        ${mapa.real && !mapa.osm ? `<span class="mapa-dia-credito">© OpenStreetMap</span>` : "" /* v35: si el mapa ya la trae dibujada (mapaDia.atribucion), no va dos veces */}
       </div>
       <div class="mapa-dia-hoja">
         <div class="mapa-dia-fecha">${esc(fechaPolaroid(dia))}</div>
@@ -1692,7 +1706,7 @@ export function renderPreguntaPasos(container, { clave, cuando = "today", contad
           <input id="input-pasos" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="${Math.max(contados, ya) || "0"}" aria-label="Steps" />
           <span>steps</span>
         </label>
-        <div class="pasos-ayuda tenue" id="pasos-nota">${contados > 0 ? `I counted ${contados.toLocaleString("en-US")} while we walked together.` : ""}</div>
+        <div class="pasos-ayuda tenue" id="pasos-nota">${contados > 0 ? `I counted ${contados.toLocaleString("en-US")} steps while we walked together.` : ""}</div>
         <div class="hoja-botones">
           <button class="boton boton-fantasma" id="btn-pasos-luego">Not now</button>
           <button class="boton" id="btn-pasos-guardar">${glifo("check")} Save</button>

@@ -51,6 +51,20 @@ export function elegir(nuevo) {
   } catch (e) {
     /* queda en memoria */
   }
+  nombrarAvisoRotar();
+}
+
+/**
+ * El aviso de "gira el telefono" esta en index.html, afuera de la pantalla
+ * (no lo alcanza el renombrado de main.js): se le pone el nombre aca, al
+ * arrancar y cada vez que se elige personaje.
+ */
+function nombrarAvisoRotar() {
+  if (typeof document === "undefined") return;
+  const el = document.querySelector("#aviso-rotar .texto-rotar");
+  if (!el) return;
+  if (!el.dataset.original) el.dataset.original = el.textContent;
+  el.textContent = conNombre(el.dataset.original);
 }
 
 export function ponerAccesorio(a) {
@@ -67,6 +81,9 @@ export function restaurar(desdeGuardado) {
 export function conNombre(texto) {
   return id === "baozi" ? texto : String(texto).replace(/\bBaozi\b/g, nombre());
 }
+
+// al cargar (los modulos corren con el HTML ya armado)
+nombrarAvisoRotar();
 
 /**
  * Que estado de cara es un par de archivos de Baozi (ojo_*, boca_*).

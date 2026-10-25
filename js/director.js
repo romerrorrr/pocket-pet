@@ -16,6 +16,10 @@
 import * as Grabacion from "./grabacion.js";
 import { guardarVideoEnGaleria } from "./galeria.js";
 import * as Final from "./final.js";
+import { FINAL } from "./config.js";
+
+// v35: nada del director se puede quedar esperando para siempre
+const conTope = (promesa, ms, valor) => Promise.race([Promise.resolve(promesa).catch(() => valor), new Promise((r) => setTimeout(() => r(valor), ms))]);
 
 function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -107,6 +111,8 @@ export async function renderDirector(contenedor, acciones) {
   const puedeArmar = fase === "dormido";
   const puedeDesarmar = fase === "armado" || fase === "pedido";
   const antes = fase === "dormido" || fase === "armado" || fase === "pedido";
+  // v35: del pedido o de la secuencia se puede volver a "armado" (el video queda)
+  const puedePausar = fase === "pedido" || fase === "en_curso";
   contenedor.innerHTML = `
     <div class="pantalla-director">
       <div class="encabezado-vista">
@@ -117,8 +123,10 @@ export async function renderDirector(contenedor, acciones) {
         <div class="director-col">
           <div class="director-estado fase-${fase}">${esc(Final.descripcionFase())}</div>
           <div class="director-botones">
+            ${puedePausar ? `<button class="boton" id="dir-pausar">Pause: back to armed</button><div class="director-gps" id="dir-pausar-resultado"></div>` : ""}
             ${puedeArmar ? `<button class="boton" id="dir-armar">Arm it</button>` : ""}
             ${puedeDesarmar ? `<button class="boton boton-fantasma" id="dir-desarmar">Disarm</button>` : ""}
+            <div class="director-gps">${esc(fase === "armado" ? `Armed: the GPS can start it by itself (${Math.round(FINAL.lugar.radioMetros)} m around ${FINAL.lugar.nombre}).` : `Not armed = only you can start it. (GPS radius when armed: ${Math.round(FINAL.lugar.radioMetros)} m)`)}</div>
             <button class="boton boton-fantasma" id="dir-gps"><i class="glifo g-pin"></i> Test location here</button>
             <div class="director-gps" id="dir-gps-resultado"></div>
             <button class="boton" id="dir-mic">Allow microphone</button>
@@ -126,7 +134,7 @@ export async function renderDirector(contenedor, acciones) {
             <button class="boton boton-fantasma" id="dir-permisos"><i class="glifo g-camara"></i> Allow camera + mic</button>
             <button class="boton boton-fantasma" id="dir-probar-video">Test video (5 s)</button>
             <div class="director-gps" id="dir-video-resultado"></div>
-            <button class="boton boton-fantasma" id="dir-ensayo">Rehearse everything</button>
+            ${fase !== "en_curso" ? `<button class="boton boton-fantasma" id="dir-ensayo">Rehearse everything</button>` : ""}
             ${acciones.mudanza ? `<button class="boton boton-fantasma" id="dir-mudanza">${acciones.mudanza.estado() === "vive" ? "Move-in test: undo (partner leaves)" : "Move-in test: preview now"}</button>` : ""}
             ${acciones.tienda ? `<button class="boton boton-fantasma" id="dir-monedas">Shop test: +200 coins</button>
             <button class="boton boton-fantasma" id="dir-semanas">${acciones.tienda.todo() ? "Shop test: all weeks ON (tap = off)" : "Shop test: show all weeks"}</button>
@@ -149,7 +157,18 @@ export async function renderDirector(contenedor, acciones) {
   const desarmar = $("dir-desarmar");
   if (desarmar) desarmar.addEventListener("click", () => { Final.desarmar(); renderDirector(contenedor, acciones); });
   $("dir-gps").addEventListener("click", () => acciones.probarGPS($("dir-gps-resultado")));
-  $("dir-ensayo").addEventListener("click", acciones.ensayar);
+  if ($("dir-ensayo")) $("dir-ensayo").addEventListener("click", acciones.ensayar);
+  // v35: pausa (vuelve a armado; corta la grabacion con cuidado y el video queda)
+  const pausar = $("dir-pausar");
+  if (pausar) {
+    pausar.addEventListener("click", async () => {
+      if (pausar.disabled) return;
+      pausar.disabled = true;
+      pausar.textContent = "Pausing…";
+      await conTope(Final.pausar(), 4000, false);
+      renderDirector(contenedor, acciones);
+    });
+  }
   // v24: para ver la mudanza antes del dia (solo en el telefono de rom)
   if (acciones.mudanza) {
     $("dir-mudanza").addEventListener("click", () => {
@@ -172,8 +191,10 @@ export async function renderDirector(contenedor, acciones) {
   // v21: permisos para el video del final (se vuelven a revisar antes de la secuencia)
   $("dir-permisos").addEventListener("click", async () => {
     const b = $("dir-permisos");
+    if (b.disabled) return;
     b.disabled = true;
-    const r = await Grabacion.pedirPermisos();
+    // (si se esta grabando el video de verdad, el microfono queda abierto)
+    const r = await conTope(Grabacion.pedirPermisos({ dejarMicAbierto: Grabacion.grabando() }), 20000, { camara: false, microfono: false });
     b.textContent = `Camera: ${r.camara ? "OK" : "NO"} · Mic: ${r.microfono ? "OK" : "NO"}`;
     b.disabled = false;
     pintarChequeos();
@@ -184,6 +205,10 @@ export async function renderDirector(contenedor, acciones) {
     const b = $("dir-mic");
     const res = $("dir-mic-resultado");
     if (b.disabled) return;
+    if (Grabacion.grabando()) {
+      res.textContent = "The real video is recording right now — pause first.";
+      return;
+    }
     b.disabled = true;
     const ctx = Grabacion.contextoParaMedir(); // dentro del toque (iOS)
     res.innerHTML = `Say something… ${htmlMedidor()}`;
@@ -201,11 +226,17 @@ export async function renderDirector(contenedor, acciones) {
     const b = $("dir-probar-video");
     const res = $("dir-video-resultado");
     if (b.disabled) return;
+    // v35: con el video de verdad grabando, la prueba lo cortaria
+    if (Grabacion.grabando()) {
+      res.textContent = "The real video is recording right now — pause first.";
+      return;
+    }
     b.disabled = true;
     const ctx = Grabacion.contextoParaMedir(); // dentro del toque (iOS)
-    await Grabacion.pedirPermisos({ dejarMicAbierto: true });
-    const ok = await Grabacion.empezar({ ensayo: true, ctxMedidor: ctx });
+    await conTope(Grabacion.pedirPermisos({ dejarMicAbierto: true }), 20000, null);
+    const ok = await conTope(Grabacion.empezar({ ensayo: true, ctxMedidor: ctx }), 12000, false);
     if (!ok) {
+      Grabacion.detener(); // (por si arrancaba tarde: se cancela)
       res.textContent = "Couldn't record here.";
       b.disabled = false;
       cerrar(ctx);
@@ -251,14 +282,23 @@ export async function renderDirector(contenedor, acciones) {
     });
   };
   conConfirmacion($("dir-pedir"), "Tap again: Baozi asks now", acciones.pedirYa);
-  conConfirmacion($("dir-ya"), "Tap again to start it", acciones.empezarYa);
+  // v35: rom la arranca asi. El segundo toque hace todo adentro del toque
+  // (pantalla, audio, permisos con tope) y el boton no se puede tocar dos veces.
+  conConfirmacion($("dir-ya"), "Tap again to start it", () => {
+    const b = $("dir-ya");
+    if (!b || b.disabled) return;
+    b.disabled = true;
+    b.textContent = "Starting…";
+    Promise.resolve(acciones.empezarYa()).catch(() => {});
+  });
   conConfirmacion($("dir-reset"), "Tap again to reset", () => {
     Final.reiniciarTodo();
     renderDirector(contenedor, acciones);
   });
 
   async function pintarChequeos() {
-    const lista = await Final.chequeos({ sonidoHabilitado: acciones.sonidoHabilitado() });
+    // (con tope: si el navegador no contesta los permisos, la lista no queda en "Checking…")
+    const lista = await conTope(Final.chequeos({ sonidoHabilitado: acciones.sonidoHabilitado() }), 5000, [[false, "Couldn't check right now (tap a button and come back)"]]);
     const ul = $("dir-chequeos");
     if (!ul) return;
     ul.innerHTML = lista

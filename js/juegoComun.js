@@ -139,6 +139,118 @@ export function flotante(capa, texto, xPct, yPct, clase = "") {
   setTimeout(() => f.remove(), 700);
 }
 
+/**
+ * v35 (F33): la pausa de los juegos. Si la app se va a segundo plano, se
+ * bloquea el telefono o lo ponen en vertical (el cartel de girar tapa el
+ * juego), el juego se congela y aparece "Paused · tap to continue". El
+ * toque que la saca no cuenta como jugada (el cartel se lo queda).
+ * Mientras el juego esta vivo, tambien mantiene la pantalla prendida.
+ *
+ * opts: activa() -> si ahora hay algo que pausar (no en el cartel de dificultad)
+ *       alPausar(), alSeguir(ms) (ms: lo que duro la pausa; se llama dentro del toque)
+ * Devuelve { pausado(), pausar(), seguir(), ahora(), destruir() }.
+ * ahora(): performance.now() sin el tiempo en pausa (el reloj de los juegos).
+ */
+export function crearPausa(area, { activa = () => true, alPausar = () => {}, alSeguir = () => {} } = {}) {
+  const vertical = typeof matchMedia === "function" ? matchMedia("(orientation: portrait)") : null;
+  const enVertical = () => !!(vertical && vertical.matches);
+  let desde = 0; // performance.now() de cuando se pauso (0: no esta en pausa)
+  let corrido = 0; // todo lo que estuvo en pausa
+  let cartel = null;
+  let vivo = true;
+  let bloqueo = null;
+  let pidiendo = false;
+
+  // la pantalla prendida (iOS la suelta sola al ir a segundo plano: se vuelve a pedir)
+  async function despertar() {
+    if (!vivo || bloqueo || pidiendo || document.hidden) return;
+    try {
+      if (!navigator.wakeLock) return;
+      pidiendo = true;
+      const b = await navigator.wakeLock.request("screen");
+      pidiendo = false;
+      if (!vivo) {
+        b.release().catch(() => {});
+        return;
+      }
+      bloqueo = b;
+      b.addEventListener("release", () => {
+        if (bloqueo === b) bloqueo = null;
+      });
+    } catch (e) {
+      pidiendo = false;
+      bloqueo = null;
+    }
+  }
+
+  function pausar() {
+    if (!vivo || desde || !activa()) return false;
+    desde = performance.now();
+    cartel = document.createElement("div");
+    cartel.className = "juego-pausa";
+    cartel.setAttribute("data-juego-pausa", "");
+    cartel.innerHTML = `<div class="juego-pausa-titulo">PAUSED</div><div class="juego-pausa-texto">Tap to continue</div>`;
+    cartel.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (document.hidden || enVertical()) return;
+      seguir();
+    });
+    area.appendChild(cartel);
+    try {
+      alPausar();
+    } catch (e) {
+      /* que la pausa nunca rompa el juego */
+    }
+    return true;
+  }
+
+  function seguir() {
+    if (!desde) return;
+    const ms = performance.now() - desde;
+    corrido += ms;
+    desde = 0;
+    if (cartel) cartel.remove();
+    cartel = null;
+    despertar();
+    alSeguir(ms);
+  }
+
+  const alVisibilidad = () => {
+    if (document.hidden) pausar();
+    else despertar();
+  };
+  const alGirar = () => {
+    if (enVertical()) pausar();
+  };
+  document.addEventListener("visibilitychange", alVisibilidad);
+  if (vertical) {
+    if (vertical.addEventListener) vertical.addEventListener("change", alGirar);
+    else if (vertical.addListener) vertical.addListener(alGirar);
+  }
+  despertar();
+
+  return {
+    pausado: () => !!desde,
+    pausar,
+    seguir,
+    ahora: () => (desde || performance.now()) - corrido,
+    destruir: () => {
+      if (!vivo) return;
+      vivo = false;
+      document.removeEventListener("visibilitychange", alVisibilidad);
+      if (vertical) {
+        if (vertical.removeEventListener) vertical.removeEventListener("change", alGirar);
+        else if (vertical.removeListener) vertical.removeListener(alGirar);
+      }
+      if (cartel) cartel.remove();
+      cartel = null;
+      if (bloqueo) bloqueo.release().catch(() => {});
+      bloqueo = null;
+    },
+  };
+}
+
 /** Multiplicador por combo (igual que Snack Rain). */
 export function multiplicador(combo) {
   return combo >= 30 ? 4 : combo >= 20 ? 3 : combo >= 10 ? 2 : 1;
