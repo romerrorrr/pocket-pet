@@ -17,6 +17,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Baozi" />
+    <!-- que iOS no convierta fechas/numeros del juego en links de telefono -->
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
     <link rel="apple-touch-icon" href="icons/mochi-192.png" />
   </head>
   <body>
@@ -37,29 +39,55 @@
       <!-- La mano de rom sosteniendo el aparato (pendiente). Vacio a proposito. -->
       <div class="capa-manito" aria-hidden="true"></div>
     </div>
-    <!-- Red de seguridad para despues de un deploy: si el navegador mezclo
-         un modulo viejo (de su cache HTTP) con uno nuevo, el juego no
-         arranca. Aca se detecta, se piden de nuevo al servidor los .js/.css
-         de esta pagina y se recarga (maximo 2 veces). No borra nada: sin
-         señal no hace ningun daño. -->
+    <!-- Red de seguridad para despues de un deploy: si se mezclo un modulo
+         viejo con uno nuevo, el juego no arranca. Aca se detecta y se
+         recarga (maximo 2 veces). Si la pagina la sirve el service worker,
+         su cache es la que esta mal (recargar daria lo mismo): SOLO si hay
+         señal de verdad (se prueba la red antes), se borran las caches y se
+         da de baja el sw, una sola vez por sesion; la recarga baja todo de
+         nuevo y el sw se vuelve a instalar limpio. Sin señal no toca nada:
+         la cache es lo unico que hay. -->
     <script>
       (function () {
-        var CLAVE = "mochi_rescate";
-        function leer() { try { return Number(sessionStorage.getItem(CLAVE) || 0); } catch (e) { return 9; } }
+        var CLAVE = "mochi_rescate", CLAVE_LIMPIO = "mochi_rescate_limpio";
+        function leer(k) { try { return Number(sessionStorage.getItem(k) || 0); } catch (e) { return 9; } }
+        function hayRed() {
+          // navigator.onLine miente (dice "si" con wifi sin internet): se prueba de verdad
+          if (navigator.onLine === false) return Promise.resolve(false);
+          var prueba = fetch("manifest.webmanifest?rescate=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok; }, function () { return false; });
+          var espera = new Promise(function (ok) { setTimeout(function () { ok(false); }, 8000); });
+          return Promise.race([prueba, espera]);
+        }
+        function limpiarSW() {
+          var sw = navigator.serviceWorker;
+          if (!sw || !sw.controller || !window.caches || leer(CLAVE_LIMPIO)) return Promise.resolve();
+          try { sessionStorage.setItem(CLAVE_LIMPIO, "1"); } catch (e) { return Promise.resolve(); }
+          return caches.keys()
+            .then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })
+            .then(function () { return sw.getRegistrations(); })
+            .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+            .catch(function () {});
+        }
         function rescatar() {
-          var n = leer();
+          var n = leer(CLAVE);
           if (n >= 2 || window.__mochi) return;
           try { sessionStorage.setItem(CLAVE, String(n + 1)); } catch (e) { return; }
-          var urls = performance.getEntriesByType("resource").map(function (e) { return e.name; }).filter(function (u) { return /\.(js|css)(\?|$)/.test(u); });
-          urls.push(location.href);
-          Promise.all(urls.map(function (u) { return fetch(u, { cache: "reload" }).catch(function () {}); })).then(function () { location.reload(); });
+          hayRed().then(function (red) {
+            if (!red) return; // sin señal: nada
+            var urls = performance.getEntriesByType("resource").map(function (e) { return e.name; }).filter(function (u) { return /\.(js|css)(\?|$)/.test(u); });
+            urls.push(location.href);
+            return limpiarSW()
+              .then(function () { return Promise.all(urls.map(function (u) { return fetch(u, { cache: "reload" }).catch(function () {}); })); })
+              .then(function () { location.reload(); });
+          });
         }
         window.addEventListener("error", function (e) {
           var m = String((e && e.message) || "");
           if (/does not provide an export|import|module/i.test(m)) rescatar();
         });
         window.addEventListener("load", function () {
-          setTimeout(function () { if (!window.__mochi) rescatar(); else { try { sessionStorage.removeItem(CLAVE); } catch (e) {} } }, 5000);
+          // 8 s: en un iPhone viejo el arranque puede tardar, y el rescate ahora puede borrar caches
+          setTimeout(function () { if (!window.__mochi) rescatar(); else { try { sessionStorage.removeItem(CLAVE); sessionStorage.removeItem(CLAVE_LIMPIO); } catch (e) {} } }, 8000);
         });
       })();
     </script>
