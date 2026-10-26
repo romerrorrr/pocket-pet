@@ -943,7 +943,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   const CUADROS_MASCOTA = {
     gato: ["sentado", "sentado_b", "parpadeo", "dormido", "dormido_b", "camina", "camina_b", "camina_c", "camina_d"],
     perro: ["sentado", "sentado_b", "parpadeo", "contento", "dormido", "dormido_b", "camina", "camina_b", "camina_c", "camina_d"],
-    serpiente: ["enroscada", "alta", "lengua", "dormida", "repta", "repta_b"],
+    serpiente: ["enroscada", "alta", "lengua", "dormida", "repta", "repta_b", "repta_c", "repta_d", "repta_e", "repta_f"],
   };
   let ultimoCuadro = null;
   const masC = document.createElement("canvas");
@@ -1002,7 +1002,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   function cuadroMascota(id, ahora) {
     const alt = (ms) => Math.floor(ahora / ms) % 2 === 1;
     if (mas.pose === "dormida") return id === "serpiente" ? "serpiente_dormida" : `${id}_dormido${alt(1100) ? "_b" : ""}`;
-    if (mas.pose === "camina") return id === "serpiente" ? `serpiente_repta${alt(320) ? "_b" : ""}` : `${id}_camina${["", "_b", "_c", "_d"][Math.floor(ahora / (id === "perro" ? 120 : 150)) % 4]}`;
+    if (mas.pose === "camina") return id === "serpiente" ? `serpiente_repta${["", "_b", "_c", "_d", "_e", "_f"][Math.floor(ahora / 120) % 6]}` : `${id}_camina${["", "_b", "_c", "_d"][Math.floor(ahora / (id === "perro" ? 120 : 150)) % 4]}`;
     if (!mas.parpadeo) mas.parpadeo = ahora + 3000;
     if (ahora > mas.parpadeo + 150) mas.parpadeo = ahora + 2500 + Math.random() * 3500;
     const parpadea = ahora > mas.parpadeo;
@@ -1028,32 +1028,41 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     ultimoCuadro = sp;
     const x = Math.round(mas.x);
     // sombrita
-    for (let xx = x - 8; xx <= x + 8; xx++) {
+    const rs = (sp.naturalWidth || 22) > 22 ? 13 : 8;
+    for (let xx = x - rs; xx <= x + rs; xx++) {
       for (let yy = PIE_MASCOTA - 1; yy <= PIE_MASCOTA + 1; yy++) {
-        if (((xx - x) / 8.5) ** 2 + ((yy - PIE_MASCOTA) / 1.6) ** 2 <= 1 && BAYER[((yy % 4) + 4) % 4][((xx % 4) + 4) % 4] < 10) pixel(xx, yy, "rgb(22,24,46)");
+        if (((xx - x) / (rs + 0.5)) ** 2 + ((yy - PIE_MASCOTA) / 1.6) ** 2 <= 1 && BAYER[((yy % 4) + 4) % 4][((xx % 4) + 4) % 4] < 10) pixel(xx, yy, "rgb(22,24,46)");
       }
     }
     // toma la luz del cuarto (como un personaje claro)
+    // v38: los cuadros pueden ser mas anchos (la serpiente reptando mide 32)
+    const sw = sp.naturalWidth || 22;
+    const sh = sp.naturalHeight || 21;
+    if (masC.width !== sw || masC.height !== sh) {
+      masC.width = sw;
+      masC.height = sh;
+    }
     masX.globalCompositeOperation = "source-over";
-    masX.clearRect(0, 0, 22, 21);
+    masX.clearRect(0, 0, sw, sh);
     masX.drawImage(sp, 0, 0);
     const luz = LUZ_CLARO[e.dormido ? "dormido" : e.momento];
     if (luz) {
       masX.globalCompositeOperation = "multiply";
       masX.fillStyle = `rgb(${luz.join(",")})`;
-      masX.fillRect(0, 0, 22, 21);
+      masX.fillRect(0, 0, sw, sh);
       masX.globalCompositeOperation = "destination-in";
       masX.drawImage(sp, 0, 0);
       masX.globalCompositeOperation = "source-over";
     }
-    const y0 = PIE_MASCOTA - 20 + offsetGolpe("mascota", ahora);
+    const y0 = PIE_MASCOTA - (sh - 1) + offsetGolpe("mascota", ahora);
     m.save();
     m.translate(x, 0);
     m.scale(mas.dir < 0 ? -1 : 1, 1);
-    m.drawImage(masC, -11, y0);
+    m.drawImage(masC, -Math.floor(sw / 2), y0);
     m.restore();
     if (b) {
-      b.caja = [x - 12, PIE_MASCOTA - 22, x + 12, PIE_MASCOTA + 2];
+      const mitad = Math.max(12, Math.ceil(sw / 2) + 1);
+      b.caja = [x - mitad, PIE_MASCOTA - 22, x + mitad, PIE_MASCOTA + 2];
       const [x0, yA, x1, yB] = b.caja;
       b.el.style.left = `${T.ox + x0 * T.s}px`;
       b.el.style.top = `${T.oy + yA * T.s}px`;
