@@ -152,6 +152,12 @@
 :root[data-momento="noche"] { --cielo-alto: rgb(34, 32, 36); --cielo-bajo: rgb(12, 11, 12); }
 
 * { box-sizing: border-box; }
+/* v39: sin ligaduras: en Pixelify Sans "fi" sale como una sola letra
+   parecida a una "A" ("first" se leia "Arst", "fight" "Aght"). */
+*, *::before, *::after {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "dlig" 0;
+}
 
 html,
 body {
