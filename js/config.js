@@ -77,12 +77,14 @@ export const FINAL = {
   // Las lineas que empiezan con "TODO" son de relleno: se ven SOLO en el
   // ensayo (para ver donde va cada cosa) y NUNCA en el de verdad.
   carta: [
-    "Since the day I saw you in Hong Kong, I knew we were going to be something special.",
-    "And it has been way more than just special.",
-    "Every second, every touch, every laugh, every fight even, has been absolutely incredible.",
-    "You've made every aspect of my life brighter, every moment unforgettable.",
-    "You've made me feel special, understood and most importantly, loved.",
-    "And what I want most in life is to at least try to make you feel the same, hopefully for the rest of our lives.",
+    "Since the day I first saw you in Hong Kong, I knew we were going to be something special.",
+    "And it was way more than special.",
+    "It's probably the best thing that has ever happened to me.",
+    "Every second, every touch, every laugh, even every fight, has been absolutely incredible.",
+    "Before I met you, I couldn't even imagine caring this much about someone else.",
+    "You've made every part of my life brighter, and every moment unforgettable.",
+    "You've made me feel special, understood, and most importantly, loved.",
+    "And what I want most in life is to at least try to make you feel the same way, hopefully for the rest of our lives.",
     "Our life together is just starting, and I couldn't be more excited about it...",
   ],
 
