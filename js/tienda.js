@@ -48,6 +48,21 @@ export const CATALOGO = [
   { id: "bote", tipo: "cuarto", nombre: "Houseboat", precio: 800, semana: 4, arte: "tienda/cuarto_bote.png", texto: "A little houseboat floating on West Lake." },
   { id: "serpiente", tipo: "mascota", nombre: "White snake", precio: 300, semana: 5, arte: "mascotas/serpiente_enroscada.png", texto: "A white snake, like the one in the West Lake legend." },
   { id: "cabana", tipo: "cuarto", nombre: "Winter cabin", precio: 1000, semana: 5, arte: "tienda/cuarto_cabana.png", texto: "A log cabin with a crackling fireplace and snow outside." },
+  // v40: un poquito de Colombia (tools/tienda_co.py, tools/cuartos_co.py)
+  { id: "arepa", tipo: "comida", nombre: "Arepa", precio: 15, semana: 6, arte: "tienda/comida_arepa.png", accion: "feed", efecto: { hambre: 20, felicidad: 5 }, texto: "A warm arepa with butter and melted cheese." },
+  { id: "empanada", tipo: "comida", nombre: "Empanadas", precio: 15, semana: 6, arte: "tienda/comida_empanada.png", accion: "feed", efecto: { hambre: 15, felicidad: 10 }, texto: "Crispy empanadas with a squeeze of lime." },
+  { id: "tinto", tipo: "comida", nombre: "Tinto", precio: 10, semana: 6, arte: "tienda/comida_tinto.png", accion: "water", efecto: { energia: 12 }, texto: "A little cup of Colombian coffee. Wakes you right up." },
+  { id: "vueltiao", tipo: "accesorio", nombre: "Sombrero vueltiao", precio: 120, semana: 6, arte: "tienda/acc_vueltiao.png", texto: "The famous woven hat from the Caribbean coast." },
+  { id: "banderin", tipo: "decoracion", nombre: "Colombian bunting", precio: 120, semana: 6, arte: "tienda/deco_banderin.png", texto: "Yellow, blue and red flags over the door and the window." },
+  { id: "chiva", tipo: "decoracion", nombre: "Toy chiva", precio: 150, semana: 6, arte: "tienda/deco_chiva.png", texto: "A tiny chiva bus, painted in every color." },
+  { id: "finca", tipo: "cuarto", nombre: "Coffee farm", precio: 900, semana: 6, arte: "tienda/cuarto_finca.png", texto: "A coffee farmhouse looking out at the wax palms of the Cocora Valley." },
+  { id: "bunuelos", tipo: "comida", nombre: "Buñuelos", precio: 18, semana: 7, arte: "tienda/comida_bunuelos.png", accion: "feed", efecto: { hambre: 15, felicidad: 12 }, texto: "Golden cheese buñuelos, like at Christmas." },
+  { id: "silletera", tipo: "accesorio", nombre: "Flower crown", precio: 130, semana: 7, arte: "tienda/acc_silletera.png", texto: "Flowers from the silleteros of Medellín's flower fair." },
+  { id: "ruana", tipo: "accesorio", nombre: "Ruana", precio: 110, semana: 7, arte: "tienda/acc_ruana.png", texto: "A warm wool ruana for chilly mountain nights." },
+  { id: "mochila", tipo: "accesorio", nombre: "Wayuu bag", precio: 100, semana: 7, arte: "tienda/acc_mochila.png", texto: "A hand-woven Wayuu mochila, full of colors." },
+  { id: "orquidea", tipo: "decoracion", nombre: "Orchid", precio: 130, semana: 7, arte: "tienda/deco_orquidea.png", texto: "A Cattleya orchid, Colombia's national flower." },
+  { id: "saco", tipo: "decoracion", nombre: "Coffee sack", precio: 100, semana: 7, arte: "tienda/deco_saco.png", texto: "A sack of coffee beans straight from the farm." },
+  { id: "guatape", tipo: "cuarto", nombre: "Guatapé house", precio: 1100, semana: 7, arte: "tienda/cuarto_guatape.png", texto: "A house with colorful zócalos, looking out at the lake and El Peñol." },
 ];
 
 /** La ultima entrega (para saber si todavia llegan cosas). */

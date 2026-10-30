@@ -42,7 +42,7 @@ import { leerRecord } from "./juego.js";
 import { iniciarPesca, leerRecordPesca, PECES, pezPorId } from "./pesca.js";
 import { iniciarTorre, leerRecordTorre } from "./torre.js";
 import { iniciarRitmo } from "./ritmo.js";
-import { iniciarBote, leerRecordBote } from "./bote.js";
+import { iniciarTejo, leerRecordTejo } from "./tejo.js"; // v40: el tejo reemplaza a Boat Ride
 import * as Galeria from "./galeria.js";
 import * as Grabacion from "./grabacion.js";
 import * as Donde from "./dondeEstuvimos.js";
@@ -68,7 +68,7 @@ const tabbarEl = document.getElementById("tabbar");
 const marcoEl = document.querySelector(".marco-manito");
 
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "bote", "fechas"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -790,14 +790,15 @@ function renderVistaActual() {
         recordSnack: leerRecord(),
         recordPesca: leerRecordPesca(),
         recordTorre: leerRecordTorre(),
-        recordBote: leerRecordBote(),
+        recordTejo: leerRecordTejo(),
+        cancionesRitmo: Musica.estacionesParaJugar().length,
         libro: PECES.map((p) => ({ id: p.id, nombre: p.nombre, n: pescaReg.libro[p.id] || 0 })),
       });
       document.getElementById("btn-juego-snack").addEventListener("click", () => conTransicion(iniciarMinijuego));
       document.getElementById("btn-juego-pesca").addEventListener("click", () => conTransicion(iniciarPescaJuego));
       document.getElementById("btn-juego-torre").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("torre")));
       document.getElementById("btn-juego-ritmo").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("ritmo")));
-      document.getElementById("btn-juego-bote").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("bote")));
+      document.getElementById("btn-juego-tejo").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("tejo")));
       document.getElementById("btn-volver-juegos").addEventListener("click", () => conTransicion(irACasa));
       break;
     case "deseo": {
@@ -842,7 +843,7 @@ function renderVistaActual() {
     case "pesca":
     case "torre":
     case "ritmo":
-    case "bote":
+    case "tejo":
     case "lente":
     case "final":
     case "intro":
@@ -911,6 +912,7 @@ function estadoPieza() {
     globoCompanero,
     fotoAnillo: Final.dijoQueSi() ? fotoDelAnillo() : null,
     clima: Clima.tipo(),
+    velitas: esNocheDeVelitas(), // v40
     globo: globo.texto,
     globoRosa: globo.rosa,
   };
@@ -1566,6 +1568,31 @@ function mostrarEspecial(nombre, ms, luego = null) {
 }
 
 /** Baozi solo comenta cosas si esta despierto y no hay nada del final en curso. */
+// v40: el Dia de las Velitas (Colombia): la noche del 7 de diciembre (hasta
+// la madrugada del 8) el cuarto se llena de velitas. Baozi lo cuenta una vez por año.
+let velitasForzadas = null; // para las pruebas
+function esNocheDeVelitas(f = new Date()) {
+  if (velitasForzadas !== null) return velitasForzadas;
+  const m = f.getMonth();
+  const d = f.getDate();
+  const h = f.getHours();
+  return m === 11 && ((d === 7 && h >= 17) || (d === 8 && h < 3));
+}
+function talVezContarVelitas() {
+  if (!esNocheDeVelitas() || !mascota || mascota.dormida || controller.vista !== "cara" || visita || !puedeComentar()) return false;
+  const clave = `baozi_velitas_${new Date().getFullYear()}`;
+  try {
+    if (localStorage.getItem(clave)) return false;
+    localStorage.setItem(clave, "1");
+  } catch (e) {
+    return false;
+  }
+  if (diario) diario.anotarHito("Día de las Velitas ♥");
+  guardarTodo();
+  decir("It's the Day of the Little Candles! In Colombia we light them tonight ♥", 6000);
+  return true;
+}
+
 function puedeComentar() {
   return !!mascota && !mascota.dormida && !Final.fotoPedida() && !finalOcupado();
 }
@@ -3718,10 +3745,9 @@ function iniciarJuegoTele(cual) {
     vibrar,
     alSalir: volverALaTele,
   };
-  const h = new Date().getHours();
   if (cual === "torre") juegoTele = iniciarTorre(screenEl, { ...comunes, alTerminar: (r) => terminarJuegoTele("torre", r) });
   else if (cual === "ritmo") juegoTele = iniciarRitmo(screenEl, { ...comunes, musica: Musica, alTerminar: (r) => terminarJuegoTele("ritmo", r) });
-  else juegoTele = iniciarBote(screenEl, { ...comunes, noche: h >= 19 || h < 6, alTerminar: (r) => terminarJuegoTele("bote", r) });
+  else juegoTele = iniciarTejo(screenEl, { ...comunes, alTerminar: (r) => terminarJuegoTele("tejo", r) });
 }
 
 function terminarJuegoTele(cual, r) {
@@ -3744,15 +3770,17 @@ function terminarJuegoTele(cual, r) {
     titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos.toLocaleString("en-US")}!` : r.fallados === 0 && r.total ? "Full combo!" : `${notas}% of the notes!`;
     sub = `${r.nombreCancion} · ${r.perfectos} perfect · best ${r.record.toLocaleString("en-US")}`;
   } else {
+    // v40: el tejo
     bien = puntos > 0;
-    monedas = tienda.ganar("juego", Math.floor(r.faroles / 2) + Math.floor(puntos / 150));
-    titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos} m!` : `${puntos} m on the lake!`;
-    sub = `${r.faroles} lantern${r.faroles === 1 ? "" : "s"} · best ${r.record} m`;
+    monedas = tienda.ganar("juego", Math.floor(puntos / 3));
+    const mechas = r.mechas || 0;
+    titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos} pts!` : mechas ? `${mechas} mecha${mechas === 1 ? "" : "s"} exploded!` : puntos ? `${puntos} points!` : "Not this time…";
+    sub = `${r.embocinadas || 0} embocinada${r.embocinadas === 1 ? "" : "s"} · best ${r.record} pts`;
   }
   if (r.nuevoRecord && puntos > 0) monedas += tienda.ganar("record");
   // v35 (F38): cuantas cosas buenas hizo de verdad (0 si salio enseguida con la flechita):
-  // pisos de la torre, notas acertadas / 4, farolitos del bote
-  const logros = cual === "torre" ? r.pisos || 0 : cual === "ritmo" ? Math.floor(((r.perfectos || 0) + (r.buenos || 0)) / 4) : r.faroles || 0;
+  // pisos de la torre, notas acertadas / 4, mechas y embocinadas del tejo
+  const logros = cual === "torre" ? r.pisos || 0 : cual === "ritmo" ? Math.floor(((r.perfectos || 0) + (r.buenos || 0)) / 4) : (r.mechas || 0) + (r.embocinadas || 0);
   mascota.resultadoMinijuego(logros, Date.now());
   diario.anotarJuego(puntos);
   eventoDeseo({ tipo: cual, puntos });
@@ -3877,7 +3905,7 @@ function tick() {
   // v22: la pregunta de los pasos va antes que una visita al azar (la visita puede esperar)
   elegirDeseo();
   if (deseos.pendiente() && amigos.puesto) eventoDeseo({ tipo: "estado", puesto: amigos.puesto });
-  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezAvisarTienda() && !celebrarDeseo() && !talVezCartaAtrasada() && !talVezAvisarBackup(ahora)) {
+  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezContarVelitas() && !talVezAvisarTienda() && !celebrarDeseo() && !talVezCartaAtrasada() && !talVezAvisarBackup(ahora)) {
     talVezVisita();
     talVezPedirDiario();
   }
@@ -3968,6 +3996,9 @@ window.__mochi = {
   juegoTele: () => juegoTele,
   mudanza: () => mudanza,
   pescaReg: () => pescaReg,
+  velitas: (si) => {
+    velitasForzadas = si === null || si === undefined ? null : !!si;
+  },
   sinVisita: () => {
     visita = null;
   },

@@ -53,13 +53,13 @@ const ACORDES = {
   G: ["G2", "D3", "G3", "D3"], D: ["D2", "A2", "D3", "A2"], Em: ["E2", "B2", "E3", "B2"],
   C: ["C3", "G2", "C3", "G2"], Am: ["A2", "E3", "A3", "E3"], F: ["F2", "C3", "F3", "C3"],
   Dm: ["D2", "A2", "D3", "A2"], Bb: ["Bb2", "F2", "Bb2", "F2"], A: ["A2", "E3", "A3", "E3"],
-  Bm: ["B2", "F#3", "B3", "F#3"],
+  Bm: ["B2", "F#3", "B3", "F#3"], E: ["E2", "B2", "E3", "B2"],
 };
 const ARPEGIOS = {
   G: ["G4", "B4", "D5", "B4"], D: ["F#4", "A4", "D5", "A4"], Em: ["G4", "B4", "E5", "B4"],
   C: ["G4", "C5", "E5", "C5"], Am: ["A4", "C5", "E5", "C5"], F: ["A4", "C5", "F5", "C5"],
   Dm: ["A4", "D5", "F5", "D5"], Bb: ["Bb4", "D5", "F5", "D5"], A: ["A4", "C#5", "E5", "C#5"],
-  Bm: ["F#4", "B4", "D5", "B4"],
+  Bm: ["F#4", "B4", "D5", "B4"], E: ["G#4", "B4", "E5", "B4"],
 };
 
 function bajo(acordes, pasosPorNota = 2) {
@@ -90,6 +90,16 @@ function bajoSaltarin(acordes) {
 const TE_ACORDES = ["D", "Bm", "G", "A", "D", "Bm", "G", "D", "G", "A", "D", "Bm", "G", "A", "D", "D"];
 const LAGO_ACORDES = ["C", "Am", "F", "G", "C", "Am", "Dm", "G", "F", "G", "Em", "Am", "F", "G", "C", "C"];
 const LLUVIA_ACORDES = ["Am", "F", "C", "G", "Am", "F", "Em", "Am", "Am", "F", "C", "G", "Am", "F", "Em", "Am"];
+// v40: la cumbia (en La menor, con el Mi mayor de la cumbia)
+const CUMBIA_ACORDES = ["Am", "Am", "Dm", "Dm", "G", "G", "C", "E", "Am", "Am", "Dm", "Dm", "E", "E", "Am", "Am"];
+// el bajo de la cumbia: raiz y quinta en negras, todo el tiempo
+function bajoCumbia(acordes) {
+  return acordes.map((a) => { const [r, q] = ACORDES[a]; return `${r}/2 ${q}/2 ${r}/2 ${q}/2`; }).join(" ");
+}
+// el acordeon/piano a contratiempo (los "chucu" de la cumbia)
+function contratiempo(acordes) {
+  return acordes.map((a) => { const n = ARPEGIOS[a]; return `-/1 ${n[0]}/1 -/1 ${n[1]}/1 -/1 ${n[2]}/1 -/1 ${n[1]}/1`; }).join(" ");
+}
 const NOCHE_ACORDES = ["Dm", "Bb", "C", "A", "Dm", "Bb", "C", "Dm", "Bb", "C", "Am", "Dm", "Bb", "C", "A", "A"];
 
 const ESTACIONES_TEMAS = {
@@ -155,6 +165,24 @@ const ESTACIONES_TEMAS = {
       },
       { onda: "triangle", vol: 0.11, notas: bajoSaltarin(NOCHE_ACORDES) },
       { onda: "pulso12", vol: 0.014, notas: arpegio(NOCHE_ACORDES) },
+    ],
+  },
+  // v40: "Radio Cumbia": original, con la gaita (melodia), el bajo en negras,
+  // los acordes a contratiempo y la guacharaca (chk - chk chk) bien bajita.
+  radio_cumbia: {
+    bpm: 96,
+    loop: true,
+    voces: [
+      {
+        onda: "pulso25", vol: 0.05,
+        notas: `E5/1 A5/1 -/1 A5/1 C6/2 B5/1 A5/1  B5/1 C6/1 B5/1 A5/1 E5/4  F5/1 A5/1 -/1 A5/1 D6/2 C6/1 A5/1  C6/1 D6/1 C6/1 A5/1 F5/4
+                D5/1 G5/1 -/1 G5/1 B5/2 A5/1 G5/1  A5/1 B5/1 D6/1 B5/1 G5/4  E5/1 G5/1 C6/2 E6/2 D6/1 C6/1  B5/2 G#5/2 E5/2 -/2
+                A5/1 C6/1 E6/2 D6/1 C6/1 B5/1 A5/1  C6/2 B5/1 A5/1 E5/2 A5/2  D6/1 F6/1 D6/1 C6/1 A5/2 F5/2  A5/1 C6/1 D6/2 C6/1 A5/1 F5/2
+                G#5/1 B5/1 E6/2 D6/1 B5/1 G#5/2  A5/1 G#5/1 F5/1 E5/1 D5/2 E5/2  C5/1 E5/1 A5/2 G#5/1 A5/1 B5/2  A5/6 -/2`,
+      },
+      { onda: "triangle", vol: 0.13, notas: bajoCumbia(CUMBIA_ACORDES) },
+      { onda: "pulso12", vol: 0.016, notas: contratiempo(CUMBIA_ACORDES) },
+      { onda: "pulso12", vol: 0.005, notas: CUMBIA_ACORDES.map(() => "A7/1 -/1 A7/1 A7/1 A7/1 -/1 A7/1 A7/1").join(" ") },
     ],
   },
 };
@@ -375,7 +403,7 @@ export function precargar(escena) {
 
 const LOOPEA = new Set(["propuesta", "si", "busqueda", ...Object.keys(ESTACIONES_TEMAS)]);
 // la radio va mas bajita que la musica de los momentos especiales
-const VOLUMEN = { radio_te: 0.55, radio_lago: 0.5, radio_lluvia: 0.6, radio_noche: 0.5 };
+const VOLUMEN = { radio_te: 0.55, radio_lago: 0.5, radio_lluvia: 0.6, radio_noche: 0.5, radio_cumbia: 0.5 };
 const VOLUMEN_PROPIA = 0.45;
 
 // ------------------------------------------------------------------
@@ -388,6 +416,7 @@ const NOMBRES_ESTACIONES = [
   { id: "radio_lago", nombre: "West Lake Walk" },
   { id: "radio_lluvia", nombre: "Rainy Day" },
   { id: "radio_noche", nombre: "Night Market" },
+  { id: "radio_cumbia", nombre: "Radio Cumbia" }, // v40
 ];
 
 /** Todas las estaciones, en el orden de la perilla (sin "Off"). */

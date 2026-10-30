@@ -392,13 +392,16 @@ export const HELADERA = [
   { src: "comida/comida_naranja.png", accion: "feed", x: 128, y: 76, nombre: "Watermelon" },
 ];
 
+// v40: la comida de la tienda va en el cajon de abajo, centrada (ya pueden ser 7)
+const xTienda = (i, n) => (n <= 3 ? 76 + i * 24 : 100 + (i - (n - 1) / 2) * Math.min(24, 156 / (n - 1)));
+
 export function renderHeladera(container, especiales = []) {
   // v23: la comida comprada en la tienda, en el cajon de abajo, con cuantas quedan
   const deLaTienda = especiales
     .map(
       (it, i) => `
       <button class="item-heladera item-tienda" data-comida-tienda="${esc(it.id)}"
-        style="left:${((76 + i * 24) / 200) * 100}%;top:${(98 / 112) * 100}%" aria-label="${esc(it.nombre)} (${it.n})">
+        style="left:${(xTienda(i, especiales.length) / 200) * 100}%;top:${(98 / 112) * 100}%" aria-label="${esc(it.nombre)} (${it.n})">
         <img src="${arte(it.arte)}" alt="" draggable="false" />
         <span class="cuantos-tienda">×${it.n}</span>
         <span class="etiqueta-item">${esc(it.nombre)}</span>
@@ -1094,7 +1097,7 @@ export function renderCloset(container, amigos, accTienda = []) {
 // ------------------------------------------------------------------
 
 // tamaño del arte de las cosas del cuarto y los stickers (para agrandarlas en pixel entero)
-const TAM_ARTE_TIENDA = { te: [92, 52], bote: [92, 52], cabana: [92, 52], gato: [22, 21], perro: [22, 21], serpiente: [22, 21], farolitos: [58, 17], pecera: [17, 15], bonsai: [15, 14], poster: [18, 24], luces: [70, 9], peluche: [18, 18], loto: [13, 13], corazones: [13, 13] };
+const TAM_ARTE_TIENDA = { te: [92, 52], bote: [92, 52], cabana: [92, 52], finca: [92, 52], guatape: [92, 52], chiva: [24, 15], orquidea: [16, 26], banderin: [132, 9], saco: [18, 20], gato: [22, 21], perro: [22, 21], serpiente: [22, 21], farolitos: [58, 17], pecera: [17, 15], bonsai: [15, 14], poster: [18, 24], luces: [70, 9], peluche: [18, 18], loto: [13, 13], corazones: [13, 13] };
 
 function vistaTienda(c, peluche) {
   if (c.tipo === "accesorio") return `<span class="acc-vista"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
@@ -1798,7 +1801,7 @@ export function renderMudanza(container, { quien = "baozi", texto = "" } = {}) {
 }
 
 /** v24: la tele tiene dos juegos: se elige cual (con el libro de peces). */
-export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, recordTorre = 0, recordBote = 0, libro = [] } = {}) {
+export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, recordTorre = 0, recordTejo = 0, cancionesRitmo = 5, libro = [] } = {}) {
   const pescados = libro.filter((p) => p.n > 0).length;
   container.innerHTML = `
     <div class="pantalla-juegos con-cuarto">
@@ -1823,12 +1826,12 @@ export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, reco
         <button class="tarjeta-juego" id="btn-juego-ritmo">
           <span class="juego-arte icono"><img src="${arte("juegos/icono_ritmo.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Radio Beats</span>
-          <span class="juego-best">4 songs</span>
+          <span class="juego-best">${cancionesRitmo} songs</span>
         </button>
-        <button class="tarjeta-juego" id="btn-juego-bote">
-          <span class="juego-arte icono"><img src="${arte("juegos/icono_bote.png")}" alt="" draggable="false" /></span>
-          <span class="juego-nombre">Boat Ride</span>
-          <span class="juego-best">Best ${recordBote} m</span>
+        <button class="tarjeta-juego" id="btn-juego-tejo">
+          <span class="juego-arte icono"><img src="${arte("juegos/icono_tejo.png")}" alt="" draggable="false" /></span>
+          <span class="juego-nombre">Tejo</span>
+          <span class="juego-best">Best ${recordTejo}</span>
         </button>
       </div>
       <div class="libro-peces" aria-label="Fish book: ${pescados} of ${libro.length}">

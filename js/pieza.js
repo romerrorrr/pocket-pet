@@ -93,6 +93,9 @@ export const CUARTOS = {
   te: { luces: { farol: [246, 26, 92, [255, 178, 130]] } },
   bote: { luces: { farol: [246, 26, 92, [255, 210, 140]] } },
   cabana: { luces: { chimenea: [196, 102, 78, [255, 158, 88]] }, fuego: [172, 220] },
+  // v40: los colombianos (tools/cuartos_co.py)
+  finca: { luces: { farol: [246, 26, 92, [255, 206, 130]] } },
+  guatape: { luces: { farol: [246, 26, 92, [255, 220, 170]] } },
 };
 let cuarto = "depto";
 /** El cuarto que esta puesto (main.js lo avisa al cargar y al cambiarlo). */
@@ -351,8 +354,13 @@ const DECORACIONES = {
   pecera: [194, 42], // en el estante de la camara
   bonsai: [270, 68], // arriba de la tele, a la izquierda de las antenas
   peluche: [146, 110], // en el tatami, al lado de la mesita
+  // v40: lo colombiano
+  banderin: [28, 10], // arriba de la puerta y la ventana
+  orquidea: [61, 9], // colgada al lado de la ventana
+  chiva: [274, 117], // en el piso, delante de la tele
+  saco: [242, 101], // en el piso, a la izquierda de la tele
 };
-const DECOS_TIENDA = new Set(["luces", "farolitos", "poster", "pecera", "bonsai", "peluche"]);
+const DECOS_TIENDA = new Set(["luces", "farolitos", "poster", "pecera", "bonsai", "peluche", "banderin", "orquidea", "chiva", "saco"]);
 const MARCO = [158, 64]; // la foto del anillo, en la pared de listones (despues del si)
 
 function srcDeco(id, e) {
@@ -766,6 +774,53 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   function sprite(rel, x, y) {
     const i = img(rel);
     if (listo(i)) m.drawImage(i, Math.round(x), Math.round(y));
+  }
+
+  // v40: las velitas del 7 de diciembre (main.js avisa con e.velitas)
+  const VELAS = [];
+  for (let x = VX0 - 3; x <= VX1 + 3; x += 9) VELAS.push([x, VY1 + 5]); // en el alfeizar
+  for (let x = 14; x <= MW - 10; x += 20) if (x < 150 || x > 250) VELAS.push([x, 146 - (x % 40 === 14 ? 2 : 0)]); // en el piso, adelante
+  const FAROLES_VELITAS = [[40, 140, "220,60,60"], [92, 143, "246,200,40"], [262, 141, "60,150,90"], [316, 143, "60,100,200"], [150, 145, "230,110,170"], [238, 145, "246,140,40"]];
+  function brilloVela(x, y, rgb, a, r = 5) {
+    m.save();
+    m.globalCompositeOperation = "screen";
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const dd = Math.hypot(dx, dy * 1.15);
+        if (dd > r) continue;
+        if (BAYER[(y + dy + 40) % 4][(x + dx + 40) % 4] > 16 * (1 - dd / r)) continue;
+        m.fillStyle = `rgba(${rgb},${(a * (1 - dd / r)).toFixed(3)})`;
+        m.fillRect(Math.round(x + dx), Math.round(y + dy), 1, 1);
+      }
+    }
+    m.restore();
+  }
+  function velitas(ahora) {
+    VELAS.forEach(([x, y], i) => {
+      const tit = Math.floor(ahora / 140 + i * 3.3) % 3;
+      brilloVela(x, y - 5, "255,190,100", 0.32 + tit * 0.04, 6);
+      m.fillStyle = "rgb(244,240,226)";
+      m.fillRect(x, y - 4, 2, 4);
+      m.fillStyle = "rgb(206,198,180)";
+      m.fillRect(x + 1, y - 4, 1, 4);
+      m.fillStyle = tit === 2 ? "rgb(255,236,170)" : "rgb(255,200,90)";
+      m.fillRect(x, y - 6 - (tit === 1 ? 1 : 0), 1, 2);
+      m.fillStyle = "rgb(255,150,50)";
+      m.fillRect(x + (tit === 0 ? 1 : 0), y - 5, 1, 1);
+    });
+    FAROLES_VELITAS.forEach(([x, y, rgb], i) => {
+      const tit = Math.floor(ahora / 170 + i * 2.1) % 2;
+      brilloVela(x + 3, y - 4, rgb, 0.3 + tit * 0.05, 8);
+      m.fillStyle = `rgb(${rgb})`;
+      m.fillRect(x, y - 8, 7, 8);
+      m.fillStyle = "rgba(255,240,200,0.75)";
+      m.fillRect(x + 2, y - 6, 3, 5);
+      m.fillStyle = "rgb(60,40,30)";
+      m.fillRect(x, y - 9, 7, 1);
+      m.fillRect(x, y, 7, 1);
+      m.fillStyle = tit ? "rgb(255,230,150)" : "rgb(255,200,90)";
+      m.fillRect(x + 3, y - 4, 1, 2);
+    });
   }
 
   function pixel(x, y, c) {
@@ -1481,6 +1536,9 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
         });
       }
     }
+    // v40: el Dia de las Velitas (7 de diciembre, de noche): velitas en la
+    // ventana y en el piso, y faroles de papel de colores, despues de la luz
+    if (e.velitas && clave !== "dia") velitas(ahora);
     // el rayo: un fogonazo en todo el cuarto
     if (clima === "tormenta") {
       if (!rayo.prox) rayo.prox = ahora + 5000 + Math.random() * 12000;

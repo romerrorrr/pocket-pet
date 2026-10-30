@@ -116,6 +116,30 @@ function nota(frec, inicio, dur, { forma = "square", vol = 0.18, desliz = null }
   osc.stop(inicio + dur + 0.02);
 }
 
+/** v40: un golpe de ruido (la explosion de la mecha del tejo), filtrado y con caida. */
+function ruido(inicio, dur, { vol = 0.3, corte = 1200 } = {}) {
+  const c = contexto();
+  if (!c) return;
+  const n = Math.max(1, Math.floor(c.sampleRate * dur));
+  const b = c.createBuffer(1, n, c.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 2;
+  const s = c.createBufferSource();
+  s.buffer = b;
+  const f = c.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.setValueAtTime(corte, inicio);
+  f.frequency.exponentialRampToValueAtTime(120, inicio + dur);
+  const g = c.createGain();
+  g.gain.setValueAtTime(vol, inicio);
+  g.gain.exponentialRampToValueAtTime(0.0001, inicio + dur);
+  s.connect(f);
+  f.connect(g);
+  g.connect(c.destination);
+  s.start(inicio);
+  s.stop(inicio + dur + 0.02);
+}
+
 // Cada entrada es una lista de [frecuencia, retrasoSeg, duracionSeg, opts]
 const VOCES = {
   comer: (t) => {
@@ -216,6 +240,15 @@ const VOCES = {
     nota(1047, t + 0.24, 0.3, { forma: "triangle", vol: 0.14 });
   },
   tocar: (t) => nota(880, t, 0.03, { forma: "square", vol: 0.04 }),
+  // v40: el tejo (el golpe seco en la greda) y la mecha (¡pum!)
+  tejo: (t) => {
+    nota(110, t, 0.12, { forma: "triangle", vol: 0.22, desliz: 60 });
+    ruido(t, 0.08, { vol: 0.12, corte: 600 });
+  },
+  mecha: (t) => {
+    ruido(t, 0.6, { vol: 0.5, corte: 3000 });
+    nota(80, t, 0.35, { forma: "sawtooth", vol: 0.16, desliz: 40 });
+  },
   no: (t) => {
     nota(220, t, 0.1, { forma: "sawtooth", vol: 0.1 });
     nota(165, t + 0.11, 0.18, { forma: "sawtooth", vol: 0.1 });
