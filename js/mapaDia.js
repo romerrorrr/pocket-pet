@@ -13,6 +13,7 @@
  * Los mapas hechos se guardan en IndexedDB: un dia que ya paso no se vuelve
  * a bajar.
  */
+import { wgsAGcj } from "./mundo.js";
 import * as Donde from "./dondeEstuvimos.js";
 
 export const MINI = { w: 146, h: 110 }; // la polaroid del diario (4:3)
@@ -23,6 +24,13 @@ const TESELA_POR_PIXEL = 4; // 1 pixel del mapa = 4 pixeles de tesela (los texto
 const ZOOM_MAX = 17;
 const ZOOM_MIN = 3;
 const URL_TESELA = (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+// v41: en China OpenStreetMap a veces no carga (y el mapa se quedaba en el
+// dibujo de respaldo). Si falla, se prueba con las teselas de Amap (Gaode),
+// que si cargan alla y dejan leer los pixeles. Amap usa GCJ-02 (el
+// "corrimiento chino", ~500 m): se corre el pedido para que todo calce.
+// Se recuerda cual anduvo, para empezar por ese la proxima vez.
+const URL_AMAP = (z, x, y) => `https://wprd0${1 + ((x + y) % 4)}.is.autonavi.com/appmaptile?x=${x}&y=${y}&z=${z}&lang=zh_cn&size=1&scl=1&style=7&ltype=3`;
+const CLAVE_PROVEEDOR = "baozi_mapa_proveedor";
 const ESPERA_TESELA_MS = 12000;
 const REINTENTO_MS = 30 * 60000;
 
@@ -85,9 +93,18 @@ const CREMA = [255, 251, 240];
 const ROSA = [186, 78, 104];
 const PERG = [243, 230, 198], PERG2 = [232, 215, 176], PERG3 = [214, 192, 148], ARBOL = [138, 160, 108], ARBOL2 = [104, 126, 84];
 
-function rotular(r, g, b) {
+// los colores de Amap (estilo 7, areas y calles, sin rotulos)
+const REFERENCIAS_AMAP = [
+  [164, 205, 255, R.agua], [180, 215, 212, R.agua], [172, 210, 232, R.agua], [175, 212, 225, R.agua],
+  [201, 229, 158, R.parque], [191, 223, 182, R.parque], [198, 227, 165, R.parque], [212, 223, 182, R.parque], [186, 219, 196, R.parque],
+  [252, 249, 242, R.tierra], [239, 236, 231, R.tierra], [244, 242, 237, R.tierra], [216, 231, 238, R.tierra],
+  [234, 225, 238, R.edif], [227, 221, 212, R.edif], [222, 218, 205, R.edif],
+  [255, 255, 255, R.calle], [254, 254, 254, R.calle], [255, 235, 161, R.calle], [255, 213, 128, R.calle], [250, 200, 110, R.calle],
+];
+
+function rotular(r, g, b, refs = REFERENCIAS) {
   let mejor = 0, dist = Infinity;
-  for (const ref of REFERENCIAS) {
+  for (const ref of refs) {
     const d = (r - ref[0]) ** 2 + (g - ref[1]) ** 2 + (b - ref[2]) ** 2;
     if (d < dist) {
       dist = d;
@@ -125,7 +142,39 @@ function cargarImagen(url) {
  * de darse por vencido. El mapa del dia no tolera ninguna; el del corcho
  * (v31, corchoReal.js), que baja muchas, alguna que otra.
  */
-export async function rasterDeRotulos(encuadres, z, { tolerancia = 0 } = {}) {
+const PROVEEDORES = {
+  osm: { url: URL_TESELA, refs: REFERENCIAS, gcj: false },
+  amap: { url: URL_AMAP, refs: REFERENCIAS_AMAP, gcj: true },
+};
+function ordenProveedores() {
+  let primero = "osm";
+  try {
+    if (localStorage.getItem(CLAVE_PROVEEDOR) === "amap") primero = "amap";
+  } catch (e) {
+    /* nada */
+  }
+  return primero === "amap" ? ["amap", "osm"] : ["osm", "amap"];
+}
+
+export async function rasterDeRotulos(encuadres, z, opciones = {}) {
+  let ultimo = null;
+  for (const id of ordenProveedores()) {
+    try {
+      const r = await rasterDe(encuadres, z, opciones, PROVEEDORES[id]);
+      try {
+        localStorage.setItem(CLAVE_PROVEEDOR, id);
+      } catch (e) {
+        /* nada */
+      }
+      return r;
+    } catch (e) {
+      ultimo = e;
+    }
+  }
+  throw ultimo || new Error("teselas");
+}
+
+async function rasterDe(encuadres, z, { tolerancia = 0 } = {}, prov = PROVEEDORES.osm) {
   const n = 2 ** z * 256;
   let px0 = Infinity, py0 = Infinity, px1 = -Infinity, py1 = -Infinity;
   for (const e of encuadres) {
@@ -136,19 +185,30 @@ export async function rasterDeRotulos(encuadres, z, { tolerancia = 0 } = {}) {
   }
   px0 = Math.floor(px0); py0 = Math.floor(py0); px1 = Math.ceil(px1); py1 = Math.ceil(py1);
   const ancho = px1 - px0, alto = py1 - py0;
+  // GCJ-02: lo que en WGS84 esta en p, en las teselas de Amap esta en p + (dx, dy)
+  let dx = 0, dy = 0;
+  if (prov.gcj) {
+    const cxN = (px0 + px1) / 2 / n, cyN = (py0 + py1) / 2 / n;
+    const lon = cxN * 360 - 180;
+    const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * cyN))) * 180) / Math.PI;
+    const [glat, glon] = wgsAGcj(lat, lon);
+    dx = Math.round((mx(glon) - cxN) * n);
+    dy = Math.round((my(glat) - cyN) * n);
+  }
+  const qx0 = px0 + dx, qy0 = py0 + dy, qx1 = px1 + dx, qy1 = py1 + dy;
   const lienzo = document.createElement("canvas");
   lienzo.width = ancho;
   lienzo.height = alto;
   const ctx = lienzo.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "rgb(170,211,223)";
+  ctx.fillStyle = prov.gcj ? "rgb(164,205,255)" : "rgb(170,211,223)";
   ctx.fillRect(0, 0, ancho, alto);
   const lado = 2 ** z;
   const pedidos = [];
-  for (let tx = Math.floor(px0 / 256); tx <= Math.floor((px1 - 1) / 256); tx++) {
-    for (let ty = Math.floor(py0 / 256); ty <= Math.floor((py1 - 1) / 256); ty++) {
+  for (let tx = Math.floor(qx0 / 256); tx <= Math.floor((qx1 - 1) / 256); tx++) {
+    for (let ty = Math.floor(qy0 / 256); ty <= Math.floor((qy1 - 1) / 256); ty++) {
       if (ty < 0 || ty >= lado) continue;
       const txx = ((tx % lado) + lado) % lado;
-      pedidos.push(cargarImagen(URL_TESELA(z, txx, ty)).then((img) => ctx.drawImage(img, tx * 256 - px0, ty * 256 - py0)));
+      pedidos.push(cargarImagen(prov.url(z, txx, ty)).then((img) => ctx.drawImage(img, tx * 256 - qx0, ty * 256 - qy0)));
     }
   }
   let fallas = 0;
@@ -161,7 +221,7 @@ export async function rasterDeRotulos(encuadres, z, { tolerancia = 0 } = {}) {
     const k = (datos[j] << 16) | (datos[j + 1] << 8) | datos[j + 2];
     let v = memo.get(k);
     if (v === undefined) {
-      v = rotular(datos[j], datos[j + 1], datos[j + 2]);
+      v = rotular(datos[j], datos[j + 1], datos[j + 2], prov.refs);
       memo.set(k, v);
     }
     rot[i] = v;

@@ -7,12 +7,15 @@
  * aro, las mechas: sobrecitos de papel con polvora que EXPLOTAN si el tejo
  * les cae encima.
  *
- *   mano      cae en la greda, cerca del bocin ............. 1
+ *   mano      al final de cada ronda, el tejo mas cerca del bocin 1
  *   mecha     revienta una mecha (¡pum!) ................... 3
  *   embocinada queda adentro del aro ........................ 6
  *   moñona    adentro del aro Y revienta una mecha ......... 9
  *
- * Se juega con 8 tejos. Para lanzar: tocar, arrastrar el dedo hacia ABAJO
+ * v41: se juega por rondas, como en la cancha: 3 rondas de 3 tejos; al
+ * terminar cada ronda, el tejo que quedo mas cerca del bocin se lleva la
+ * mano. La punteria se ve siempre (una flecha que sigue al dedo).
+ * Se juega con 9 tejos. Para lanzar: tocar, arrastrar el dedo hacia ABAJO
  * (como tomando impulso) y soltar. Lo largo del arrastre es la fuerza; el
  * costado, la punteria. Hay una barrita de fuerza con la zona buena (en
  * EASY se ve tambien por donde va a caer). En NORMAL y HARD hay viento.
@@ -24,7 +27,9 @@ import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablea
 
 const CLAVE = "baozi_record_tejo";
 const ALTO = 168;
-const TEJOS = 8;
+const POR_RONDA = 3; // v41: como en la cancha, se tira por rondas de 3 tejos
+const RONDAS = 3;
+const TEJOS = POR_RONDA * RONDAS;
 const PUNTOS = { mano: 1, mecha: 3, embocinada: 6, monona: 9 };
 
 // el cajon (en pixeles del juego, respecto del centro de la pantalla)
@@ -55,11 +60,10 @@ export function puntuar(x, y, mechas) {
     if (m.viva && Math.hypot(x - m.x, (y - m.y) * 1.4) <= MECHA_R) reventadas.push(i);
   });
   const adentro = d < 0.82;
-  if (adentro && reventadas.length) return { tipo: "monona", puntos: PUNTOS.monona, reventadas };
-  if (adentro) return { tipo: "embocinada", puntos: PUNTOS.embocinada, reventadas };
-  if (reventadas.length) return { tipo: "mecha", puntos: PUNTOS.mecha, reventadas };
-  if (d < 2.4) return { tipo: "mano", puntos: PUNTOS.mano, reventadas };
-  return { tipo: "greda", puntos: 0, reventadas };
+  if (adentro && reventadas.length) return { tipo: "monona", puntos: PUNTOS.monona, reventadas, d };
+  if (adentro) return { tipo: "embocinada", puntos: PUNTOS.embocinada, reventadas, d };
+  if (reventadas.length) return { tipo: "mecha", puntos: PUNTOS.mecha, reventadas, d };
+  return { tipo: "greda", puntos: 0, reventadas, d };
 }
 
 function dentroDelCajon(x, y) {
@@ -107,7 +111,7 @@ export function iniciarTejo(contenedor, opts) {
       <div class="juego-record" id="tejo-record">TEJO</div>
       <div class="tejo-personaje" id="tejo-personaje">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
       <div class="juego-cielo" id="tejo-capa"></div>
-      <div class="pista-minijuego" id="tejo-pista">Drag down to swing, let go to throw · hit a mecha and BOOM!</div>
+      <div class="pista-minijuego" id="tejo-pista">Drag down to swing, sideways to aim, let go to throw · hit a mecha and BOOM!</div>
       ${htmlDificultad("TEJO", CLAVE, dif, " pts")}
     </div>`;
   const $ = (id) => contenedor.querySelector(`#${id}`);
@@ -124,7 +128,9 @@ export function iniciarTejo(contenedor, opts) {
     mechasRotas: 0,
     embocinadas: 0,
     mechas: mechasNuevas(),
-    clavados: [], // tejos en la greda { x, y }
+    clavados: [], // tejos en la greda de esta ronda { x, y, d }
+    ronda: 1,
+    polvo: [], // la greda que salta al clavarse un tejo
     vuelo: null, // { t0, desde, hasta, res }
     arrastre: null, // { x0, y0, x, y }
     viento: 0,
@@ -142,7 +148,8 @@ export function iniciarTejo(contenedor, opts) {
   }
 
   function hud() {
-    $("tejo-tejos").innerHTML = `<i class="tejo-ficha"></i>×${st.quedan}`;
+    const enRonda = Math.max(0, st.quedan - (RONDAS - st.ronda) * POR_RONDA);
+    $("tejo-tejos").innerHTML = `R${Math.min(st.ronda, RONDAS)} ${'<i class="tejo-ficha"></i>'.repeat(enRonda)}`;
     $("tejo-puntos").textContent = `${st.puntos} pts`;
     const v = $("tejo-viento");
     if (D.viento > 0 && st.estado !== "eligiendo") {
@@ -184,7 +191,7 @@ export function iniciarTejo(contenedor, opts) {
     const r = area.getBoundingClientRect();
     const fuerza = Math.max(0, Math.min(1.15, (a.y - a.y0) / MAX_ARRASTRE()));
     // tirar hacia la izquierda manda el tejo a la derecha (como una honda)
-    const punteria = Math.max(-1.6, Math.min(1.6, -(a.x - a.x0) / (r.width * 0.16)));
+    const punteria = Math.max(-1.8, Math.min(1.8, -(a.x - a.x0) / (r.width * 0.11)));
     return { fuerza, punteria };
   }
 
@@ -254,7 +261,10 @@ export function iniciarTejo(contenedor, opts) {
     const xPct = ((cx + hasta.x) / W) * 100;
     const yPct = (hasta.y / ALTO) * 100;
     st.puntos += res.puntos;
-    if (res.tipo !== "fuera") st.clavados = [...st.clavados.slice(-3), { x: hasta.x, y: hasta.y }];
+    if (res.tipo !== "fuera") {
+      st.clavados.push({ x: hasta.x, y: hasta.y, d: res.d });
+      for (let i = 0; i < 10; i++) st.polvo.push({ x: hasta.x, y: hasta.y, vx: (Math.random() * 2 - 1) * 26, vy: -10 - Math.random() * 22, t0: reloj() });
+    }
     if (res.reventadas.length) {
       for (const i of res.reventadas) st.mechas[i].viva = false;
       st.mechasRotas += res.reventadas.length;
@@ -264,10 +274,10 @@ export function iniciarTejo(contenedor, opts) {
       vibrar([40, 30, 60]);
     } else sonar(res.tipo === "fuera" ? "no" : "tejo");
     if (res.tipo === "embocinada" || res.tipo === "monona") st.embocinadas += 1;
-    const textos = { mano: "+1 Mano!", mecha: "+3 MECHA!", embocinada: "+6 Embocinada!", monona: "+9 ¡MOÑONA!", greda: "Close…", fuera: "Out!" };
+    const textos = { mecha: "+3 MECHA!", embocinada: "+6 Embocinada!", monona: "+9 ¡MOÑONA!", greda: "In the clay!", fuera: "Out!" };
     flotante(capa, textos[res.tipo], xPct, Math.max(12, yPct - 10), res.puntos >= 3 ? "oro" : res.tipo === "fuera" ? "mal" : "");
     if (res.puntos >= 3) cara("ojo_especial_euforico.png", "boca_especial_euforico.png");
-    else if (res.puntos > 0) cara("ojo_base_energia_alta.png", "boca_base_feliz.png");
+    else if (res.puntos > 0 || res.tipo === "greda") cara("ojo_base_energia_alta.png", "boca_base_feliz.png");
     else cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png");
     st.estado = "viendo";
     hud();
@@ -278,6 +288,31 @@ export function iniciarTejo(contenedor, opts) {
   function despuesDeVer() {
     // las mechas reventadas se reponen para el proximo tejo (como en la cancha)
     for (const m of st.mechas) m.viva = true;
+    const tirados = TEJOS - st.quedan;
+    if (tirados > 0 && tirados % POR_RONDA === 0 && !st.manoDada) {
+      // fin de la ronda: la mano para el tejo mas cerca del bocin
+      st.manoDada = true;
+      const enGreda = st.clavados.filter((c) => Number.isFinite(c.d));
+      if (enGreda.length) {
+        const mejor = enGreda.reduce((a, b) => (b.d < a.d ? b : a));
+        st.puntos += PUNTOS.mano;
+        st.manos = (st.manos || 0) + 1;
+        st.manoMarca = { x: mejor.x, y: mejor.y, t0: reloj() };
+        const W = L.W;
+        flotante(capa, "+1 Mano!", ((W / 2 + mejor.x) / W) * 100, Math.max(12, (mejor.y / ALTO) * 100 - 12), "");
+        sonar("moneda");
+      }
+      hud();
+      st.estado = "viendo";
+      st.siguiente = reloj() + (enGreda.length ? 1100 : 300);
+      return;
+    }
+    st.manoDada = false;
+    if (tirados > 0 && tirados % POR_RONDA === 0) {
+      // ronda nueva: se sacan los tejos de la greda
+      st.clavados = [];
+      st.ronda += 1;
+    }
     if (st.quedan <= 0) terminar();
     else nuevoTiro();
   }
@@ -301,13 +336,18 @@ export function iniciarTejo(contenedor, opts) {
       px(0, y, W, 1, k === 0 ? "rgb(70,44,28)" : k < 3 ? "rgb(138,94,58)" : "rgb(118,78,48)");
     }
     for (let x = 0; x < W; x += 37) px(x, 0, 2, 86, "rgb(84,54,34)");
-    // el banderin amarillo-azul-rojo a lo largo
-    const cols = ["rgb(246,200,40)", "rgb(40,76,168)", "rgb(210,40,48)"];
-    for (let x = 4, i = 0; x < W; x += 9, i++) {
-      const y = 8 + Math.round(2 * Math.sin((Math.PI * (x % 120)) / 119));
-      for (let k = 0; k < 6; k++) px(x - 3 + k / 2, y + k, 6 - k, 1, cols[i % 3]);
-    }
     for (let x = 0; x < W; x++) px(x, 7 + Math.round(2 * Math.sin((Math.PI * (x % 120)) / 119)), 1, 1, "rgb(60,40,30)");
+    // el lanzadero: la tabla desde donde se tira
+    px(0, ALTO - 13, W, 3, "rgb(110,72,42)");
+    px(0, ALTO - 13, W, 1, "rgb(150,106,64)");
+    // una canasta de tejos y un tablero de puntos (tiza) en la pared
+    px(14, 20, 34, 24, "rgb(40,52,44)");
+    px(14, 20, 34, 1, "rgb(120,84,50)");
+    px(14, 43, 34, 1, "rgb(120,84,50)");
+    for (let i = 0; i < 4; i++) px(18 + i * 3, 25, 1, 6, "rgba(236,236,230,0.85)");
+    px(17, 28, 12, 1, "rgba(236,236,230,0.85)");
+    for (let i = 0; i < 3; i++) px(33 + i * 3, 25, 1, 6, "rgba(236,236,230,0.85)");
+    px(18, 35, 26, 1, "rgba(236,236,230,0.5)");
     // el piso: tierra apisonada que se va acercando
     for (let y = 86; y < ALTO; y++) {
       const t = (y - 86) / (ALTO - 86);
@@ -365,10 +405,10 @@ export function iniciarTejo(contenedor, opts) {
     g.fillRect(x - 2, y + 1, 5, 1);
   }
 
-  function dibujarTejo(g, x, y, r) {
+  function dibujarTejo(g, x, y, r, giro = 0.55) {
     // un disco de metal (visto un poco de costado): oscuro, con un brillo arriba
     const rx = Math.max(1, r);
-    const ry = Math.max(1, r * 0.55);
+    const ry = Math.max(1, r * giro);
     g.fillStyle = "rgb(24,22,30)";
     g.beginPath();
     g.ellipse(Math.round(x), Math.round(y), rx + 1, ry + 1, 0, 0, Math.PI * 2);
@@ -394,8 +434,27 @@ export function iniciarTejo(contenedor, opts) {
     const sac = t < st.sacudon ? Math.round((Math.random() * 2 - 1) * 2) : 0;
     g.setTransform(1, 0, 0, 1, sac, sac ? 1 : 0);
     g.drawImage(fondo(W), 0, 0);
-    // los tejos clavados en la greda
+    // el banderin: se mueve con el viento (asi se ve para donde sopla)
+    const cols = ["rgb(246,200,40)", "rgb(40,76,168)", "rgb(210,40,48)"];
+    for (let x = 4, i = 0; x < W; x += 9, i++) {
+      const y = 8 + Math.round(2 * Math.sin((Math.PI * (x % 120)) / 119));
+      const lado = st.viento * 9 + Math.sin(t / 260 + i) * (0.6 + Math.abs(st.viento) * 3);
+      g.fillStyle = cols[i % 3];
+      for (let k = 0; k < 6; k++) g.fillRect(Math.round(x - 3 + k / 2 + (lado * k) / 6), y + k, 6 - k, 1);
+    }
+    // los tejos clavados en la greda (los de esta ronda)
     for (const c of st.clavados) dibujarTejo(g, cx + c.x, c.y, 2.5);
+    if (st.manoMarca && t - st.manoMarca.t0 < 1400 && Math.floor(t / 180) % 2) {
+      g.strokeStyle = "rgb(255,236,120)";
+      g.strokeRect(Math.round(cx + st.manoMarca.x) - 4, Math.round(st.manoMarca.y) - 3, 8, 6);
+    }
+    // la greda que salta
+    st.polvo = st.polvo.filter((p) => t - p.t0 < 500);
+    for (const p of st.polvo) {
+      const k = (t - p.t0) / 1000;
+      g.fillStyle = `rgba(150,128,104,${1 - k * 2})`;
+      g.fillRect(Math.round(cx + p.x + p.vx * k), Math.round(p.y + p.vy * k + 60 * k * k), 1, 1);
+    }
     // las mechas
     for (const m of st.mechas) if (m.viva) dibujarMecha(g, Math.round(cx + m.x), Math.round(m.y));
     // la explosion: destello, humo y chispas
@@ -443,7 +502,8 @@ export function iniciarTejo(contenedor, opts) {
       const y1 = st.vuelo.hasta.y;
       const x = x0 + (x1 - x0) * k;
       const y = y0 + (y1 - y0) * k - Math.sin(Math.PI * k) * 46;
-      dibujarTejo(g, x, y, 6 - 3.5 * k);
+      // da vueltas en el aire (el disco se ve de canto y de frente)
+      dibujarTejo(g, x, y, 6 - 3.5 * k, 0.15 + 0.6 * Math.abs(Math.cos(k * 14)));
       if (k >= 1) aterrizar();
     }
     if (st.estado === "viendo" && t >= st.siguiente) despuesDeVer();
@@ -465,16 +525,39 @@ export function iniciarTejo(contenedor, opts) {
         const h = Math.round(bh * Math.min(1, fuerza / 1.15));
         g.fillStyle = "rgb(246,200,40)";
         g.fillRect(bx, by0 + bh - h, 6, h);
-        if (D.guia === "todo") {
-          const p = caida(fuerza, punteria + st.viento, D.pw);
-          g.fillStyle = "rgba(255,255,255,0.85)";
-          for (let i = 1; i < 12; i++) {
-            const k = i / 12;
-            const x = cx - 40 + (cx + p.x - (cx - 40)) * k;
-            const y = ALTO - 26 + (p.y - (ALTO - 26)) * k - Math.sin(Math.PI * k) * 46;
-            g.fillRect(Math.round(x), Math.round(y), 1, 1);
+        if (D.guia !== "nada") {
+          const z0 = by0 + bh * (1 - Math.min(1, (FUERZA_JUSTA + D.pw) / 1.15));
+          const z1 = by0 + bh * (1 - (FUERZA_JUSTA - D.pw) / 1.15);
+          g.strokeStyle = "rgb(90,220,120)";
+          g.strokeRect(bx - 1.5, Math.round(z0) - 0.5, 9, Math.round(z1 - z0) + 1);
+        }
+        {
+          // v41: la punteria se ve siempre (en EASY, el arco entero y donde cae;
+          // en NORMAL la mitad del camino; en HARD solo para donde va)
+          const p = caida(fuerza, punteria + (D.guia === "todo" ? st.viento : 0), D.pw);
+          const hasta = D.guia === "todo" ? 12 : D.guia === "zona" ? 7 : 4;
+          const punto = (k) => [cx - 40 + (cx + p.x - (cx - 40)) * k, ALTO - 26 + (p.y - (ALTO - 26)) * k - Math.sin(Math.PI * k) * 46];
+          for (let i = 1; i < hasta; i++) {
+            const [x, y] = punto(i / 12);
+            g.fillStyle = "rgba(30,20,14,0.6)";
+            g.fillRect(Math.round(x), Math.round(y) + 1, 2, 2);
+            g.fillStyle = "rgb(255,250,236)";
+            g.fillRect(Math.round(x), Math.round(y), 2, 2);
           }
-          g.fillRect(Math.round(cx + p.x) - 1, Math.round(p.y), 3, 1);
+          if (D.guia === "todo") {
+            // donde cae: un anillito
+            g.strokeStyle = "rgb(255,236,120)";
+            g.strokeRect(Math.round(cx + p.x) - 3.5, Math.round(p.y) - 2.5, 7, 5);
+          } else {
+            // la punta de la flecha
+            const [x1, y1] = punto((hasta - 1) / 12);
+            const [x0, y0] = punto((hasta - 2) / 12);
+            const a = Math.atan2(y1 - y0, x1 - x0);
+            g.fillStyle = "rgb(255,250,236)";
+            for (const da of [-2.5, 2.5]) {
+              for (let r = 1; r <= 4; r++) g.fillRect(Math.round(x1 - Math.cos(a + da * 0.3) * r), Math.round(y1 - Math.sin(a + da * 0.3) * r), 2, 2);
+            }
+          }
         }
         dibujarTejo(g, cx - 40, ALTO - 26, 6);
       } else {
@@ -487,7 +570,8 @@ export function iniciarTejo(contenedor, opts) {
     const lado = Math.round(70 * s);
     pjEl.style.width = `${lado}px`;
     pjEl.style.height = `${lado}px`;
-    pjEl.style.left = `${Math.round((cx - 110) * s)}px`;
+    const ladeo = st.arrastre && st.estado === "apuntando" ? Math.round(lectura(st.arrastre).punteria * 6) : 0;
+    pjEl.style.left = `${Math.round((cx - 110 + ladeo) * s)}px`;
     pjEl.style.top = `${Math.round((ALTO - 66) * s)}px`;
   }
   requestAnimationFrame(cuadro);
@@ -519,6 +603,6 @@ export function iniciarTejo(contenedor, opts) {
       if (exacto) st.viento = 0;
       lanzar(fuerza, punteria, { exacto });
     },
-    _estado: () => ({ estado: st.estado, quedan: st.quedan, puntos: st.puntos, mechas: st.mechasRotas, embocinadas: st.embocinadas, viento: st.viento }),
+    _estado: () => ({ estado: st.estado, quedan: st.quedan, puntos: st.puntos, mechas: st.mechasRotas, embocinadas: st.embocinadas, viento: st.viento, ronda: st.ronda, manos: st.manos || 0 }),
   };
 }
