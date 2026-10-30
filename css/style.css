@@ -5007,19 +5007,15 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
 .ritmo-canciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
 .ritmo-canciones .boton { font-size: 11px; min-height: 34px; }
 
-.pantalla-bote { overflow: hidden; background: rgb(64, 118, 150); }
-.pantalla-bote.de-noche { background: rgb(18, 26, 58); }
-.bote-atras { z-index: 1; }
-.bote-frente { z-index: 2; }
-.bote-personaje { position: absolute; z-index: 2; pointer-events: none; }
-.bote-personaje .sprite-cara { width: 100%; height: 100%; }
-.bote-metros { margin-left: auto; }
-.pantalla-bote .juego-record { color: rgba(30, 28, 30, 0.7); }
-.pantalla-bote.de-noche .juego-record { color: var(--tenue); }
-.pantalla-bote .pista-minijuego { color: var(--crema); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
-.bote-chip-farol { display: inline-flex; align-items: center; gap: 4px; padding-top: 3px; padding-bottom: 3px; }
-.bote-chip-farol img { width: 19px; height: 21px; margin: -3px -3px -3px -5px; image-rendering: pixelated; }
-.bote-chip-farol b { font-weight: normal; }
+/* v40: el tejo (reemplaza a Boat Ride) */
+.pantalla-tejo { overflow: hidden; background: rgb(118, 78, 48); touch-action: none; }
+.tejo-personaje { position: absolute; z-index: 2; pointer-events: none; }
+.tejo-personaje .sprite-cara { width: 100%; height: 100%; }
+.pantalla-tejo .juego-record { color: rgba(255, 240, 210, 0.75); }
+.pantalla-tejo .pista-minijuego { color: var(--crema); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
+.tejo-chip-tejos { display: inline-flex; align-items: center; gap: 4px; }
+.tejo-ficha { display: inline-block; width: 12px; height: 7px; background: rgb(54, 54, 62); border: 1px solid rgb(24, 22, 30); border-radius: 50%; box-shadow: inset 2px 1px 0 rgb(150, 150, 160); }
+.tejo-viento { margin-left: auto; }
 
 /* ------------------------------------------------------------------
    v30 — los lugares de ustedes (se agregan desde el mapa del corcho)
