@@ -32,7 +32,7 @@
  *     final en juego): mensaje "activar" + recarga.
  */
 
-const VERSION = "baozi-0e7df8efb6"; // tools/deploy.py la reemplaza por un hash del contenido
+const VERSION = "baozi-fd87fbd9c4"; // tools/deploy.py la reemplaza por un hash del contenido
 
 // tools/deploy.py escribe aca el hash de cada archivo ({"./js/main.js": "ab12..."}).
 // Vacio (sin deploy, servido local): se usa VERSION para romper caches y no se copia nada.
@@ -168,19 +168,40 @@ const MUSICA_OPCIONAL = []; // tools/deploy.py: assets/musica/*.mp3
 const MANIFIESTO = "./__hashes__.json";
 const EN_PARALELO = 6; // con GitHub lento desde China, mejor pocos a la vez
 
-/** Baja un archivo salteando la cache del navegador Y la del CDN (?v=). Un reintento. */
+/** SHA-256 (los primeros 12 hex, como en tools/deploy.py) de lo que se bajo. */
+async function hashDe(datos) {
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", datos));
+  let h = "";
+  for (let i = 0; i < 6; i++) h += d[i].toString(16).padStart(2, "0");
+  return h;
+}
+
+/**
+ * Baja un archivo salteando la cache del navegador Y la del CDN (?v=).
+ * v43 (para China): hasta 4 intentos con espera (GitHub Pages devuelve 503
+ * sueltos cuando se le pide mucho junto) y se COMPRUEBA el contenido contra
+ * su hash: una pagina de wifi de hotel, un CDN atrasado o una descarga
+ * cortada no entran nunca a la cache como si fueran la app.
+ */
+const ESPERAS_REINTENTO = [0, 1000, 3000, 8000];
 async function bajar(u) {
   const url = u + (u.includes("?") ? "&" : "?") + "v=" + (HASHES[u] || VERSION);
   let error = null;
-  for (let intento = 0; intento < 2; intento++) {
+  for (const espera of ESPERAS_REINTENTO) {
+    if (espera) await new Promise((r) => setTimeout(r, espera));
     try {
       const r = await fetch(new Request(url, { cache: "reload" }));
+      if (r.status === 404) throw Object.assign(new Error(`${u}: HTTP 404`), { definitivo: true });
       if (!r.ok) throw new Error(`${u}: HTTP ${r.status}`);
-      // una respuesta redirigida no se puede servir a una navegacion (Safari): se copia limpia
-      if (r.redirected) return new Response(await r.blob(), { status: r.status, statusText: r.statusText, headers: r.headers });
-      return r;
+      const datos = await r.arrayBuffer();
+      const esperado = HASHES[u];
+      if (esperado && (await hashDe(datos)) !== esperado) throw new Error(`${u}: el contenido no es el de esta version`);
+      // (copia limpia: una respuesta redirigida no se puede servir a una navegacion en Safari)
+      const tipo = r.headers.get("Content-Type");
+      return new Response(datos, { status: 200, statusText: "OK", headers: tipo ? { "Content-Type": tipo } : {} });
     } catch (e) {
       error = e;
+      if (e && e.definitivo) break;
     }
   }
   throw error;
@@ -204,13 +225,15 @@ async function hashesViejos() {
 }
 
 async function precachear() {
-  // una cache con este nombre pero sin manifiesto es una instalacion que quedo a medias: de cero
-  const previa = await caches.open(VERSION);
-  if (!(await previa.match(MANIFIESTO))) await caches.delete(VERSION);
+  // v43: una cache con este nombre pero sin manifiesto es una instalacion de
+  // ESTA misma version que quedo a medias (con señal mala): se sigue desde ahi.
+  // Lo que tiene ya se comprobo contra su hash al bajarlo, y VERSION cambia
+  // con cualquier cambio de contenido, asi que no se mezclan dos deploys.
   const cache = await caches.open(VERSION);
   const viejos = Object.keys(HASHES).length ? await hashesViejos() : new Map();
 
   const guardar = async (u) => {
+    if (await cache.match(u)) return; // (de un intento anterior de esta version)
     const h = HASHES[u];
     const deAntes = h && viejos.get(u + "|" + h);
     if (deAntes) {
@@ -219,20 +242,22 @@ async function precachear() {
     }
     return cache.put(u, await bajar(u));
   };
-  // de a EN_PARALELO; si uno falla, falla todo (y los demas dejan de bajar)
+  // de a EN_PARALELO. v43: si uno falla se siguen bajando los demas (quedan
+  // para el proximo intento) y al final la instalacion falla igual: sin todo, no se activa.
   const cola = [...SHELL, ...ARTE];
-  let fallo = false;
+  let primerError = null;
   const obreros = Array.from({ length: EN_PARALELO }, async () => {
-    while (cola.length && !fallo) {
+    while (cola.length) {
+      const u = cola.shift();
       try {
-        await guardar(cola.shift());
+        await guardar(u);
       } catch (e) {
-        fallo = true;
-        throw e;
+        if (!primerError) primerError = e;
       }
     }
   });
   await Promise.all(obreros);
+  if (primerError) throw primerError;
   await Promise.all(MUSICA_OPCIONAL.map((u) => guardar(u).catch(() => {})));
   // ultimo paso: el manifiesto (marca la cache como completa)
   await cache.put(MANIFIESTO, new Response(JSON.stringify(HASHES), { headers: { "Content-Type": "application/json" } }));
@@ -241,11 +266,10 @@ async function precachear() {
 self.addEventListener("install", (evento) => {
   evento.waitUntil(
     precachear()
-      .catch(async (e) => {
-        // todo o nada: sin la cache a medias, la version vieja sigue entera
-        await caches.delete(VERSION).catch(() => {});
-        throw e;
-      })
+      // todo o nada para ACTIVARSE: si falta algo, esta version no se instala y
+      // la vieja sigue entera (con su propia cache). v43: lo ya bajado queda
+      // en la cache de esta version para el proximo intento (se borra sola
+      // cuando se activa otra version).
       .then(async () => {
         // Solo se activa de una si no hay ninguna ventana abierta. Con la app
         // abierta ESPERA (ver arriba): el proximo arranque o main.js la activan.
