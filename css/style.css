@@ -5228,3 +5228,22 @@ img.icono-fecha { width: 22px; height: 21px; }
 @media (max-height: 400px) {
   .pantalla-ritmo .juego-dificultad { gap: 9px; }
 }
+
+/* v44: la monedita de "la primera partida de hoy paga segun el puntaje" */
+.tarjeta-juego { position: relative; }
+.juego-moneda {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: var(--papel);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--tinta);
+  animation: juego-moneda-brilla 1.8s ease-in-out infinite;
+}
+.juego-moneda img { width: 16px; height: 16px; image-rendering: pixelated; }
+@keyframes juego-moneda-brilla { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .juego-moneda { animation: none; } }
