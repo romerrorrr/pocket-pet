@@ -459,6 +459,7 @@ function arrancar() {
   registrarServiceWorker();
   storage.pedirAlmacenamientoPersistente();
   const fotosListas = Camara.precargarFotos();
+  fotosListasPromesa = fotosListas;
   Corcho.precargar();
   MapaDia.precargarMapas().then(() => {
     if (controller.vista === "consulta" && controller.consultaActual === "diary") renderVistaActual();
@@ -793,6 +794,7 @@ function renderVistaActual() {
         recordTejo: leerRecordTejo(),
         cancionesRitmo: Musica.estacionesParaJugar().length,
         libro: PECES.map((p) => ({ id: p.id, nombre: p.nombre, n: pescaReg.libro[p.id] || 0 })),
+        primeras: Object.fromEntries(["snack", "pesca", "torre", "ritmo", "tejo"].map((j) => [j, tienda.primeraDelDia(j)])), // v44
       });
       document.getElementById("btn-juego-snack").addEventListener("click", () => conTransicion(iniciarMinijuego));
       document.getElementById("btn-juego-pesca").addEventListener("click", () => conTransicion(iniciarPescaJuego));
@@ -3011,6 +3013,9 @@ function abrirEscribir() {
   });
 }
 
+// v44: el backup espera a que el album este leido (si no, en el primer segundo podia salir sin fotos)
+let fotosListasPromesa = Promise.resolve();
+
 function wireBackup() {
   const mensajeEl = document.getElementById("mensaje-backup");
   const mensaje = (texto, clase = "") => {
@@ -3023,6 +3028,10 @@ function wireBackup() {
   const videos = Final.dijoQueSi() ? Grabacion.videosParaBackup().catch(() => []) : Promise.resolve([]);
   document.getElementById("btn-exportar-backup").addEventListener("click", async () => {
     guardarTodo();
+    if (!Camara.fotosCargadas()) {
+      mensaje("Getting your photos ready…");
+      await fotosListasPromesa;
+    }
     const blob = storage.armarBackup({ fotos: Camara.todasLasFotos(), videos: await videos });
     if (!blob) {
       mensaje("Nothing to save yet.", "error");
@@ -3588,7 +3597,8 @@ function iniciarPescaJuego() {
   });
 }
 
-function terminarPesca({ puntos = 0, peces = [], record = 0, nuevoRecord = false } = {}) {
+function terminarPesca(r = {}) {
+  const { puntos = 0, peces = [], record = 0, nuevoRecord = false } = r;
   if (pesca) pesca.destruir();
   pesca = null;
   const buenos = peces.filter((id) => (pezPorId(id) || {}).puntos > 0);
@@ -3600,7 +3610,8 @@ function terminarPesca({ puntos = 0, peces = [], record = 0, nuevoRecord = false
   }
   mascota.resultadoMinijuego(buenos.length, Date.now());
   diario.anotarJuego(puntos);
-  const monedasPesca = tienda.ganar("juego", Math.floor(puntos / 3)) + (nuevoRecord && puntos > 0 ? tienda.ganar("record") : 0);
+  // v44: la primera del dia paga segun el puntaje; despues, 5 o 10 si pasa el medio (tienda.js)
+  const monedasPesca = tienda.ganarPorJuego("pesca", r).monedas + (nuevoRecord && puntos > 0 ? tienda.ganar("record") : 0);
   eventoDeseo({ tipo: "pesca", peces });
   guardarTodo();
   if (monedasPesca) setTimeout(() => mostrarMonedas(monedasPesca), 600);
@@ -3706,13 +3717,14 @@ function volverALaTele() {
   });
 }
 
-function terminarMinijuego({ puntos = 0, atrapadas = 0, record = 0, nuevoRecord = false } = {}) {
+function terminarMinijuego(r = {}) {
+  const { puntos = 0, atrapadas = 0, record = 0, nuevoRecord = false } = r;
   minijuego = null;
   soltarVolante();
   mascota.resultadoMinijuego(atrapadas, Date.now());
   diario.anotarJuego(puntos);
   eventoAmigos({ tipo: "juego", puntos });
-  const monedasJuego = tienda.ganar("juego", Math.floor(puntos / 10)) + (nuevoRecord && puntos > 0 ? tienda.ganar("record") : 0);
+  const monedasJuego = tienda.ganarPorJuego("snack", r).monedas + (nuevoRecord && puntos > 0 ? tienda.ganar("record") : 0);
   eventoDeseo({ tipo: "juego", puntos, atrapadas });
   guardarTodo();
   if (monedasJuego) setTimeout(() => mostrarMonedas(monedasJuego), 600);
@@ -3760,23 +3772,22 @@ function terminarJuegoTele(cual, r) {
   let bien;
   if (cual === "torre") {
     bien = r.pisos > 0;
-    monedas = tienda.ganar("juego", Math.floor(puntos / 3));
     titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos}!` : r.pisos ? `${r.pisos} steamers tall!` : "Oops!";
     sub = `${puntos} points · best ${r.record}`;
   } else if (cual === "ritmo") {
     bien = r.perfectos + r.buenos > 0;
-    monedas = tienda.ganar("juego", Math.floor(puntos / 60));
     const notas = r.total ? Math.round(((r.perfectos + r.buenos) / r.total) * 100) : 0;
     titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos.toLocaleString("en-US")}!` : r.fallados === 0 && r.total ? "Full combo!" : `${notas}% of the notes!`;
     sub = `${r.nombreCancion} · ${r.perfectos} perfect · best ${r.record.toLocaleString("en-US")}`;
   } else {
     // v40: el tejo
     bien = puntos > 0;
-    monedas = tienda.ganar("juego", Math.floor(puntos / 3));
     const mechas = r.mechas || 0;
     titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos} pts!` : mechas ? `${mechas} mecha${mechas === 1 ? "" : "s"} exploded!` : puntos ? `${puntos} points!` : "Not this time…";
     sub = `${r.embocinadas || 0} embocinada${r.embocinadas === 1 ? "" : "s"} · best ${r.record} pts`;
   }
+  // v44: la primera del dia de cada juego paga segun el puntaje; despues, 5 o 10 si pasa el medio
+  monedas = tienda.ganarPorJuego(cual, r).monedas;
   if (r.nuevoRecord && puntos > 0) monedas += tienda.ganar("record");
   // v35 (F38): cuantas cosas buenas hizo de verdad (0 si salio enseguida con la flechita):
   // pisos de la torre, notas acertadas / 4, mechas y embocinadas del tejo

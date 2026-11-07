@@ -76,6 +76,42 @@ export const porId = (id) => CATALOGO.find((c) => c.id === id) || null;
 /** Topes por dia de cada forma de ganar monedas (lo que no esta aca no tiene tope). */
 // v35: record con tope (15 = 3 records por dia): sin tope, un juego facil se "farmeaba"
 export const TOPES = { pasos: 10, diario: 5, cuidar: 5, juego: 10, foto: 6, saludo: 4, propio: 20, record: 15 };
+
+/**
+ * v44 (rom: "no tiene sentido jugar si no da monedas"): las monedas de los
+ * juegos. Antes los 5 juegos compartian un tope de 10 por dia (despues de la
+ * primera partida ya no daban nada). Ahora:
+ *   - la PRIMERA partida del dia de CADA juego paga segun el puntaje, hasta 15;
+ *   - despues, una partida que pase el puntaje medio da 5, y una buena da 10,
+ *     hasta 5 veces por dia (entre todos los juegos);
+ *   - el record sigue dando +5 (hasta 3 por dia).
+ * "Medio" y "bueno" son los puntajes que en la primera partida valdrian 5 y
+ * 10 monedas (valorJuego), asi una sola cuenta decide las dos cosas.
+ */
+export const JUEGO_PRIMERA_MAX = 15;
+export const JUEGO_EXTRAS_POR_DIA = 5;
+export const JUEGO_EXTRA = { medio: 5, bueno: 10 };
+const DIF_JUEGO = { easy: 0.8, normal: 1, hard: 1.25 };
+
+/**
+ * Cuantas monedas "vale" una partida (sin tope, puede tener decimales).
+ * r: lo que devuelve el juego al terminar ({ puntos, dificultad, ... }).
+ */
+export function valorJuego(juego, r = {}) {
+  const p = Math.max(0, Number(r.puntos) || 0);
+  let v;
+  if (juego === "snack") v = p / 8; // 40 pts -> 5, 80 -> 10
+  else if (juego === "pesca") v = (p * 2) / 3; // 8 pts (unos 5 peces) -> 5
+  else if (juego === "torre") v = p / 2; // 10 pts -> 5, 20 -> 10
+  else if (juego === "tejo") v = p / 2; // 10 pts -> 5, 20 -> 10
+  else if (juego === "ritmo") {
+    // depende de la cancion: cuenta que parte de las notas acerto (un "bien" vale menos que un "perfecto")
+    const total = Number(r.total) || 0;
+    const acierto = total ? Math.min(1, ((Number(r.perfectos) || 0) + 0.6 * (Number(r.buenos) || 0)) / total) : 0;
+    v = Math.max(0, 18 * acierto - 3); // 45 % -> 5, 72 % -> 10, todo perfecto -> 15
+  } else v = 0;
+  return v * (DIF_JUEGO[r.dificultad] || 1);
+}
 // propio: un lugar que ella agrega desde el mapa (20 monedas, uno por dia: si no, se podrian "fabricar" monedas)
 export const PREMIOS = { diario: 5, cuidar: 1, foto: 2, saludo: 2, sello: 20, mision: 30, racha: 25, record: 5, propio: 20 };
 
@@ -203,6 +239,42 @@ export class Tienda {
     this.monedas += dar;
     this.ganadas += dar;
     return dar;
+  }
+
+  /**
+   * v44: las monedas de una partida. Devuelve { monedas, como } con como =
+   * "primera" (la primera del dia de ese juego), "medio" | "bueno" (una
+   * partida mas que paso el puntaje) o null (no pago: no llego, o ya se
+   * usaron las 5 del dia). Una partida que no vale ni 1 moneda no gasta la
+   * primera del dia.
+   */
+  ganarPorJuego(juego, r = {}, ahora = Date.now()) {
+    const v = valorJuego(juego, r);
+    const por = this._hoy(ahora);
+    const clavePrimera = `jugo_${juego}`;
+    let monedas = 0;
+    let como = null;
+    if (!por[clavePrimera]) {
+      // (una partida que no llega ni a 1 moneda, como salirse enseguida, no gasta la primera)
+      monedas = Math.min(JUEGO_PRIMERA_MAX, Math.floor(v));
+      if (monedas < 1) return { monedas: 0, como: null };
+      por[clavePrimera] = 1;
+      como = "primera";
+    } else if ((por.juego_extras || 0) < JUEGO_EXTRAS_POR_DIA && v >= 5) {
+      monedas = v >= 10 ? JUEGO_EXTRA.bueno : JUEGO_EXTRA.medio;
+      como = v >= 10 ? "bueno" : "medio";
+      por.juego_extras = (por.juego_extras || 0) + 1;
+    }
+    if (monedas > 0) {
+      this.monedas += monedas;
+      this.ganadas += monedas;
+    }
+    return { monedas, como };
+  }
+
+  /** v44: ¿la primera partida de hoy de este juego todavia paga segun el puntaje? */
+  primeraDelDia(juego, ahora = Date.now()) {
+    return !this._hoy(ahora)[`jugo_${juego}`];
   }
 
   /** Los pasos anotados de un dia: 1 moneda cada 1.000 pasos, hasta 10 por dia. */

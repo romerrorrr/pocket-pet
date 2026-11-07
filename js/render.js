@@ -1801,34 +1801,41 @@ export function renderMudanza(container, { quien = "baozi", texto = "" } = {}) {
 }
 
 /** v24: la tele tiene dos juegos: se elige cual (con el libro de peces). */
-export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, recordTorre = 0, recordTejo = 0, cancionesRitmo = 5, libro = [] } = {}) {
+export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, recordTorre = 0, recordTejo = 0, cancionesRitmo = 5, libro = [], primeras = {} } = {}) {
   const pescados = libro.filter((p) => p.n > 0).length;
+  // v44: una monedita en la tarjeta del juego cuya primera partida de hoy todavia paga segun el puntaje
+  const moneda = (j) => (primeras[j] ? `<span class="juego-moneda" title="First game today: coins for your score"><img src="${arte("tienda/moneda.png")}" alt="coins today" draggable="false" /></span>` : "");
   container.innerHTML = `
     <div class="pantalla-juegos con-cuarto">
       <button class="boton-volver volver-flotante" id="btn-volver-juegos" aria-label="Back">${glifo("atras")}</button>
       <div class="juegos-titulo">What shall we play?</div>
       <div class="juegos-fila">
         <button class="tarjeta-juego" id="btn-juego-snack">
+          ${moneda("snack")}
           <span class="juego-arte"><img src="${arte("comida/juego_bao_dorado.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Snack Rain</span>
           <span class="juego-best">Best ${recordSnack}</span>
         </button>
         <button class="tarjeta-juego" id="btn-juego-pesca">
+          ${moneda("pesca")}
           <span class="juego-arte pez"><img src="${arte("pesca/pez_koi.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Lake Fishing</span>
           <span class="juego-best">Best ${recordPesca}</span>
         </button>
         <button class="tarjeta-juego" id="btn-juego-torre">
+          ${moneda("torre")}
           <span class="juego-arte icono"><img src="${arte("juegos/icono_torre.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Steamer Stack</span>
           <span class="juego-best">Best ${recordTorre}</span>
         </button>
         <button class="tarjeta-juego" id="btn-juego-ritmo">
+          ${moneda("ritmo")}
           <span class="juego-arte icono"><img src="${arte("juegos/icono_ritmo.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Radio Beats</span>
           <span class="juego-best">${cancionesRitmo} songs</span>
         </button>
         <button class="tarjeta-juego" id="btn-juego-tejo">
+          ${moneda("tejo")}
           <span class="juego-arte icono"><img src="${arte("juegos/icono_tejo.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Tejo</span>
           <span class="juego-best">Best ${recordTejo}</span>
