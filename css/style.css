@@ -5247,3 +5247,153 @@ img.icono-fecha { width: 22px; height: 21px; }
 .juego-moneda img { width: 16px; height: 16px; image-rendering: pixelated; }
 @keyframes juego-moneda-brilla { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .juego-moneda { animation: none; } }
+
+/* ------------------------------------------------------------------
+   v45 — el jardin del balcon
+   ------------------------------------------------------------------ */
+.pantalla-jardin {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(22, 22, 30);
+}
+.jardin-caja {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 200 / 112;
+  max-width: 100%;
+}
+.jardin-fondo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.maceta-jardin {
+  position: absolute;
+  width: 13%; /* 26 de 200 */
+  height: 46.4%; /* 52 de 112: la planta (40) + la maceta (12) */
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.maceta-jardin .planta-jardin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 76.9%; /* 40 de 52 */
+  image-rendering: pixelated;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+}
+.maceta-jardin .maceta-img {
+  position: absolute;
+  left: 7.7%; /* 2 de 26: la maceta (22) centrada */
+  width: 84.6%;
+  bottom: 0;
+  height: 25%; /* 13 de 52 */
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.maceta-jardin.lista .planta-jardin { animation: planta-lista 1.6s ease-in-out infinite; }
+@keyframes planta-lista { 50% { transform: translateY(-2%) scale(1.03); } }
+.maceta-jardin:active .planta-jardin { transform: scale(1.06); }
+.pantalla-jardin[data-momento="noche"] .planta-jardin,
+.pantalla-jardin[data-momento="noche"] .maceta-img { filter: brightness(0.72) saturate(0.85); }
+.etiqueta-maceta {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  font-family: var(--fuente-display);
+  font-size: 8px;
+  color: var(--tinta);
+  background: rgba(252, 250, 244, 0.94);
+  padding: 2px 4px;
+  box-shadow: 0 0 0 1px var(--tinta);
+  pointer-events: none;
+}
+.etiqueta-maceta.vacia { top: 46%; background: rgba(252, 250, 244, 0.75); }
+.etiqueta-maceta.lista { background: rgb(255, 236, 150); }
+.etiqueta-maceta.sed { background: rgb(250, 204, 196); }
+.etiqueta-maceta.regada { background: rgb(214, 236, 214); }
+.regadera-jardin {
+  position: absolute;
+  width: 12%;
+  aspect-ratio: 24 / 18;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  animation: item-respira-j 2.4s steps(2) infinite;
+}
+.regadera-jardin img { width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
+.regadera-jardin .etiqueta-maceta.regar { top: auto; bottom: -4px; transform: translate(-50%, 100%); background: rgb(196, 226, 244); }
+.regadera-jardin.sin-sed { animation: none; opacity: 0.8; }
+.regadera-jardin.regando img { animation: regando 0.9s ease-in-out 2; transform-origin: 30% 80%; }
+@keyframes regando { 50% { transform: rotate(-28deg); } }
+@keyframes item-respira-j { 50% { transform: translateY(-3%); } }
+.aviso-jardin {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 70%;
+  text-align: center;
+  font-family: var(--fuente-display);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--tinta);
+  background: var(--papel);
+  padding: 6px 10px;
+  box-shadow: 0 0 0 2px var(--tinta), 3px 4px 0 1px rgba(0, 0, 0, 0.25);
+  z-index: 2;
+}
+.semillas-jardin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, 86vw);
+  max-height: 86%;
+  overflow: auto;
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+  z-index: 4;
+}
+.semillas-titulo { font-family: var(--fuente-display); font-size: 12px; text-align: center; color: var(--tinta); }
+.semillas-fila { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.semilla-jardin {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 96px;
+  padding: 6px 4px;
+  border: none;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 0 2px var(--tinta);
+  cursor: pointer;
+  color: var(--tinta);
+}
+.semilla-jardin img { width: 48px; height: 48px; image-rendering: pixelated; }
+.semilla-nombre { font-family: var(--fuente-display); font-size: 8px; text-align: center; }
+.semilla-n { font-size: 11px; opacity: 0.8; }
+.pantalla-jardin .volver-flotante {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  z-index: 5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .maceta-jardin.lista .planta-jardin, .regadera-jardin { animation: none !important; }
+}
+.etiqueta-maceta { display: grid; justify-items: center; line-height: 1.35; }
+.etiqueta-maceta b { font-weight: normal; opacity: 0.75; }
+.semillas-jardin.papel { min-height: 0; flex: none; height: auto; position: absolute; box-shadow: 0 0 0 2px var(--tinta), 5px 6px 0 1px rgba(0, 0, 0, 0.3); }
+.semilla-jardin img { width: 64px; height: 64px; }
