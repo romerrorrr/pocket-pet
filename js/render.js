@@ -395,6 +395,73 @@ export const HELADERA = [
 // v40: la comida de la tienda va en el cajon de abajo, centrada (ya pueden ser 7)
 const xTienda = (i, n) => (n <= 3 ? 76 + i * 24 : 100 + (i - (n - 1) / 2) * Math.min(24, 156 / (n - 1)));
 
+// ------------------------------------------------------------------
+// v45: el jardin del balcon (jardin.js). Mismo tamaño de dibujo que la heladera (200x112).
+// ------------------------------------------------------------------
+const X_MACETAS = [40, 80, 120, 160];
+const Y_ESTANTE = 92; // donde apoyan las macetas
+
+function etiquetaMaceta(e) {
+  if (!e) return { nombre: "", estado: "+ Plant", clase: "vacia" };
+  if (e.lista) return { nombre: e.nombre, estado: "Ready! ♥", clase: "lista" };
+  if (e.mustia) return { nombre: e.nombre, estado: "Thirsty!", clase: "sed" };
+  return { nombre: e.nombre, estado: `Day ${e.dia}/${e.dias}${e.regadaHoy ? " ✓" : ""}`, clase: e.regadaHoy ? "regada" : "" };
+}
+
+/**
+ * opts: { momento, estados: [estado|null x4], semillas: [{ planta, nombre, n, dias }],
+ *         eligiendo: indice de maceta | null, aviso, quiereAgua }
+ */
+export function renderJardin(container, { momento = "dia", estados = [], semillas = [], eligiendo = null, aviso = "", quiereAgua = false } = {}) {
+  const pct = (v, total) => `${((v / total) * 100).toFixed(3)}%`;
+  const macetas = X_MACETAS.map((x, i) => {
+    const e = estados[i] || null;
+    const et = etiquetaMaceta(e);
+    const planta = e ? `<img class="planta-jardin" src="${arte(`jardin/${e.planta}_${e.etapa}${e.mustia && e.etapa > 0 ? "m" : ""}.png`)}" alt="" draggable="false" />` : "";
+    return `
+      <button class="maceta-jardin ${e && e.lista ? "lista" : ""} ${e && e.mustia ? "mustia" : ""}" data-maceta="${i}"
+        style="left:${pct(x - 13, 200)};top:${pct(Y_ESTANTE - 12 - 39, 112)}" aria-label="${esc(e ? `${et.nombre}: ${et.estado}` : "Empty pot: plant a seed")}">
+        ${planta}
+        <img class="maceta-img" src="${arte("jardin/maceta.png")}" alt="" draggable="false" />
+        <span class="etiqueta-maceta ${et.clase}">${et.nombre ? `<b>${esc(et.nombre)}</b>` : ""}${esc(et.estado)}</span>
+      </button>`;
+  }).join("");
+  const eligiendoHtml =
+    eligiendo === null
+      ? ""
+      : `<div class="semillas-jardin papel" role="dialog" aria-label="Choose a seed">
+          <div class="semillas-titulo">What shall we plant?</div>
+          ${
+            semillas.length
+              ? `<div class="semillas-fila">${semillas
+                  .map(
+                    (s) => `<button class="semilla-jardin" data-semilla="${esc(s.planta)}">
+                      <img src="${arte(`jardin/semilla_${s.planta}.png`)}" alt="" draggable="false" />
+                      <span class="semilla-nombre">${esc(s.nombre)}</span>
+                      <span class="semilla-n">×${s.n} · ${s.dias} days</span>
+                    </button>`,
+                  )
+                  .join("")}</div>`
+              : `<div class="vacio-suave">No seeds yet. Get some at the shop (notebook → Shop) ♥</div>`
+          }
+          <div class="fila-botones"><button class="boton boton-fantasma chico" id="btn-semilla-cancelar">Not now</button></div>
+        </div>`;
+  container.innerHTML = `
+    <div class="pantalla-jardin con-cuarto" data-momento="${esc(momento)}">
+      <div class="jardin-caja">
+        <img class="jardin-fondo" src="${arte(`jardin/balcon_${momento}.png`)}" alt="" draggable="false" />
+        ${macetas}
+        <button class="regadera-jardin ${quiereAgua ? "" : "sin-sed"}" id="btn-regar" style="left:${pct(170, 200)};top:${pct(83, 112)}" aria-label="Water the plants">
+          <img src="${arte("jardin/regadera.png")}" alt="" draggable="false" />
+          <span class="etiqueta-maceta regar">Water ♥</span>
+        </button>
+      </div>
+      <div class="aviso-jardin ${aviso ? "" : "oculto"}" id="aviso-jardin" aria-live="polite">${esc(aviso)}</div>
+      ${eligiendoHtml}
+      <button class="boton-volver volver-flotante" id="btn-volver-jardin" aria-label="Back to the room">${glifo("atras")}</button>
+    </div>`;
+}
+
 export function renderHeladera(container, especiales = []) {
   // v23: la comida comprada en la tienda, en el cajon de abajo, con cuantas quedan
   const deLaTienda = especiales
@@ -1101,7 +1168,7 @@ const TAM_ARTE_TIENDA = { te: [92, 52], bote: [92, 52], cabana: [92, 52], finca:
 
 function vistaTienda(c, peluche) {
   if (c.tipo === "accesorio") return `<span class="acc-vista"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
-  if (c.tipo === "comida") return `<span class="vista-tienda vista-comida"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
+  if (c.tipo === "comida" || c.tipo === "semilla") return `<span class="vista-tienda vista-comida"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
   const src = c.id === "peluche" ? `tienda/deco_peluche_${peluche}.png` : c.arte;
   const [w, h] = TAM_ARTE_TIENDA[c.id] || [16, 16];
   const k = Math.max(1, Math.min(Math.floor(92 / w), Math.floor(52 / h)));
@@ -1110,6 +1177,7 @@ function vistaTienda(c, peluche) {
 
 function estadoTienda(c, tienda, puesto) {
   if (c.tipo === "comida") return tienda.cantidadComida(c.id) ? `×${tienda.cantidadComida(c.id)} in the fridge` : "";
+  if (c.tipo === "semilla") return tienda.cantidadSemillas(c.planta) ? `×${tienda.cantidadSemillas(c.planta)} for the garden` : "";
   if (!tienda.tiene(c.id)) return "";
   if (c.tipo === "accesorio") return puesto === (c.acc || c.id) ? "Wearing it ✓" : "In your closet ✓";
   if (c.tipo === "sticker") return "In your camera ✓";
@@ -1119,7 +1187,7 @@ function estadoTienda(c, tienda, puesto) {
 }
 
 function tarjetaTienda(c, tienda, { nuevas, confirmar, recien, puesto, peluche, falta }) {
-  const tiene = c.tipo !== "comida" && tienda.tiene(c.id);
+  const tiene = c.tipo !== "comida" && c.tipo !== "semilla" && tienda.tiene(c.id);
   const estado = estadoTienda(c, tienda, puesto);
   const moneda = `<img class="moneda-mini" src="${arte("tienda/moneda.png")}" alt="coins" draggable="false" />`;
   let pie;
@@ -1140,7 +1208,7 @@ function tarjetaTienda(c, tienda, { nuevas, confirmar, recien, puesto, peluche, 
       ${vistaTienda(c, peluche)}
       <span class="nombre-tienda">${esc(c.nombre)}</span>
       <span class="texto-tienda">${esc(c.texto)}</span>
-      ${recien === c.id ? `<span class="recien-tienda">${c.tipo === "comida" ? "In the fridge! ♥" : "It's yours! ♥"}</span>` : ""}
+      ${recien === c.id ? `<span class="recien-tienda">${c.tipo === "comida" ? "In the fridge! ♥" : c.tipo === "semilla" ? "Plant it on the balcony! ♥" : "It's yours! ♥"}</span>` : ""}
       ${pie}
     </div>`;
 }

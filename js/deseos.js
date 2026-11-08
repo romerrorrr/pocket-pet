@@ -42,6 +42,7 @@ export const DESEOS = [
   // el cuarto
   { id: "radio", texto: "Can we listen to Rainy Day on the radio?", cumple: (ev) => ev.tipo === "radio" && ev.estacion === "radio_lluvia" },
   { id: "ropa", texto: "Wear something cute today!", cumple: (ev) => ev.tipo === "estado" && !!ev.puesto, puede: (c) => c.tieneRopa },
+  { id: "regar", texto: "Can you water our plants on the balcony today?", cumple: (ev) => ev.tipo === "regar", puede: (c) => !!c.tienePlantas }, // v45
   { id: "diario", texto: "Write in our diary before 10 pm.", cumple: (ev) => ev.tipo === "diario" && hora(ev) >= 4 && hora(ev) < 22, puede: (c) => c.hora < 21 },
   // afuera
   { id: "pasos", texto: "Let's walk 5,000 steps today! Tell me tonight.", cumple: (ev) => ev.tipo === "pasos" && ev.hoy && (ev.pasos || 0) >= 5000 },

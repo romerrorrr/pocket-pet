@@ -795,6 +795,44 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
     }
     m.restore();
   }
+  // v45: la jardinera de afuera: una cajita de barro con 4 plantitas (jardin.js)
+  const FLOR_MINI = { girasol: "252,206,52", longjing: "186,226,112", loto: "244,160,190", bambu: "140,186,86", cafe: "210,44,50", orquidea: "222,160,230", maracuya: "240,200,60", osmanto: "250,170,48" };
+  function jardinera(estados, momento) {
+    const X0 = 112, Y0 = 72; // la caja: 30 x 6, apoyada en el borde de abajo del vidrio
+    const noche = momento === "noche";
+    const px = (x, y, w, h, c) => {
+      m.fillStyle = `rgb(${c})`;
+      m.fillRect(x, y, w, h);
+    };
+    estados.forEach((p, i) => {
+      if (!p) return;
+      const x = X0 + 3 + i * 7;
+      const verde = p.mustia ? "164,150,84" : noche ? "62,100,60" : "96,150,72";
+      const oscuro = p.mustia ? "126,110,64" : noche ? "44,74,44" : "60,108,54";
+      if (p.etapa === 0) {
+        px(x + 1, Y0 - 1, 2, 1, "110,80,54");
+        return;
+      }
+      const alto = p.etapa === 1 ? 2 : p.etapa === 2 ? 5 : p.planta === "bambu" ? 9 : 7;
+      px(x + 1, Y0 - alto, 1, alto, oscuro); // el tallo
+      px(x, Y0 - 2, 1, 1, verde); // hojitas
+      px(x + 2, Y0 - 2, 1, 1, verde);
+      if (p.etapa >= 2) {
+        px(x, Y0 - 4, 1, 1, verde);
+        px(x + 2, Y0 - 5, 1, 1, verde);
+      }
+      if (p.etapa === 3) {
+        const c = p.mustia ? "170,150,118" : FLOR_MINI[p.planta] || "250,250,250";
+        if (p.planta === "bambu") px(x + 2, Y0 - 8, 1, 1, verde);
+        else px(x, Y0 - alto - 1, 3, 2, c);
+      }
+    });
+    // la caja de barro (adelante de los tallos)
+    px(X0, Y0, 30, 6, noche ? "120,72,48" : "176,104,66");
+    px(X0, Y0, 30, 1, noche ? "146,92,64" : "206,134,92");
+    px(X0, Y0 + 5, 30, 1, noche ? "88,52,36" : "130,74,48");
+  }
+
   function velitas(ahora) {
     VELAS.forEach(([x, y], i) => {
       const tit = Math.floor(ahora / 140 + i * 3.3) % 3;
@@ -1360,6 +1398,8 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
         m.restore();
       }
     }
+    // 1a. v45: la jardinera del balcon, que se ve por la ventana (con las plantas como van)
+    if (e.jardin) jardinera(e.jardin, e.momento);
     // 1b. el clima de afuera
     // en la cabana (nieve afuera) la lluvia cae como nieve
     // (y la tormenta, como ventisca: nieve tupida con viento, y los rayos igual)

@@ -63,10 +63,21 @@ export const CATALOGO = [
   { id: "orquidea", tipo: "decoracion", nombre: "Orchid", precio: 130, semana: 2, arte: "tienda/deco_orquidea.png", texto: "A Cattleya orchid, Colombia's national flower." },
   { id: "saco", tipo: "decoracion", nombre: "Coffee sack", precio: 100, semana: 2, arte: "tienda/deco_saco.png", texto: "A sack of coffee beans straight from the farm." },
   { id: "guatape", tipo: "cuarto", nombre: "Guatapé house", precio: 1100, semana: 2, arte: "tienda/cuarto_guatape.png", texto: "A house with colorful zócalos, looking out at the lake and El Peñol." },
+  // v45: semillas para el jardin del balcon (jardin.js). Se compran muchas veces, como la comida.
+  { id: "semilla_girasol", tipo: "semilla", planta: "girasol", nombre: "Sunflower seeds", precio: 10, semana: 0, arte: "jardin/semilla_girasol.png", texto: "Ready in 3 days. Sell the flower for 25 coins." },
+  { id: "semilla_longjing", tipo: "semilla", planta: "longjing", nombre: "Longjing tea seeds", precio: 15, semana: 0, arte: "jardin/semilla_longjing.png", texto: "Ready in 3 days. Two Longjing teas for the fridge." },
+  { id: "semilla_cafe", tipo: "semilla", planta: "cafe", nombre: "Coffee seeds", precio: 20, semana: 0, arte: "jardin/semilla_cafe.png", texto: "Ready in 5 days. Three cups of tinto for the fridge." },
+  { id: "semilla_loto", tipo: "semilla", planta: "loto", nombre: "Lotus seeds", precio: 25, semana: 0, arte: "jardin/semilla_loto.png", texto: "Ready in 4 days. Sell the flower for 45 coins." },
+  { id: "semilla_bambu", tipo: "semilla", planta: "bambu", nombre: "Bamboo shoots", precio: 15, semana: 1, arte: "jardin/semilla_bambu.png", texto: "Ready in 3 days. Sell it for 35 coins." },
+  { id: "semilla_maracuya", tipo: "semilla", planta: "maracuya", nombre: "Passion fruit seeds", precio: 20, semana: 1, arte: "jardin/semilla_maracuya.png", texto: "Ready in 5 days. Two passion fruits for the fridge." },
+  { id: "semilla_osmanto", tipo: "semilla", planta: "osmanto", nombre: "Osmanthus seeds", precio: 25, semana: 1, arte: "jardin/semilla_osmanto.png", texto: "Ready in 4 days. Two osmanthus cakes for the fridge." },
+  { id: "semilla_orquidea", tipo: "semilla", planta: "orquidea", nombre: "Orchid seeds", precio: 30, semana: 1, arte: "jardin/semilla_orquidea.png", texto: "Ready in 5 days. Sell the flower for 60 coins." },
+  // v45: la maracuya sale del jardin (no se vende)
+  { id: "maracuya", tipo: "comida", nombre: "Passion fruit", precio: 0, semana: 0, noSeVende: true, arte: "tienda/comida_maracuya.png", accion: "feed", efecto: { felicidad: 10, energia: 5 }, texto: "Fresh from the balcony garden." },
 ];
 
 /** La ultima entrega (para saber si todavia llegan cosas). */
-export const ULTIMA_SEMANA = Math.max(...CATALOGO.map((c) => c.semana));
+export const ULTIMA_SEMANA = Math.max(...CATALOGO.filter((c) => !c.noSeVende).map((c) => c.semana));
 
 /** Los accesorios de la tienda (id del accesorio -> archivo). */
 export const ACCESORIOS_TIENDA = Object.fromEntries(CATALOGO.filter((c) => c.tipo === "accesorio").map((c) => [c.acc || c.id, c.arte]));
@@ -135,6 +146,7 @@ export class Tienda {
     this.todoDesbloqueado = false; // modo director: ver todas las semanas
     this.cuarto = "depto"; // v25: el cuarto puesto ("depto" = el de siempre)
     this.mascota = null; // v25: la mascota que esta afuera (o ninguna)
+    this.semillas = {}; // v45: planta -> cuantas semillas tiene
   }
 
   /** v25: los cuartos que tiene (sin contar el depto, que es de todos). */
@@ -170,7 +182,7 @@ export class Tienda {
 
   disponibles(ahora = Date.now()) {
     const s = this.semanaActual(ahora);
-    return CATALOGO.filter((c) => c.semana <= s);
+    return CATALOGO.filter((c) => c.semana <= s && !c.noSeVende);
   }
 
   /** Lo que llego en la ultima entrega (la de esta semana), o [] si ya estan todas desde antes. */
@@ -201,13 +213,40 @@ export class Tienda {
   comprar(id, ahora = Date.now()) {
     const c = porId(id);
     if (!c || !this.disponibles(ahora).includes(c)) return "no-esta";
-    if (c.tipo !== "comida" && this.tiene(id)) return "ya-lo-tiene";
+    if (c.tipo !== "comida" && c.tipo !== "semilla" && this.tiene(id)) return "ya-lo-tiene";
     if (this.monedas < c.precio) return "no-alcanza";
     this.monedas -= c.precio;
     if (c.tipo === "comida") this.comida[id] = this.cantidadComida(id) + 1;
+    else if (c.tipo === "semilla") this.semillas[c.planta] = this.cantidadSemillas(c.planta) + 1;
     else this.compradas.add(id);
     this.vistas.add(id);
     return "ok";
+  }
+
+  /** v45: las semillas del jardin (por planta). */
+  cantidadSemillas(planta) {
+    return this.semillas[planta] || 0;
+  }
+
+  /** v45: suma semillas (las de regalo). */
+  darSemillas(planta, n = 1) {
+    this.semillas[planta] = this.cantidadSemillas(planta) + Math.max(0, Math.floor(n));
+  }
+
+  /** v45: usa una semilla. true si habia. */
+  usarSemilla(planta) {
+    if (!this.cantidadSemillas(planta)) return false;
+    this.semillas[planta] -= 1;
+    if (!this.semillas[planta]) delete this.semillas[planta];
+    return true;
+  }
+
+  /** v45: suma comida a la heladera (la cosecha del jardin). */
+  darComida(id, n = 1) {
+    const c = porId(id);
+    if (!c || c.tipo !== "comida") return false;
+    this.comida[id] = this.cantidadComida(id) + Math.max(0, Math.floor(n));
+    return true;
   }
 
   /** Usa una comida de la heladera. true si habia. */
@@ -330,6 +369,7 @@ export class Tienda {
       todoDesbloqueado: this.todoDesbloqueado,
       cuarto: this.cuarto,
       mascota: this.mascota,
+      semillas: this.semillas,
     };
   }
 
@@ -345,6 +385,9 @@ export class Tienda {
       if (porId(id) && porId(id).tipo === "comida" && entero(n) > 0) t.comida[id] = entero(n);
     }
     t.vistas = new Set((datos.vistas || []).filter((id) => porId(id)));
+    for (const [planta, n] of Object.entries(datos.semillas || {})) {
+      if (CATALOGO.some((c) => c.tipo === "semilla" && c.planta === planta) && entero(n) > 0) t.semillas[planta] = entero(n);
+    }
     if (datos.hoy && typeof datos.hoy.dia === "string" && datos.hoy.por && typeof datos.hoy.por === "object") {
       t.hoy = { dia: datos.hoy.dia, por: {} };
       for (const [k, v] of Object.entries(datos.hoy.por)) t.hoy.por[k] = entero(v);

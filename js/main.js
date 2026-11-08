@@ -50,6 +50,7 @@ import * as MapaDia from "./mapaDia.js";
 import * as Corcho from "./corchoReal.js";
 import { crearVisor } from "./visorMapa.js";
 import * as Fechas from "./fechas.js";
+import { Jardin, PLANTAS as PLANTAS_JARDIN, SEMILLAS_DE_REGALO } from "./jardin.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -68,7 +69,7 @@ const tabbarEl = document.getElementById("tabbar");
 const marcoEl = document.querySelector(".marco-manito");
 
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas", "jardin"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -90,7 +91,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla, jardin: jardin.aObjeto() });
 }
 
 // v35: actualizaciones seguras (ver el comentario de arriba de sw.js).
@@ -176,6 +177,7 @@ let mascota, npcsReg, lugaresReg, diario;
 let amigos = new RegistroAmigos(); // amistad, secretos, misiones y regalos (amigos.js)
 let tienda = new Tienda(); // v23: las monedas y lo comprado (tienda.js)
 let deseos = Deseos.desdeObjeto(null, DESEOS_PROPIOS); // v24: el deseo del dia (deseos.js)
+let jardin = new Jardin(); // v45: el jardin del balcon (jardin.js)
 // v24: despues del si, el personaje de rom se muda: "no" -> "llega" (golpea la puerta) -> "vive"
 let mudanza = { estado: "no", desde: 0 };
 function cargarMudanza(datos) {
@@ -495,6 +497,7 @@ function arrancar() {
     cargarPesca(guardado.extras && guardado.extras.pesca);
     cargarMudanza(guardado.extras && guardado.extras.mudanza);
     cargarAmigos(guardado.extras && guardado.extras.amigos);
+    jardin = Jardin.desdeObjeto(guardado.extras && guardado.extras.jardin);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
@@ -641,6 +644,7 @@ function confirmarNombre() {
   cargarPesca(null);
   cargarMudanza(null);
   cargarAmigos(null);
+  jardin = new Jardin();
   cargarLugaresDeElla(null);
   cargarFechasDeElla(null);
   diario = diario || new Diario();
@@ -745,6 +749,9 @@ function renderVistaActual() {
       break;
     case "mapa":
       renderMapaActual();
+      break;
+    case "jardin":
+      renderJardinActual();
       break;
     case "mapadia":
       renderMapaDiaActual();
@@ -900,6 +907,8 @@ function estadoPieza() {
             ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() ? ["mesita"] : []),
             // un amigo trae un regalo: "!" sobre la ventana
             ...(visita && visita.regalo ? ["ventana"] : []),
+            // v45: el jardin pide agua (desde las 8) o hay algo para cosechar: "!" sobre la ventana
+            ...(puedeComentar() && !finalEnMarcha() && (jardin.hayCosecha(claveDelDia()) || (jardin.quiereAgua(claveDelDia()) && new Date().getHours() >= 8)) ? ["ventana"] : []),
             // v23: cosas nuevas en la tienda (en el cuaderno): "!" sobre la mesita
             ...(puedeComentar() && !["armado", "pedido", "en_curso"].includes(Final.fase()) && tienda.nuevas().length ? ["mesita"] : []),
           ]),
@@ -915,6 +924,7 @@ function estadoPieza() {
     fotoAnillo: Final.dijoQueSi() ? fotoDelAnillo() : null,
     clima: Clima.tipo(),
     velitas: esNocheDeVelitas(), // v40
+    jardin: jardin.estados(claveDelDia()), // v45: la jardinera que se ve por la ventana
     globo: globo.texto,
     globoRosa: globo.rosa,
   };
@@ -1108,6 +1118,7 @@ function contextoDeseos(ahora = new Date()) {
     finDeSemana: ahora.getDay() === 0 || ahora.getDay() === 6,
     tieneRopa: amigos.accesorios().length + tienda.accesorios().length > 0,
     quedanLugares: !!lugaresReg && lugaresReg.pendientes().length > 0,
+    tienePlantas: jardin.hayPlantas(), // v45
   };
 }
 
@@ -1497,7 +1508,12 @@ function tocarVentana() {
     });
     return;
   }
-  Sonido.sonar("tocar");
+  // v45: sin visita, la ventana da al balcon (el jardin)
+  abrirJardin();
+}
+
+/** v40 y antes: lo que decia Baozi al tocar la ventana (ahora, al volver del balcon si no hay nada que contar). */
+function fraseDeLaVentana() {
   const frases = {
     amanecer: "Good morning, lake!",
     dia: "The lake looks so pretty today.",
@@ -1512,7 +1528,7 @@ function tocarVentana() {
     tormenta: "Stay inside with me, okay?",
     nieve: "SNOW! Everything's white!",
   };
-  decir(delClima[Clima.tipo()] || frases[momentoActual] || frases.dia);
+  return delClima[Clima.tipo()] || frases[momentoActual] || frases.dia;
 }
 
 // Visitas: de vez en cuando un amigo golpea la ventana (antes pasaba caminando).
@@ -1635,6 +1651,191 @@ function sonidoDelClima() {
   // v35: en la cabaña la lluvia se ve como nieve: la nieve no suena (la ventisca, apenas, como viento)
   if (tienda && tienda.cuarto === "cabana") nivel = t === "tormenta" ? 0.25 : 0;
   Clima.sonidoLluvia(nivel);
+}
+
+// ------------------------------------------------------------------
+// v45: el jardin del balcon (jardin.js). Se sale tocando la ventana.
+// ------------------------------------------------------------------
+
+let jardinUI = { eligiendo: null, aviso: "" };
+let timeoutAvisoJardin = null;
+
+function abrirJardin() {
+  Sonido.sonar("tocar");
+  jardinUI = { eligiendo: null, aviso: "" };
+  // la primera vez: dos semillas de regalo para empezar
+  if (!jardin.regalo) {
+    jardin.regalo = true;
+    for (const p of SEMILLAS_DE_REGALO) tienda.darSemillas(p, 1);
+    guardarTodo();
+    jardinUI.aviso = "Our balcony! Here are two seeds to start: sunflower and Longjing tea ♥";
+  } else if (Clima.llueve(Clima.tipo()) && jardin.hayPlantas()) jardinUI.aviso = "The rain is watering our plants ♪";
+  conTransicion(() => {
+    prepararVista("jardin");
+    renderVistaActual();
+  });
+}
+
+function avisoJardin(texto, ms = 3200) {
+  jardinUI.aviso = texto;
+  const el = document.getElementById("aviso-jardin");
+  if (el) {
+    el.textContent = texto;
+    el.classList.toggle("oculto", !texto);
+  }
+  clearTimeout(timeoutAvisoJardin);
+  timeoutAvisoJardin = setTimeout(() => {
+    jardinUI.aviso = "";
+    const e2 = document.getElementById("aviso-jardin");
+    if (e2) e2.classList.add("oculto");
+  }, ms);
+}
+
+function renderJardinActual() {
+  const hoy = claveDelDia();
+  R.renderJardin(screenEl, {
+    momento: momentoActual || "dia",
+    estados: jardin.estados(hoy),
+    semillas: Object.keys(PLANTAS_JARDIN)
+      .filter((p) => tienda.cantidadSemillas(p) > 0)
+      .map((p) => ({ planta: p, nombre: PLANTAS_JARDIN[p].nombre, n: tienda.cantidadSemillas(p), dias: PLANTAS_JARDIN[p].dias })),
+    eligiendo: jardinUI.eligiendo,
+    aviso: jardinUI.aviso,
+    quiereAgua: jardin.quiereAgua(hoy),
+  });
+  if (jardinUI.aviso) avisoJardin(jardinUI.aviso, 4200);
+  wireJardin();
+}
+
+function wireJardin() {
+  const hoy = claveDelDia();
+  document.getElementById("btn-volver-jardin").addEventListener("click", () => {
+    jardinUI = { eligiendo: null, aviso: "" };
+    conTransicion(() => {
+      irACasa();
+      // (lo que antes decia al tocar la ventana: el cielo, el clima)
+      if (puedeComentar()) decir(fraseDeLaVentana(), 2600);
+    });
+  });
+  for (const b of screenEl.querySelectorAll("[data-maceta]")) {
+    b.addEventListener("click", () => tocarMaceta(Number(b.dataset.maceta)));
+  }
+  for (const b of screenEl.querySelectorAll("[data-semilla]")) {
+    b.addEventListener("click", () => {
+      const i = jardinUI.eligiendo;
+      const p = b.dataset.semilla;
+      if (i === null || !tienda.cantidadSemillas(p) || !jardin.sembrar(i, p, hoy)) return;
+      tienda.usarSemilla(p);
+      jardinUI.eligiendo = null;
+      guardarTodo();
+      Sonido.sonar("guardado");
+      vibrar(15);
+      jardinUI.aviso = `${PLANTAS_JARDIN[p].nombre} planted! Water it every day ♥`;
+      renderJardinActual();
+    });
+  }
+  const cancelar = document.getElementById("btn-semilla-cancelar");
+  if (cancelar) {
+    cancelar.addEventListener("click", () => {
+      jardinUI.eligiendo = null;
+      Sonido.sonar("tocar");
+      renderJardinActual();
+    });
+  }
+  document.getElementById("btn-regar").addEventListener("click", regarJardin);
+}
+
+function tocarMaceta(i) {
+  const hoy = claveDelDia();
+  const e = jardin.estado(i, hoy);
+  if (!e) {
+    Sonido.sonar("tocar");
+    jardinUI.eligiendo = i;
+    jardinUI.aviso = "";
+    renderJardinActual();
+    return;
+  }
+  if (e.lista) {
+    cosecharMaceta(i);
+    return;
+  }
+  Sonido.sonar("tocar");
+  const faltan = e.dias - e.dia;
+  if (e.mustia) avisoJardin(`The ${e.nombre.toLowerCase()} is so thirsty… water it! (it won't die ♥)`);
+  else if (!e.regadaHoy) avisoJardin(`${e.nombre}: ${faltan} more ${faltan === 1 ? "day" : "days"} of water. Let's water it today!`);
+  else avisoJardin(`${e.nombre}: watered today ✓ ${faltan} more ${faltan === 1 ? "day" : "days"} to go.`);
+}
+
+function regarJardin() {
+  const hoy = claveDelDia();
+  if (!jardin.hayPlantas()) {
+    Sonido.sonar("no");
+    avisoJardin("Plant a seed first ♥ (tap an empty pot)");
+    return;
+  }
+  const n = jardin.regar(hoy);
+  if (!n) {
+    Sonido.sonar("tocar");
+    avisoJardin(jardin.hayCosecha(hoy) && !jardin.quiereAgua(hoy) ? "Already watered! Something is ready to pick ♥" : "Already watered today ✓ See you tomorrow!");
+    return;
+  }
+  guardarTodo();
+  Sonido.sonar("beber");
+  vibrar([15, 30, 15]);
+  if (diario) diario.anotarCuidado();
+  ganarMonedas("cuidar");
+  eventoDeseo({ tipo: "regar" });
+  const regadera = document.getElementById("btn-regar");
+  if (regadera) regadera.classList.add("regando");
+  setTimeout(() => {
+    if (controller.vista !== "jardin") return;
+    jardinUI.aviso = n === 1 ? "Glug glug… watered! ♥" : `Glug glug… ${n} plants watered! ♥`;
+    renderJardinActual();
+  }, 1000);
+}
+
+function cosecharMaceta(i) {
+  const hoy = claveDelDia();
+  const r = jardin.cosechar(i, hoy);
+  if (!r) return;
+  let texto;
+  if (r.cosecha.monedas) {
+    const n = tienda.ganar("cosecha", r.cosecha.monedas);
+    setTimeout(() => mostrarMonedas(n), 300);
+    texto = `${r.nombre}! Sold for ${n} coins ♥`;
+  } else {
+    tienda.darComida(r.cosecha.comida, r.cosecha.n);
+    const c = productoTienda(r.cosecha.comida);
+    texto = `+${r.cosecha.n} ${c ? c.nombre : r.nombre} in the fridge ♥`;
+  }
+  if (diario) diario.anotarHito(r.primera ? `Our first harvest: ${r.nombre} ♥` : `Harvest: ${r.nombre}`);
+  guardarTodo();
+  Sonido.sonar("hallazgo");
+  vibrar([20, 40, 20]);
+  jardinUI.aviso = texto;
+  renderJardinActual();
+}
+
+/** v45: si llueve de verdad, el jardin se riega solo. */
+function talVezLluviaRiega() {
+  if (!mascota || !jardin.hayPlantas() || !Clima.llueve(Clima.tipo())) return;
+  const hoy = claveDelDia();
+  if (!jardin.quiereAgua(hoy)) return;
+  jardin.regar(hoy);
+  guardarTodo();
+}
+
+/** v45: ...y Baozi lo cuenta una vez por dia (en la fila de avisos del tick, para no pisar a otro). */
+function talVezContarLluvia() {
+  const hoy = claveDelDia();
+  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar() || jardin.lluviaAvisada === hoy) return false;
+  if (!jardin.hayPlantas() || !Clima.llueve(Clima.tipo()) || jardin.quiereAgua(hoy)) return false;
+  // (solo si de verdad la lluvia rego hoy: alguna regada hoy que no este lista)
+  if (!jardin.estados(hoy).some((e) => e && e.regadaHoy)) return false;
+  jardin.lluviaAvisada = hoy;
+  guardarTodo();
+  decir("The rain is watering our plants ♪", 4200);
+  return true;
 }
 
 // ------------------------------------------------------------------
@@ -2229,7 +2430,7 @@ let watchFinal = null;
 let pedidoPendiente = false;
 // Baozi espera a que ella termine lo que esta haciendo (una foto, el
 // minijuego, un encuentro) para no cortarle nada a la mitad.
-const VISTAS_INTERRUMPIBLES = new Set(["cara", "menu", "consulta", "caminar", "heladera", "mapa", "mapadia"]);
+const VISTAS_INTERRUMPIBLES = new Set(["cara", "menu", "consulta", "caminar", "heladera", "mapa", "mapadia", "jardin"]);
 
 function dejarDeVigilar() {
   if (watchFinal !== null) {
@@ -3127,6 +3328,7 @@ async function restaurarDesdeArchivo(archivo, mensaje) {
       cargarPesca(guardado.extras && guardado.extras.pesca);
       cargarMudanza(guardado.extras && guardado.extras.mudanza);
       cargarAmigos(guardado.extras && guardado.extras.amigos);
+      jardin = Jardin.desdeObjeto(guardado.extras && guardado.extras.jardin);
       mascota.actualizarTiempo(Date.now());
       mensaje(`Backup restored${nFotos ? ` (+${nFotos} ${nFotos === 1 ? "photo" : "photos"})` : ""}. Welcome back, Baozi!`, "ok");
       // se recarga para que todo (records, el cuarto, el album) arranque del backup
@@ -3916,7 +4118,8 @@ function tick() {
   // v22: la pregunta de los pasos va antes que una visita al azar (la visita puede esperar)
   elegirDeseo();
   if (deseos.pendiente() && amigos.puesto) eventoDeseo({ tipo: "estado", puesto: amigos.puesto });
-  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezContarVelitas() && !talVezAvisarTienda() && !celebrarDeseo() && !talVezCartaAtrasada() && !talVezAvisarBackup(ahora)) {
+  talVezLluviaRiega(); // v45 (regar, siempre; contarlo va en la fila)
+  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezContarVelitas() && !talVezAvisarTienda() && !talVezContarLluvia() && !celebrarDeseo() && !talVezCartaAtrasada() && !talVezAvisarBackup(ahora)) {
     talVezVisita();
     talVezPedirDiario();
   }
@@ -4002,6 +4205,7 @@ window.__mochi = {
   mapaDia: MapaDia,
   tick: () => tick(),
   tienda: () => tienda,
+  jardin: () => jardin, // v45
   deseos: () => deseos,
   pesca: () => pesca,
   juegoTele: () => juegoTele,
