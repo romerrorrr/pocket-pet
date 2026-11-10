@@ -16,7 +16,7 @@
  * record por dificultad. Termina a los 40 s o sin corazones.
  */
 
-import { HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
+import { HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
 
 const DURACION_MS = 40000;
 const CORAZONES = 3;
@@ -121,6 +121,7 @@ export function iniciarJuego(contenedor, opts) {
     </div>`;
 
   const area = contenedor.querySelector("#area-minijuego");
+  blindarToques(area); // v46: doble toque rapido (iPhone)
   const cielo = contenedor.querySelector("#juego-cielo");
   const pj = contenedor.querySelector("#caja-cara-minijuego");
   const $ = (id) => contenedor.querySelector(`#${id}`);

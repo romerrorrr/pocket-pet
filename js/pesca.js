@@ -17,7 +17,7 @@
  * sentado en la punta del muelle.
  */
 
-import { HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
+import { HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
 
 const DURACION_MS = 60000;
 const CLAVE_RECORD = "baozi_record_pesca_";
@@ -111,6 +111,7 @@ export function iniciarPesca(contenedor, opts) {
 
   const $ = (id) => contenedor.querySelector(`#${id}`);
   const area = $("area-pesca");
+  blindarToques(area); // v46: doble toque rapido (iPhone)
   const lienzo = $("pesca-lienzo");
   const m = lienzo.getContext("2d");
   m.imageSmoothingEnabled = false;

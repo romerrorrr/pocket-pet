@@ -369,6 +369,46 @@ function srcDeco(id, e) {
   return DECOS_TIENDA.has(id) ? `tienda/deco_${id}.png` : `amigos/deco_${id}.png`;
 }
 
+/**
+ * v47: las decoraciones se mueven. tools/decos_anim.py arma una tira
+ * "anim_<id>.png" por decoracion (los cuadros uno al lado del otro, con
+ * 1 px de margen); aca se elige el cuadro segun la hora. Todo sutil: 1 px.
+ * Lo que no esta en las tiras (peces, burbujas, humito, vapor, aroma,
+ * petalos, el brillo de las lucecitas) se dibuja en vivo en vidaDecos().
+ */
+const ANIM_DECO = {
+  farolitos: { n: 4, cuadro: (t) => Math.floor(t / 450) % 4 }, // se mecen
+  banderin: { n: 4, cuadro: (t) => Math.floor(t / 380) % 4 }, // flamean, en ola
+  orquidea: { n: 4, cuadro: (t) => Math.floor(t / 650) % 4 }, // las raices se mecen
+  bonsai: { n: 2, cuadro: (t) => (t % 6100 < 700 ? 1 : 0) }, // una brisa de vez en cuando
+  maceta: {
+    n: 3,
+    cuadro: (t) => {
+      const r = t % 5300;
+      return r < 640 ? [1, 0, 2, 0][Math.floor(r / 160)] : 0; // las hojas se sacuden
+    },
+  },
+  ovni: { n: 3, cuadro: (t) => Math.floor(t / 500) % 3, dy: (t) => (Math.floor(t / 1100) % 2 ? -1 : 0) }, // luces que giran, flota
+  poster: { n: 3, cuadro: (t) => Math.floor(t / 800) % 3 }, // el brillo del lago
+  chiva: {
+    n: 2,
+    cuadro: (t) => {
+      const r = t % 9000;
+      return r < 1500 ? Math.floor(r / 110) % 2 : 0; // prende el motor y tiembla
+    },
+  },
+  peluche: {
+    n: 3,
+    cuadro: (t, e) => {
+      if (t % 9100 < 300) return 2; // se apachurra
+      if (e.peluche !== "mantou" && t % 4300 < 170) return 1; // parpadea (el de Baozi; el de Mantou duerme)
+      return 0;
+    },
+  },
+  pecera: { n: 1, cuadro: () => 0 }, // sin los peces dibujados: los nada vidaDecos()
+};
+const srcAnim = (id, e) => srcDeco(id, e).replace("/deco_", "/anim_");
+
 // la foto del anillo, achicada una vez a 14x11 (se ve como una fotito de verdad)
 const fotosChicas = new Map();
 function fotoChica(dataUrl) {
@@ -774,6 +814,108 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
   function sprite(rel, x, y) {
     const i = img(rel);
     if (listo(i)) m.drawImage(i, Math.round(x), Math.round(y));
+  }
+
+  // v47: una decoracion, con su cuadro de la tira (o quieta si no se mueve o todavia no cargo)
+  function dibujarDeco(id, e, ahora) {
+    const d = DECORACIONES[id];
+    if (!d) return;
+    const a = ANIM_DECO[id];
+    const i = a ? img(srcAnim(id, e)) : null;
+    if (!a || !listo(i)) {
+      sprite(srcDeco(id, e), d[0], d[1]);
+      return;
+    }
+    const w = i.naturalWidth / a.n;
+    const k = Math.max(0, Math.min(a.n - 1, a.cuadro(ahora, e) | 0));
+    m.drawImage(i, k * w, 0, w, i.naturalHeight, d[0] - 1, d[1] - 1 + (a.dy ? a.dy(ahora) : 0), w, i.naturalHeight);
+  }
+
+  // v47: lo que se mueve en vivo arriba de las decoraciones (con la misma luz que el cuarto)
+  const COLOR_PEZ = { nativo: ["rgb(244,122,44)", "rgb(255,170,90)"], dorado: ["rgb(244,132,44)", "rgb(255,180,100)"], koi: ["rgb(246,244,240)", "rgb(230,70,60)"], koi_dorado: ["rgb(250,206,80)", "rgb(255,236,150)"] };
+  function px(x, y, color) {
+    m.fillStyle = color;
+    m.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  // una voluta que sube: n puntitos que se apagan (vapor, aroma, humito)
+  function voluta(x0, y0, ahora, ciclo, fase, alto, rgb, alfa) {
+    const t = ((ahora + fase) % ciclo) / ciclo;
+    for (let k = 0; k < 3; k++) {
+      const tk = t - k * 0.09;
+      if (tk < 0 || tk > 1) continue;
+      const y = y0 - tk * alto;
+      const x = x0 + Math.sin(tk * 7 + fase) * 1.2;
+      px(x, y, `rgba(${rgb},${(alfa * (1 - tk) * (1 - k * 0.25)).toFixed(3)})`);
+    }
+  }
+  function vidaDecos(decos, e, ahora, clave) {
+    const hay = new Set(decos);
+    if (hay.has("pecera")) {
+      const [bx, by] = DECORACIONES.pecera;
+      // los dos pescaditos de siempre y los que ella pesco (hasta 4)
+      const peces = ["nativo", "nativo", ...(e.pecera || []).slice(-4)];
+      peces.forEach((id, i) => {
+        const t = ahora / (2300 + i * 470) + i * 1.9;
+        const dir = Math.cos(t) > 0 ? 1 : -1;
+        const x = bx + 8 + Math.sin(t) * (4 - (i % 2));
+        const y = by + 6 + ((i * 2) % 5) + Math.round(Math.sin(ahora / 1700 + i) * 0.6);
+        const [c1, c2] = COLOR_PEZ[id] || COLOR_PEZ.nativo;
+        const xi = Math.round(x);
+        px(xi - dir, y, c1); // cuerpo
+        px(xi, y, c1);
+        px(xi + dir, y, c2); // la cabeza, mas clarita
+        px(xi - 2 * dir, y + (Math.floor(ahora / 260 + i) % 2 ? 0 : -1), c1); // la cola se mueve
+        // una burbujita que sube cada tanto
+        const r = (ahora + i * 1300) % 3100;
+        if (i < 3 && r < 1300) {
+          const yb = y - 1 - (r / 1300) * (y - by - 3);
+          px(xi + dir * 2 + (Math.floor(r / 300) % 2), yb, "rgba(250,254,255,0.95)");
+        }
+      });
+    }
+    if (hay.has("chiva")) {
+      // cuando prende el motor sale humito por atras (a la izquierda, abajo)
+      const [cx, cy] = DECORACIONES.chiva;
+      const r = ahora % 9000;
+      if (r < 2300) {
+        for (let k = 0; k < 4; k++) {
+          const nace = k * 380;
+          const vida = r - nace;
+          if (vida < 0 || vida > 900 || nace > 1500) continue;
+          const t = vida / 900;
+          m.fillStyle = `rgba(214,214,220,${(0.75 * (1 - t)).toFixed(3)})`;
+          m.fillRect(Math.round(cx - 1 - t * 5), Math.round(cy + 11 - t * 4), t < 0.5 ? 1 : 2, 1);
+        }
+      }
+    }
+    if (hay.has("saco")) {
+      const [sx, sy] = DECORACIONES.saco;
+      voluta(sx + 7, sy - 1, ahora, 3400, 0, 8, "236,214,180", 0.8); // el aroma del cafe
+      voluta(sx + 11, sy - 1, ahora, 3400, 1700, 7, "236,214,180", 0.7);
+    }
+    if (hay.has("te")) {
+      const [tx, ty] = DECORACIONES.te;
+      voluta(tx + 4, ty - 1, ahora, 2600, 0, 7, "255,255,255", 0.85); // vapor de la tetera
+      voluta(tx + 12, ty + 5, ahora, 2600, 1300, 5, "255,255,255", 0.75); // y de la tacita
+    }
+    if (hay.has("cuadro")) {
+      // en el cuadro de Ruchong caen petalitos de cerezo, por los costados
+      const [qx, qy] = DECORACIONES.cuadro;
+      for (let k = 0; k < 2; k++) {
+        const t = ((ahora + k * 2900) % 5800) / 5800;
+        const x = qx + (k ? 17 : 3) + (Math.floor(t * 9) % 2);
+        px(x, qy + 3 + t * 19, "rgba(246,186,210,0.95)");
+      }
+    }
+    if (hay.has("luces") && clave === "dia") {
+      // de dia, una lucecita brilla de a una (de noche titilan todas, mas abajo)
+      const k = Math.floor(ahora / 1300);
+      if (ahora % 1300 < 260) {
+        const [lx, ly] = DECORACIONES.luces;
+        const [x, y] = FOCOS_LUCES[(k * 7) % FOCOS_LUCES.length];
+        px(lx + x, ly + y + 1, "rgba(255,252,226,0.95)");
+      }
+    }
   }
 
   // v40: las velitas del 7 de diciembre (main.js avisa con e.velitas)
@@ -1417,30 +1559,10 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       if (id === "farol") dx = Math.floor(ahora / 1400) % 4 === 1 ? 1 : Math.floor(ahora / 1400) % 4 === 3 ? -1 : 0;
       sprite(rel, caja[0] + dx, caja[1] + offsetGolpe(id, ahora));
     }
-    // los regalos de los amigos (amigos.js), con la misma luz que el resto
-    for (const id of e.decoraciones || []) {
-      const d = DECORACIONES[id];
-      if (d) sprite(srcDeco(id, e), d[0], d[1]);
-    }
-    // v24: los peces que ella pesco nadan en la pecera (hasta 4, ademas de los 2 dibujados)
-    if ((e.decoraciones || []).includes("pecera") && (e.pecera || []).length) {
-      const [px, py] = DECORACIONES.pecera;
-      const COLOR_PEZ = { dorado: "rgb(244,132,44)", koi: "rgb(246,244,240)", koi_dorado: "rgb(250,206,80)" };
-      e.pecera.forEach((id, i) => {
-        const t = ahora / (1700 + i * 380) + i * 1.9;
-        const dx = Math.sin(t) * 4;
-        const dir = Math.cos(t) > 0 ? 1 : -1;
-        const x = Math.round(px + 8 + dx);
-        const y = py + 6 + (i % 2) * 3 + (i > 1 ? 1 : 0);
-        m.fillStyle = COLOR_PEZ[id] || COLOR_PEZ.dorado;
-        m.fillRect(x - 1, y, 3, 1);
-        m.fillRect(x - 2 * dir, y, 1, 1);
-        if (id === "koi") {
-          m.fillStyle = "rgb(230,70,60)";
-          m.fillRect(x, y, 1, 1);
-        }
-      });
-    }
+    // los regalos de los amigos (amigos.js) y lo de la tienda, con la misma luz que el resto
+    // v47: cada una con su movimiento (y los peces de la pecera nadan en vidaDecos)
+    for (const id of e.decoraciones || []) dibujarDeco(id, e, ahora);
+    vidaDecos(e.decoraciones || [], e, ahora, clave);
     // v24: el segundo almohadon (el del personaje de rom)
     if (e.companero) {
       const f = img(rutaCuarto("fondo.png"));
@@ -1565,12 +1687,12 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
       };
       if (decos.includes("farolitos")) {
         const [fx, fy] = DECORACIONES.farolitos;
-        sprite("tienda/deco_farolitos.png", fx, fy);
+        dibujarDeco("farolitos", e, ahora);
         for (const [lx, ly] of FOCOS_FAROLITOS) halo(fx + lx, fy + ly, "255,130,90", 0.22);
       }
       if (decos.includes("luces")) {
         const [lx0, ly0] = DECORACIONES.luces;
-        sprite("tienda/deco_luces.png", lx0, ly0);
+        dibujarDeco("luces", e, ahora);
         FOCOS_LUCES.forEach(([x, y], i) => {
           if (Math.floor(ahora / 700 + i * 1.7) % 5 !== 0) halo(lx0 + x, ly0 + y + 1, "255,220,150", 0.16);
         });

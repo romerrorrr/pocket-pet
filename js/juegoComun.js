@@ -60,6 +60,28 @@ export function cablearVolver(contenedor, fn) {
   });
 }
 
+/**
+ * v46: el doble toque rapido. En iPhone dos toques seguidos pueden agrandar
+ * la pantalla (zoom) aunque la pagina diga que no, y como el juego no deja
+ * arrastrar, queda trabada hasta cerrar la app. Los juegos se manejan con
+ * pointerdown, asi que en su area el touchend se cancela: sin zoom ni click
+ * fantasma. Los botones (volver, dificultad, sync) siguen con su click.
+ */
+export function blindarToques(area) {
+  if (!area) return;
+  const esControl = (e) => !!(e.target && e.target.closest && e.target.closest("button, a, input, label, select, textarea"));
+  area.addEventListener(
+    "touchend",
+    (e) => {
+      if (!esControl(e) && e.cancelable) e.preventDefault();
+    },
+    { passive: false },
+  );
+  area.addEventListener("dblclick", (e) => {
+    if (!esControl(e)) e.preventDefault();
+  });
+}
+
 /** El cartel de elegir dificultad (mismo que Snack Rain y la pesca). */
 export function htmlDificultad(titulo, clave, actual, unidad = "") {
   return `

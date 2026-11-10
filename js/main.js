@@ -159,6 +159,9 @@ function conTransicion(fn) {
     return;
   }
   veloEl.classList.add("activo");
+  // v46: red de seguridad: si por lo que sea el velo no se levanto, a los 1,5 s se saca solo
+  clearTimeout(conTransicion._guardia);
+  conTransicion._guardia = setTimeout(() => veloEl.classList.remove("activo"), 1500);
   setTimeout(() => {
     try {
       fn();
@@ -168,6 +171,31 @@ function conTransicion(fn) {
     }
   }, DURACION_VELO_MS);
 }
+
+/**
+ * v46: nada de zoom. iOS ignora user-scalable=no: un doble toque rapido o
+ * un pellizco pueden dejar la pantalla agrandada y, en los juegos (que no
+ * dejan arrastrar), trabada hasta cerrar la app. Se cancelan los gestos de
+ * zoom de Safari y, si igual quedo agrandada, se vuelve a escala 1.
+ */
+function sinZoom() {
+  for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+  const vv = window.visualViewport;
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (!vv || !meta) return;
+  const original = meta.getAttribute("content");
+  let t = null;
+  vv.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const escribiendo = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+      if (vv.scale <= 1.02 || escribiendo) return;
+      meta.setAttribute("content", `${original}, minimum-scale=1`);
+      setTimeout(() => meta.setAttribute("content", original), 300);
+    }, 350);
+  });
+}
+sinZoom();
 
 // ------------------------------------------------------------------
 // Estado global de la sesion
@@ -914,7 +942,7 @@ function estadoPieza() {
           ]),
         ],
     npc: visita ? visita.npc.id : null,
-    decoraciones: [...amigos.decoraciones(), ...tienda.decoraciones()],
+    decoraciones: [...amigos.decoraciones(), ...tienda.decoraciones()].filter((id) => tienda.estaPuesta(id)), // v47: las guardadas no
     deseo: deseos.estado === "nuevo" && !fotoPedida && !finalEnMarcha() && !enCalma("deseo") ? "nuevo" : null,
     // v23: el peluche es del OTRO personaje; y despues del si, la foto del anillo enmarcada
     peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi",
@@ -2788,7 +2816,7 @@ function renderConsulta() {
     // lo nuevo se marca como visto al abrir la tienda (el "NEW" queda mientras ella este aca)
     if (!estadoTiendaUI.nuevas) estadoTiendaUI.nuevas = new Set(tienda.nuevas().map((c) => c.id));
     tienda.marcarVistas();
-    R.renderTienda(tmp, tienda, { ...estadoTiendaUI, puesto: amigos.puesto, peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi" });
+    R.renderTienda(tmp, tienda, { ...estadoTiendaUI, puesto: amigos.puesto, peluche: Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi", decos: decosDelCuarto() });
   }
   else if (tipo === "ajustes" || tipo === "backup") tmp.innerHTML = R.htmlAjustes(Sonido.sonidoHabilitado(), Donde.activo(), { fotos: Camara.cantidadDeFotos(), conVideo: Final.dijoQueSi() });
   else R.renderProgress(tmp, mascota, lugaresReg);
@@ -2853,6 +2881,17 @@ function renderConsulta() {
   });
 }
 
+/** v47: las decoraciones que tiene (compradas y regaladas), para ponerlas o sacarlas en la tienda. */
+function decosDelCuarto() {
+  const peluche = Personaje.IDS.find((q) => q !== Personaje.actual()) || "baozi";
+  const compradas = tienda.decoraciones().map((id) => {
+    const c = productoTienda(id);
+    return { id, nombre: c.nombre, arte: id === "peluche" ? `tienda/deco_peluche_${peluche}.png` : c.arte };
+  });
+  const regaladas = amigos.delTipo("decoracion").map((r) => ({ id: r.id, nombre: r.nombre, arte: r.id === "cuadro" ? `amigos/deco_cuadro_${Personaje.actual()}.png` : r.arte }));
+  return [...compradas, ...regaladas].map((d) => ({ ...d, puesta: tienda.estaPuesta(d.id) }));
+}
+
 // v23: la tienda del cuaderno
 let estadoTiendaUI = {}; // { nuevas, confirmar, recien, falta } mientras la tienda esta abierta
 
@@ -2876,6 +2915,15 @@ function wireTienda() {
       }
       Sonido.sonar("tocar");
       repintar({ confirmar: c.id, falta: null, recien: null });
+    });
+  }
+  // v47: sacar una decoracion del cuarto o volver a ponerla (en la tarjeta o en "Your decorations")
+  for (const b of screenEl.querySelectorAll("[data-alternar-deco]")) {
+    b.addEventListener("click", () => {
+      const puesta = tienda.alternarDeco(b.dataset.alternarDeco);
+      guardarTodo();
+      Sonido.sonar(puesta ? "guardado" : "tocar");
+      repintar({ confirmar: null, recien: null, falta: null });
     });
   }
   // v25: elegir el cuarto y la mascota
@@ -4206,6 +4254,7 @@ window.__mochi = {
   tick: () => tick(),
   tienda: () => tienda,
   jardin: () => jardin, // v45
+  decosPuestas: () => estadoPieza().decoraciones, // v47
   deseos: () => deseos,
   pesca: () => pesca,
   juegoTele: () => juegoTele,

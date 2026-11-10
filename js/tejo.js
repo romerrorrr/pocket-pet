@@ -23,7 +23,7 @@
  *
  * Todo se dibuja aca (sin PNGs), en pixeles del juego, como el resto.
  */
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante, HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante, HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_tejo";
 const ALTO = 168;
@@ -116,6 +116,7 @@ export function iniciarTejo(contenedor, opts) {
     </div>`;
   const $ = (id) => contenedor.querySelector(`#${id}`);
   const area = $("area-tejo");
+  blindarToques(area); // v46: doble toque rapido (iPhone)
   const L = lienzoPixel(area, ALTO, "juego-lienzo tejo-lienzo");
   const pjEl = $("tejo-personaje");
   area.insertBefore(L.lienzo, pjEl);

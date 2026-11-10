@@ -147,6 +147,7 @@ export class Tienda {
     this.cuarto = "depto"; // v25: el cuarto puesto ("depto" = el de siempre)
     this.mascota = null; // v25: la mascota que esta afuera (o ninguna)
     this.semillas = {}; // v45: planta -> cuantas semillas tiene
+    this.guardadas = new Set(); // v47: decoraciones (compradas o regaladas) que ella saco del cuarto
   }
 
   /** v25: los cuartos que tiene (sin contar el depto, que es de todos). */
@@ -344,6 +345,19 @@ export class Tienda {
     return CATALOGO.filter((c) => c.tipo === "decoracion" && this.tiene(c.id)).map((c) => c.id);
   }
 
+  /** v47: ¿esta decoracion esta puesta en el cuarto? (todas empiezan puestas) */
+  estaPuesta(id) {
+    return !this.guardadas.has(id);
+  }
+
+  /** v47: la saca del cuarto o la vuelve a poner. Devuelve si quedo puesta. */
+  alternarDeco(id) {
+    if (typeof id !== "string" || !id) return false;
+    if (this.guardadas.has(id)) this.guardadas.delete(id);
+    else this.guardadas.add(id);
+    return !this.guardadas.has(id);
+  }
+
   /** Los accesorios que tiene (ids de accesorio, como los de los amigos). */
   accesorios() {
     return CATALOGO.filter((c) => c.tipo === "accesorio" && this.tiene(c.id)).map((c) => c.acc || c.id);
@@ -370,6 +384,7 @@ export class Tienda {
       cuarto: this.cuarto,
       mascota: this.mascota,
       semillas: this.semillas,
+      guardadas: [...this.guardadas],
     };
   }
 
@@ -385,6 +400,7 @@ export class Tienda {
       if (porId(id) && porId(id).tipo === "comida" && entero(n) > 0) t.comida[id] = entero(n);
     }
     t.vistas = new Set((datos.vistas || []).filter((id) => porId(id)));
+    t.guardadas = new Set((Array.isArray(datos.guardadas) ? datos.guardadas : []).filter((id) => typeof id === "string" && /^[a-z_]{1,24}$/.test(id)));
     for (const [planta, n] of Object.entries(datos.semillas || {})) {
       if (CATALOGO.some((c) => c.tipo === "semilla" && c.planta === planta) && entero(n) > 0) t.semillas[planta] = entero(n);
     }

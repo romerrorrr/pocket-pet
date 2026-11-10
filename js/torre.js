@@ -12,7 +12,7 @@
  * Record por dificultad (EASY / NORMAL / HARD: lo rapido que va y cuanto
  * perdona el PERFECT).
  */
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante, HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, htmlDificultad, cablearDificultad, lienzoPixel, flotante, HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_torre";
 const ALTO = 195; // pixeles de arte de alto (en un telefono, ~2 px de pantalla cada uno)
@@ -110,6 +110,7 @@ export function iniciarTorre(contenedor, opts) {
     </div>`;
   const $ = (id) => contenedor.querySelector(`#${id}`);
   const area = $("area-torre");
+  blindarToques(area); // v46: doble toque rapido (iPhone)
   const L = lienzoPixel(area, ALTO, "juego-lienzo torre-lienzo");
   const ctx = L.ctx;
 

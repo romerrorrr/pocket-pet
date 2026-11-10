@@ -1183,7 +1183,7 @@ function estadoTienda(c, tienda, puesto) {
   if (c.tipo === "sticker") return "In your camera ✓";
   if (c.tipo === "cuarto") return "Yours ✓";
   if (c.tipo === "mascota") return "Yours ✓";
-  return "In your room ✓";
+  return tienda.estaPuesta(c.id) ? "In your room ✓" : "In storage";
 }
 
 function tarjetaTienda(c, tienda, { nuevas, confirmar, recien, puesto, peluche, falta }) {
@@ -1194,6 +1194,11 @@ function tarjetaTienda(c, tienda, { nuevas, confirmar, recien, puesto, peluche, 
   if (confirmar === c.id) {
     pie = `<span class="tienda-pregunta">Buy for ${c.precio}?</span>
       <span class="fila-tienda"><button class="boton boton-fantasma chico" data-cancelar-compra>No</button><button class="boton chico" data-confirmar-compra="${esc(c.id)}">Buy</button></span>`;
+  } else if (tiene && c.tipo === "decoracion") {
+    // v47: las decoraciones se sacan del cuarto y se vuelven a poner
+    const puesta = tienda.estaPuesta(c.id);
+    pie = `<span class="estado-tienda ${puesta ? "" : "guardada"}">${esc(estado)}</span>
+      <button class="boton ${puesta ? "boton-fantasma" : ""} chico boton-deco" data-alternar-deco="${esc(c.id)}">${puesta ? "Put away" : "Place"}</button>`;
   } else if (tiene) {
     pie = `<span class="estado-tienda">${esc(estado)}</span>`;
   } else {
@@ -1237,9 +1242,21 @@ function elegirCasa(tienda) {
   return html;
 }
 
+/** v47: todo lo que hay (o hubo) en el cuarto, comprado o regalado: tocar lo saca o lo pone. */
+function elegirDecos(decos) {
+  if (!decos || !decos.length) return "";
+  return `<div class="subtitulo-lista">Your decorations</div><div class="fila-elegir fila-decos" role="group" aria-label="Your decorations">${decos
+    .map(
+      (d) =>
+        `<button class="chip-elegir chip-deco ${d.puesta ? "puesto" : ""}" data-alternar-deco="${esc(d.id)}" aria-pressed="${d.puesta}"><img src="${arte(d.arte)}" alt="" draggable="false" />${esc(d.nombre)}${d.puesta ? " ✓" : ""}</button>`,
+    )
+    .join("")}</div><div class="ayuda-decos">Tap one to put it away or bring it back.</div>`;
+}
+
 /**
  * opts: { nuevas: Set(ids), confirmar: id|null, recien: id|null, falta: id|null,
- *         puesto: id del accesorio puesto, peluche: "baozi"|"mantou", ahora }
+ *         puesto: id del accesorio puesto, peluche: "baozi"|"mantou", ahora,
+ *         decos: [{ id, nombre, arte, puesta }] (v47: las del cuarto, compradas y regaladas) }
  */
 export function renderTienda(container, tienda, opts = {}) {
   const o = { nuevas: new Set(), confirmar: null, recien: null, falta: null, puesto: null, peluche: "baozi", ...opts };
@@ -1257,6 +1274,7 @@ export function renderTienda(container, tienda, opts = {}) {
         <div class="tienda-ayuda">Earn coins by caring for Baozi, writing your diary, telling Baozi your steps, playing and taking photos.</div>
       </div>
       ${elegirCasa(tienda)}
+      ${elegirDecos(o.decos)}
       ${hayNuevasSemana ? `<div class="subtitulo-lista">New this week</div><div class="grilla-tienda">${semana.map((c) => tarjetaTienda(c, tienda, o)).join("")}</div>` : ""}
       <div class="subtitulo-lista">${hayNuevasSemana ? "Everything else" : "Everything"}</div>
       <div class="grilla-tienda">${resto.map((c) => tarjetaTienda(c, tienda, o)).join("")}</div>

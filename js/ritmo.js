@@ -20,7 +20,7 @@
  * del juego. Es de este telefono: no viaja en el backup.
  */
 import { sonidoHabilitado, modoDeAudio } from "./sonido.js";
-import { leerRecordDe, guardarRecordDe, leerDificultadDe, guardarDificultadDe, NOMBRES_DIFICULTAD, lienzoPixel, imagen, lista, flotante, multiplicador, HTML_VOLVER, cablearVolver, crearPausa } from "./juegoComun.js";
+import { leerRecordDe, guardarRecordDe, leerDificultadDe, guardarDificultadDe, NOMBRES_DIFICULTAD, lienzoPixel, imagen, lista, flotante, multiplicador, HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
 
 const CLAVE = "baozi_record_ritmo"; // + "_<cancion>" (+ "_<dif>")
 const CLAVE_CANCION = "baozi_ritmo_cancion";
@@ -207,6 +207,7 @@ export function iniciarRitmo(contenedor, opts) {
     </div>`;
   const $ = (id) => contenedor.querySelector(`#${id}`);
   const area = $("area-ritmo");
+  blindarToques(area); // v46: doble toque rapido (iPhone)
   const L = lienzoPixel(area, ALTO, "juego-lienzo ritmo-lienzo");
   const ctx = L.ctx;
   const comidas = COMIDAS.map((c) => imagen(arte(c)));
