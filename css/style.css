@@ -5397,3 +5397,12 @@ img.icono-fecha { width: 22px; height: 21px; }
 .etiqueta-maceta b { font-weight: normal; opacity: 0.75; }
 .semillas-jardin.papel { min-height: 0; flex: none; height: auto; position: absolute; box-shadow: 0 0 0 2px var(--tinta), 5px 6px 0 1px rgba(0, 0, 0, 0.3); }
 .semilla-jardin img { width: 64px; height: 64px; }
+
+/* v47 — poner y sacar las decoraciones (en la tienda) */
+.chip-deco img { width: 26px; height: 20px; object-fit: cover; object-position: left center; }
+.chip-deco:not(.puesto) { opacity: 0.72; }
+.chip-deco:not(.puesto) img { filter: grayscale(0.6); }
+.ayuda-decos { font-size: 11px; color: rgba(22, 20, 22, 0.55); padding-top: 6px; }
+.estado-tienda.guardada { color: rgba(22, 20, 22, 0.5); }
+.boton-deco { margin-top: 4px; min-height: 30px; }
+.tarjeta-tienda .boton-deco.boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
