@@ -33,6 +33,7 @@ import { LUGARES, NPCS, VECES_PARA_ENAMORADO, CATEGORIAS, SELLOS_PROPIOS } from 
 import { resumenDelDia, fotoDelDia, fechaLegible, ANIMOS, preguntaDelDia, claveDelDia, claveDelDiaLogico } from "./diario.js";
 import { buscarCarta } from "./cartas.js";
 import { papelDe, HOJAS, ANILLOS, PAPELES_CUADERNO } from "./estiloDiario.js";
+import { SECCIONES_ALBUM, TOTAL_ALBUM, srcStickerLugar, tieneSticker } from "./album.js"; // v50
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
 import { RECORTES_MENU } from "./recortes.js";
 import { AMIGOS, REGALOS, MAX_CORAZONES } from "./amigos.js";
@@ -656,6 +657,11 @@ export function renderSello(container, lugar) {
           <div class="caja-dialogo-nombre">${Personaje.nombre().toUpperCase()}</div>
           <div class="caja-dialogo-texto" id="frase-sello"></div>
         </div>
+        ${
+          tieneSticker(lugar.id)
+            ? `<div class="sticker-nuevo oculto" id="sticker-nuevo"><img src="${arte(srcStickerLugar(lugar.id))}" alt="" draggable="false" /><span><b>NEW STICKER!</b>It's in your album, your camera and your diary.</span></div>`
+            : ""
+        }
         <div class="fila-botones oculto" id="botones-sello">
           <button class="boton boton-fantasma" id="btn-sello-despues">Later</button>
           <button class="boton" id="btn-sello-foto">${glifo("camara")} Postcard photo</button>
@@ -1030,8 +1036,113 @@ export function renderStats(container, mascota, opts = {}) {
         <span class="pips">${corazonesHtml}</span>
       </div>
       ${aviso}
+      ${htmlDiccionario(opts.palabras, opts.totalPalabras, opts.hayVoz)}
     </div>
   `;
+}
+
+/** v50: las palabras que Baozi ya aprendio (la ultima primero). */
+function htmlDiccionario(palabras, total = 0, voz = false) {
+  if (!palabras) return "";
+  const filas = palabras.length
+    ? palabras
+        .map(
+          (p) => `<div class="fila-palabra">
+            <span class="pal-es">${esc(p.es)}${p.co ? `<small>CO</small>` : ""}</span>
+            <span class="pal-zh" lang="zh-CN">${esc(p.zh)}</span>
+            <span class="pal-py">${esc(p.py)}</span>
+            <span class="pal-en">${esc(p.en)}</span>
+            ${voz ? `<span class="pal-oir"><button type="button" class="boton-oir" data-oir="${p.i}" data-idioma="es" aria-label="Listen in Spanish">ES</button><button type="button" class="boton-oir" data-oir="${p.i}" data-idioma="zh" aria-label="Listen in Chinese">中</button></span>` : ""}
+          </div>`,
+        )
+        .join("")
+    : `<div class="vacio-suave">Tap the calendar in the room to learn today's word ♥</div>`;
+  return `<div class="subtitulo-lista">Baozi's words · ${palabras.length} of ${total}</div><div class="lista-palabras">${filas}</div>`;
+}
+
+/** v50: la palabra del dia (sale al tocar el calendario). */
+export function renderPalabra(container, p, { fecha = "", voz = false } = {}) {
+  container.innerHTML = `
+    <div class="pantalla-palabra">
+      <div class="papel carta-palabra">
+        <div class="hoja-calendario">WORD OF THE DAY · ${esc(fecha)}</div>
+        <div class="fila-palabra-grande">
+          <div class="palabra-baozi">${spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png")}</div>
+          <div class="palabra-textos">
+            <div class="palabra-es">${esc(p.es)}</div>
+            <div class="palabra-zh-fila"><span class="palabra-zh" lang="zh-CN">${esc(p.zh)}</span><span class="palabra-py">${esc(p.py)}</span></div>
+            <div class="palabra-en">${esc(p.en)}${p.co ? ` <small>(Colombian Spanish)</small>` : ""}</div>
+          </div>
+        </div>
+        <div class="palabra-ejemplo">“${esc(p.ejEs)}” — ${esc(p.ejEn)}</div>
+        <div class="fila-botones palabra-botones">
+          ${voz ? `<button class="boton chico boton-fantasma" type="button" id="btn-oir-es">🔈 Español</button><button class="boton chico boton-fantasma" type="button" id="btn-oir-zh">🔈 中文</button>` : ""}
+          <button class="boton chico boton-fantasma" type="button" id="btn-palabra-fechas">${glifo("estrella")} Our dates</button>
+          <button class="boton chico" type="button" id="btn-palabra-listo">Got it ♥</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/** v50: el album de stickers (en el cuaderno). tengo: Set de lugares sellados. */
+export function renderAlbum(container, { tengo = new Set(), nombre = (id) => id } = {}) {
+  const n = SECCIONES_ALBUM.reduce((s, sec) => s + sec.lugares.filter((id) => tengo.has(id)).length, 0);
+  container.innerHTML = `
+    ${encabezado("Sticker album", "btn-volver-consulta")}
+    <div class="lista-journal album">
+      <div class="fila-botones"><button class="boton chico boton-fantasma" id="btn-album-volver" type="button">${glifo("atras")} Diary</button></div>
+      <div class="subtitulo-lista">Sticker album · ${n} of ${TOTAL_ALBUM}</div>
+      <div class="barra-album"><i style="width:${((n / TOTAL_ALBUM) * 100).toFixed(1)}%"></i></div>
+      ${SECCIONES_ALBUM.map(
+        (sec) => `<div class="seccion-album">${sec.nombre}</div>
+          <div class="grilla-album">${sec.lugares
+            .map((id) =>
+              tengo.has(id)
+                ? `<div class="slot-album tengo"><img src="${arte(srcStickerLugar(id))}" alt="" draggable="false" /><span>${esc(nombre(id))}</span></div>`
+                : `<div class="slot-album"><b>?</b><span>${esc(nombre(id))}</span></div>`,
+            )
+            .join("")}</div>`,
+      ).join("")}
+      <div class="vacio-suave">Seal a new place to win its sticker ♥</div>
+    </div>`;
+}
+
+/** v50: los meses que Baozi armo (en el cuaderno). meses: [{ mes, nombre, anio }] el ultimo primero. */
+export function renderMeses(container, meses) {
+  container.innerHTML = `
+    ${encabezado("Our months", "btn-volver-consulta")}
+    <div class="lista-journal lista-cartas">
+      <div class="fila-botones"><button class="boton chico boton-fantasma" id="btn-meses-volver" type="button">${glifo("atras")} Diary</button></div>
+      <div class="subtitulo-lista">Our months</div>
+      ${meses
+        .map(
+          (m) => `<button class="fila-carta fila-mes" type="button" data-abrir-mes="${esc(m.mes)}">
+            <span class="fila-carta-sello">${glifo("estrella")}</span>
+            <span class="fila-carta-titulo">Our ${esc(m.nombre)}</span>
+            <span class="fila-carta-fecha">${esc(m.anio)}</span>
+          </button>`,
+        )
+        .join("")}
+    </div>`;
+}
+
+/** v50: Baozi entrega el librito del mes. */
+export function renderSobreMes(container, nombre) {
+  container.innerHTML = `
+    <div class="pantalla-palabra pantalla-sobre-mes">
+      <div class="papel carta-sobre">
+        <div class="sobre-fila">
+          <div class="palabra-baozi">${spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png")}</div>
+          <div class="sobre-mes" aria-hidden="true"><span>♥</span></div>
+        </div>
+        <div class="titulo-sobre">OUR ${esc(String(nombre).toUpperCase())} IS READY!</div>
+        <div class="texto-sobre">Baozi made you a little book about our month.</div>
+        <div class="fila-botones botones-sobre">
+          <button class="boton boton-fantasma" type="button" id="btn-mes-luego">Later</button>
+          <button class="boton" type="button" id="btn-mes-abrir">Open it ♥</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 const TRAIT_DESCRIPCION = {
@@ -1576,6 +1687,9 @@ function fotoArteDelDia(entrada) {
  */
 const animoDe = (id) => ANIMOS.find((a) => a.id === id) || null;
 
+/** v50: la carita de un animo, para afuera (el librito del mes). */
+export const caritaAnimo = (id) => caraAnimo(id, "");
+
 function caraAnimo(id, clase = "") {
   const a = animoDe(id);
   if (!a) return `<span class="animo-vacio ${clase}"></span>`;
@@ -1583,7 +1697,7 @@ function caraAnimo(id, clase = "") {
 }
 
 /** Arriba del diario: la pagina de hoy (o el boton para escribirla), la semana y un recuerdo. */
-function cabezaDiario(diario, cartas = 0) {
+function cabezaDiario(diario, cartas = 0, extra = {}) {
   if (!diario) return "";
   const hoy = diario.entrada(claveDelDiaLogico()); // v35: la pagina escrita va por dia logico
   const escrita = diario.hoyEscrito();
@@ -1631,6 +1745,8 @@ function cabezaDiario(diario, cartas = 0) {
       ${tarjetaRecuerdo}
       <div class="fila-cabeza-diario">
         ${cartas ? `<button class="tarjeta-cartas" id="btn-ver-cartas" type="button">${glifo("corazon")} <span>Letters</span><b>${cartas}</b></button>` : ""}
+        ${extra.meses ? `<button class="tarjeta-meses" id="btn-ver-meses" type="button">${glifo("estrella")} <span>Our months</span><b>${extra.meses}</b></button>` : ""}
+        <button class="tarjeta-album" id="btn-ver-album" type="button"><span class="flor-album" aria-hidden="true">✿</span> <span>Sticker album</span><b>${extra.album || 0}/${TOTAL_ALBUM}</b></button>
         <button class="tarjeta-estilo" id="btn-estilo-cuaderno" type="button"><span class="muestra-estilo" aria-hidden="true"></span> Notebook style</button>
       </div>
     </div>`;
@@ -1727,7 +1843,7 @@ export function renderDiario(container, diario, opts = {}) {
 
   container.innerHTML = `
     ${encabezado("Diary", "btn-volver-consulta")}
-    ${cabezaDiario(diario, opts.cartas || 0)}
+    ${cabezaDiario(diario, opts.cartas || 0, { meses: opts.meses || 0, album: opts.album || 0 })}
     ${cuerpo}
   `;
 }

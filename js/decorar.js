@@ -263,7 +263,7 @@ export function abrirDecorar(contenedor, opts) {
       const def = porId.get(p.dataset.poner);
       if (!def) return;
       guardarParaDeshacer();
-      const s = def.grupo === "extras" ? 30 : def.grupo === "amigos" ? 46 : 60;
+      const s = def.grupo === "extras" ? 30 : def.grupo === "amigos" ? 46 : def.grupo === "lugares" ? 40 : 60;
       const n = estilo.stickers.length;
       const st = { id: def.id, x: ANCHO_PAGINA / 2 + ((n * 23) % 50) - 25, y: 60 + ((n * 17) % 40) - 20, s, r: 0 };
       acomodar(st);

@@ -53,6 +53,9 @@ import * as Fechas from "./fechas.js";
 import { Jardin, PLANTAS as PLANTAS_JARDIN, SEMILLAS_DE_REGALO } from "./jardin.js";
 import { abrirDecorar } from "./decorar.js"; // v49
 import { limpiarCuaderno } from "./estiloDiario.js";
+import { Palabras, PALABRAS, decirEnVoz, hayVoz } from "./palabras.js"; // v50
+import { tieneSticker, srcStickerLugar, cuantosTiene } from "./album.js"; // v50
+import { resumenDelMes, abrirLibrito, mesDe, mesAnterior, nombreDelMes } from "./nuestroMes.js"; // v50
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -71,7 +74,7 @@ const tabbarEl = document.getElementById("tabbar");
 const marcoEl = document.querySelector(".marco-manito");
 
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas", "jardin", "decorar"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas", "jardin", "decorar", "palabra", "mes", "sobremes"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -93,7 +96,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla, jardin: jardin.aObjeto(), cuaderno: estiloCuaderno });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla, jardin: jardin.aObjeto(), cuaderno: estiloCuaderno, palabras: palabras.aObjeto(), meses: mesesReg });
 }
 
 // v35: actualizaciones seguras (ver el comentario de arriba de sw.js).
@@ -209,6 +212,9 @@ let tienda = new Tienda(); // v23: las monedas y lo comprado (tienda.js)
 let deseos = Deseos.desdeObjeto(null, DESEOS_PROPIOS); // v24: el deseo del dia (deseos.js)
 let jardin = new Jardin(); // v45: el jardin del balcon (jardin.js)
 let estiloCuaderno = limpiarCuaderno(null); // v49: como se ve el cuaderno (estiloDiario.js)
+let palabras = new Palabras(); // v50: la palabra del dia (palabras.js)
+let mesesReg = { entregados: [] }; // v50: los librillos del mes que Baozi ya entrego (nuestroMes.js)
+const cargarMeses = (d) => ({ entregados: (d && Array.isArray(d.entregados) ? d.entregados : []).filter((m) => typeof m === "string" && /^\d{4}-\d{2}$/.test(m)) });
 // v24: despues del si, el personaje de rom se muda: "no" -> "llega" (golpea la puerta) -> "vive"
 let mudanza = { estado: "no", desde: 0 };
 function cargarMudanza(datos) {
@@ -242,6 +248,8 @@ let cartasEntregadas = [];
 let cartaActual = null;
 let cartaReleida = false; // v48: la carta abierta es una que ya habia llegado (se vuelve al diario)
 let verCartas = false; // v48: en la pestana del diario, la lista de cartas en vez de las paginas
+let verAlbum = false; // v50: el album de stickers
+let verMeses = false; // v50: la lista de "Our months"
 const controller = new ControladorVistas();
 let guardadoAuto;
 
@@ -532,6 +540,8 @@ function arrancar() {
     cargarAmigos(guardado.extras && guardado.extras.amigos);
     jardin = Jardin.desdeObjeto(guardado.extras && guardado.extras.jardin);
     estiloCuaderno = limpiarCuaderno(guardado.extras && guardado.extras.cuaderno);
+    palabras = Palabras.desdeObjeto(guardado.extras && guardado.extras.palabras);
+    mesesReg = cargarMeses(guardado.extras && guardado.extras.meses);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
@@ -680,6 +690,8 @@ function confirmarNombre() {
   cargarAmigos(null);
   jardin = new Jardin();
   estiloCuaderno = limpiarCuaderno(null);
+  palabras = new Palabras();
+  mesesReg = cargarMeses(null);
   cargarLugaresDeElla(null);
   cargarFechasDeElla(null);
   diario = diario || new Diario();
@@ -759,6 +771,15 @@ function renderVistaActual() {
     case "decorar":
       if (decorando) abrirDecorarDia(decorando.clave, decorando.estilo, false);
       else irACasa();
+      break;
+    case "palabra":
+      renderPalabraActual();
+      break;
+    case "mes":
+      renderMesActual();
+      break;
+    case "sobremes":
+      renderSobreMesActual();
       break;
     case "elegir":
       R.renderElegir(screenEl, { cargaFallida: storage.estadoDeCarga().fallida });
@@ -959,6 +980,8 @@ function estadoPieza() {
             ...(dormido ? [] : R.necesidades(mascota).map((n) => n.objeto).filter(Boolean)),
             // la pagina de hoy sin escribir: un "!" sobre el cuaderno de la mesita
             ...(esHoraDeEscribir() && diario && !diario.hoyEscrito() ? ["mesita"] : []),
+            // v50: la palabra de hoy todavia no la vio
+            ...(puedeComentar() && !finalEnMarcha() && !palabras.vioLaDeHoy(claveDelDia()) ? ["calendario"] : []),
             // un amigo trae un regalo: "!" sobre la ventana
             ...(visita && visita.regalo ? ["ventana"] : []),
             // v45: el jardin pide agua (desde las 8) o hay algo para cosechar: "!" sobre la ventana
@@ -1064,9 +1087,9 @@ function tocarObjeto(id) {
       abrirMapa();
       break;
     case "calendario":
-      // v33: el calendario abre las fechas de ustedes (y se pueden agregar)
+      // v50: el calendario muestra la palabra del dia (y desde ahi, las fechas de ustedes)
       Sonido.sonar("tocar");
-      abrirFechas();
+      abrirPalabra();
       break;
     case "ventana":
       tocarVentana();
@@ -1084,8 +1107,9 @@ function tocarBaozi() {
     conTransicion(() => Final.abrirPedido());
     return;
   }
-  if (!mascota || mascota.dormida) {
-    Sonido.sonar("no");
+  if (!mascota) return;
+  if (mascota.dormida) {
+    suenoDeBaozi(); // v50: dormido, sueña con un recuerdo
     return;
   }
   const ahora = Date.now();
@@ -2359,6 +2383,8 @@ function wireSello(lugar) {
       alTerminar: () => {
         const b = document.getElementById("botones-sello");
         if (b) b.classList.remove("oculto");
+        const st = document.getElementById("sticker-nuevo"); // v50
+        if (st) st.classList.remove("oculto");
       },
     });
   }, 1300);
@@ -2615,6 +2641,12 @@ function catalogoStickers() {
     const src = arte(`npcs/npc_${id}.png`);
     stickers.push({ id: `npc-${id}`, nombre: npc.nombre, grupo: "amigos", html: `<img class="sticker-extra sticker-npc" src="${src}" alt="" draggable="false" />`, capas: [src], lado: 80 });
   }
+  // v50: los stickers de los lugares sellados
+  const deLugares = [...lugaresReg.desbloqueados].filter(tieneSticker);
+  for (const id of deLugares) {
+    const src = arte(srcStickerLugar(id));
+    stickers.push({ id: `lugar-${id}`, nombre: nombreDeLugar(id), grupo: "lugares", html: `<img class="sticker-extra" src="${src}" alt="" draggable="false" />`, capas: [src], lado: 64 });
+  }
   const mini = (quien) => R.spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png", false, "mini", { quien });
   return {
     stickers,
@@ -2622,6 +2654,7 @@ function catalogoStickers() {
       ...quienes.map((q) => ({ id: q, nombre: Personaje.nombre(q), html: `${mini(q)}<span>${Personaje.nombre(q)}</span>` })),
       { id: "extras", nombre: "Extras", html: `<img class="sticker-extra" src="${arte("final/corazon_rojo.png")}" alt="" /><span>Extras</span>` },
       ...(amigos.stickers().length ? [{ id: "amigos", nombre: "Friends", html: `<img class="sticker-extra" src="${arte(`npcs/npc_${amigos.stickers()[0]}.png`)}" alt="" /><span>Friends</span>` }] : []),
+      ...(deLugares.length ? [{ id: "lugares", nombre: "Places", html: `<img class="sticker-extra" src="${arte(srcStickerLugar(deLugares[0]))}" alt="" /><span>Places</span>` }] : []),
     ],
     iconoSticker: mini(suya),
   };
@@ -2831,12 +2864,14 @@ function renderConsulta() {
   const tmp = document.createElement("div");
   if (tipo === "diary") {
     if (verCartas) R.renderCartas(tmp, cartasQueLlegaron());
-    else R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi(), cartas: cartasQueLlegaron().length, ...opcionesPagina() });
+    else if (verAlbum) R.renderAlbum(tmp, { tengo: lugaresReg.desbloqueados, nombre: nombreDeLugar });
+    else if (verMeses) R.renderMeses(tmp, mesesDisponibles().map((m) => ({ mes: m, nombre: nombreDelMes(m), anio: m.slice(0, 4) })));
+    else R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi(), cartas: cartasQueLlegaron().length, meses: mesesDisponibles().length, album: cuantosTiene(lugaresReg.desbloqueados), ...opcionesPagina() });
   }
   else if (tipo === "stats") {
     elegirDeseo();
     const d = deseos.actual();
-    R.renderStats(tmp, mascota, { deseo: d && !finalEnMarcha() && !enCalma("deseo") ? { texto: d.texto, real: !!d.real, estado: deseos.estado, progreso: deseos.progreso, meta: d.meta || 0 } : null });
+    R.renderStats(tmp, mascota, { deseo: d && !finalEnMarcha() && !enCalma("deseo") ? { texto: d.texto, real: !!d.real, estado: deseos.estado, progreso: deseos.progreso, meta: d.meta || 0 } : null, palabras: palabras.diccionario(), totalPalabras: PALABRAS.length, hayVoz: hayVoz() });
   }
   else if (tipo === "traits") R.renderTraits(tmp, mascota);
   else if (tipo === "npcs") R.renderNpcs(tmp, npcsReg, amigos, { progreso: (m) => progresoDe(m, contextoAmigos()) });
@@ -2853,7 +2888,7 @@ function renderConsulta() {
   if (cabecera) cabecera.remove();
   R.renderCuaderno(screenEl, tipo === "backup" ? "ajustes" : tipo, tmp.innerHTML, estiloCuaderno);
   if (tipo !== "shop") estadoTiendaUI = {};
-  if (tipo !== "diary") verCartas = false;
+  if (tipo !== "diary") verCartas = verAlbum = verMeses = false;
   if (tipo === "shop") wireTienda();
   const pestanaTienda = screenEl.querySelector('.cuaderno-pestanas [data-pestana="shop"]');
   if (pestanaTienda && tienda.nuevas().length) pestanaTienda.classList.add("con-novedad");
@@ -2874,6 +2909,20 @@ function renderConsulta() {
       renderConsulta();
     });
     if (verCartas) for (const b of screenEl.querySelectorAll("[data-leer-carta]")) b.addEventListener("click", () => releerCarta(b.dataset.leerCarta));
+    // v50: el album y los meses
+    const sub = (id, fn) => {
+      const b = document.getElementById(id);
+      if (b) b.addEventListener("click", () => {
+        Sonido.sonar("tocar");
+        fn();
+        renderConsulta();
+      });
+    };
+    sub("btn-ver-album", () => (verAlbum = true));
+    sub("btn-album-volver", () => (verAlbum = false));
+    sub("btn-ver-meses", () => (verMeses = true));
+    sub("btn-meses-volver", () => (verMeses = false));
+    for (const b of screenEl.querySelectorAll("[data-abrir-mes]")) b.addEventListener("click", () => abrirMes(b.dataset.abrirMes, "diario"));
     const estilo = document.getElementById("btn-estilo-cuaderno");
     if (estilo) estilo.addEventListener("click", () => {
       Sonido.sonar("tocar");
@@ -2889,6 +2938,7 @@ function renderConsulta() {
   if (tipo === "stats") {
     const b = screenEl.querySelector("[data-ver-deseo]");
     if (b) b.addEventListener("click", () => abrirDeseo("stats"));
+    for (const o of screenEl.querySelectorAll("[data-oir]")) o.addEventListener("click", () => oirPalabra(PALABRAS[Number(o.dataset.oir)], o.dataset.idioma));
   }
   if (tipo === "closet") {
     for (const b of screenEl.querySelectorAll("[data-accesorio]")) {
@@ -2934,7 +2984,7 @@ function renderConsulta() {
   }
   document.getElementById("btn-volver-consulta").addEventListener("click", () => {
     estadoTiendaUI = {};
-    verCartas = false;
+    verCartas = verAlbum = verMeses = false;
     conTransicion(irACasa);
   });
 }
@@ -3118,6 +3168,204 @@ function abrirEstiloCuaderno() {
     const scroll2 = screenEl.querySelector(".tira-diario");
     if (scroll2) scroll2.scrollLeft = x;
     abrirEstiloCuaderno();
+  });
+}
+
+// ------------------------------------------------------------------
+// v50: la palabra del dia, los sueños, el album y "Our month"
+// ------------------------------------------------------------------
+
+const nombreDeLugar = (id) => (LUGARES.find((l) => l.id === id) || {}).nombre || "a special place";
+const LUGARES_CON_FOTO_ARTE = new Set(["westlake", "longjing", "lingyin"]);
+const arteDeRecuerdo = (id) => (LUGARES_CON_FOTO_ARTE.has(id) ? arte(`lugares/lugar_${id}.png`) : tieneSticker(id) ? arte(srcStickerLugar(id)) : null);
+
+function fechaCortaHoy() {
+  const f = new Date();
+  return `${f.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${f.getDate()}`;
+}
+
+function abrirPalabra() {
+  palabras.ver(claveDelDia());
+  guardarTodo();
+  conTransicion(() => {
+    prepararVista("palabra");
+    renderVistaActual();
+  });
+}
+
+function oirPalabra(p, idioma) {
+  if (!p) return;
+  const ok = idioma === "zh" ? decirEnVoz(p.zh, "zh-CN") : decirEnVoz(p.es.replace(/[¡!¿?]/g, ""), "es-ES");
+  if (!ok) Sonido.sonar("no");
+}
+
+function renderPalabraActual() {
+  const p = palabras.deHoy(claveDelDia());
+  R.renderPalabra(screenEl, p, { fecha: fechaCortaHoy(), voz: hayVoz() });
+  const en = (id, fn) => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener("click", fn);
+  };
+  en("btn-oir-es", () => oirPalabra(p, "es"));
+  en("btn-oir-zh", () => oirPalabra(p, "zh"));
+  en("btn-palabra-fechas", () => {
+    Sonido.sonar("tocar");
+    abrirFechas();
+  });
+  en("btn-palabra-listo", () => {
+    Sonido.sonar("tocar");
+    conTransicion(irACasa);
+  });
+}
+
+/** "yesterday", "5 days ago", "3 weeks ago", "2 months ago". */
+function haceCuanto(clave) {
+  const [y, m, d] = clave.split("-").map(Number);
+  const dias = Math.round((new Date().setHours(12, 0, 0, 0) - new Date(y, m - 1, d, 12).getTime()) / 86400000);
+  if (dias <= 1) return "yesterday";
+  if (dias < 14) return `${dias} days ago`;
+  if (dias < 60) return `${Math.round(dias / 7)} weeks ago`;
+  return `${Math.round(dias / 30)} months ago`;
+}
+
+let ultimoSueno = "";
+function suenoDeBaozi() {
+  const hoy = claveDelDia();
+  const recuerdos = [];
+  for (const f of Camara.todasLasFotos()) {
+    if (!f || !f.dataUrl || !f.dia || f.dia === hoy || f.tipo === "final") continue;
+    recuerdos.push({ clave: `f${f.clave || f.t}`, src: f.dataUrl, que: f.lugar ? nombreDeLugar(f.lugar) : "a photo we took", dia: f.dia, propia: true });
+  }
+  for (const id of lugaresReg.desbloqueados) {
+    const src = arteDeRecuerdo(id);
+    const t = lugaresReg.fechas && lugaresReg.fechas[id];
+    if (!src || !t) continue;
+    const dia = claveDelDia(new Date(t));
+    if (dia === hoy) continue;
+    recuerdos.push({ clave: `l${id}`, src, que: nombreDeLugar(id), dia, propia: false });
+  }
+  const opciones = recuerdos.length > 1 ? recuerdos.filter((r) => r.clave !== ultimoSueno) : recuerdos;
+  const r = opciones.length ? opciones[Math.floor(Math.random() * opciones.length)] : null;
+  if (r) ultimoSueno = r.clave;
+  const viejo = screenEl.querySelector(".burbuja-sueno");
+  if (viejo) viejo.remove();
+  if (globoTemporal) { // que no se encime con algo que dijo antes de dormirse
+    globoTemporal = "";
+    clearTimeout(timeoutGlobo);
+    renderVistaActual();
+  }
+  const caja = screenEl.querySelector(".caja-cara");
+  const pant = screenEl.getBoundingClientRect();
+  const c = caja ? caja.getBoundingClientRect() : { left: pant.left + pant.width / 2, top: pant.top + pant.height / 2, width: 0, height: 0 };
+  const x = Math.min(pant.width - 250, Math.max(8, c.left - pant.left + c.width * 0.55));
+  const y = Math.max(6, c.top - pant.top - 150);
+  const el = document.createElement("div");
+  el.className = "burbuja-sueno";
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.innerHTML = r
+    ? `<span class="sueno-bolita sb1"></span><span class="sueno-bolita sb2"></span><div class="nube-sueno"><img class="${r.propia ? "" : "arte"}" src="${r.src}" alt="" draggable="false" /><div class="texto-sueno"><b>${Personaje.nombre().toUpperCase()} IS DREAMING OF…</b>${r.que}, ${haceCuanto(r.dia)}</div></div>`
+    : `<span class="sueno-bolita sb1"></span><span class="sueno-bolita sb2"></span><div class="nube-sueno"><img class="arte" src="${arte("comida/comida_dumpling.png")}" alt="" draggable="false" /><div class="texto-sueno"><b>${Personaje.nombre().toUpperCase()} IS DREAMING OF…</b>a mountain of dumplings</div></div>`;
+  screenEl.appendChild(el);
+  Sonido.sonar("tocar");
+  const quitar = () => {
+    el.classList.add("se-va");
+    setTimeout(() => el.remove(), 400);
+  };
+  el.addEventListener("click", quitar);
+  setTimeout(() => el.isConnected && quitar(), 6500);
+}
+
+// ---- Our month ----
+function resumenDe(mes) {
+  return resumenDelMes(mes, {
+    entradas: diario ? diario.entradas : [],
+    fotosDelDia: (k) => Camara.fotosDelDia(k).filter((f) => f.tipo !== "final"),
+    nombreLugar: nombreDeLugar,
+    arteLugar: arteDeRecuerdo,
+    conSticker: tieneSticker,
+  });
+}
+
+/** Los meses que ya terminaron y tienen librito (el ultimo primero). */
+function mesesDisponibles() {
+  if (!diario) return [];
+  const actual = mesDe(claveDelDia());
+  const meses = [...new Set(diario.entradas.map((e) => mesDe(e.fecha)))].filter((m) => /^\d{4}-\d{2}$/.test(m) && m < actual).sort().reverse();
+  return meses.filter((m) => resumenDe(m));
+}
+
+let mesAbierto = null; // { mes, volver: "diario" | "casa" }
+let librito = null;
+let mesRevisado = null; // el mes anterior que ya se miro (y no tenia nada), para no recalcular cada tick
+
+function entregarMes(mes) {
+  if (!mesesReg.entregados.includes(mes)) mesesReg.entregados.push(mes);
+  guardarTodo();
+}
+
+function abrirMes(mes, volver) {
+  entregarMes(mes);
+  mesAbierto = { mes, volver };
+  conTransicion(() => {
+    prepararVista("mes");
+    renderVistaActual();
+  });
+}
+
+function renderMesActual() {
+  const r = mesAbierto && resumenDe(mesAbierto.mes);
+  if (!r) {
+    mesAbierto = null;
+    irACasa();
+    return;
+  }
+  if (librito) librito.destruir();
+  librito = abrirLibrito(screenEl, r, {
+    carita: (a) => R.caritaAnimo(a),
+    baozi: (cara) => (cara === "euforico" ? R.spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png") : R.spriteCara("ojo_base_energia_alta.png", "boca_base_feliz.png")),
+    sticker: (id) => arte(srcStickerLugar(id)),
+    sonar: (n) => Sonido.sonar(n),
+    alCerrar: () => {
+      const volver = mesAbierto ? mesAbierto.volver : "casa";
+      librito = null;
+      mesAbierto = null;
+      conTransicion(volver === "diario" ? irAlDiario : irACasa);
+    },
+  });
+}
+
+/** El primer dia del mes (o despues), Baozi entrega el librito del mes anterior. */
+function talVezEntregarMes() {
+  if (!mascota || controller.vista !== "cara" || visita || !puedeComentar() || finalEnMarcha()) return false;
+  if (performance.now() - abiertaDesdeMs < 8000) return false; // primero el saludo
+  const mes = mesAnterior(claveDelDia());
+  if (mesesReg.entregados.includes(mes) || mesRevisado === mes) return false;
+  if (!resumenDe(mes)) {
+    mesRevisado = mes;
+    return false;
+  }
+  Musica.tocar("carta");
+  vibrar([20, 60, 20]);
+  conTransicion(() => {
+    prepararVista("sobremes");
+    renderVistaActual();
+  });
+  return true;
+}
+
+function renderSobreMesActual() {
+  const mes = mesAnterior(claveDelDia());
+  R.renderSobreMes(screenEl, nombreDelMes(mes));
+  document.getElementById("btn-mes-luego").addEventListener("click", () => {
+    entregarMes(mes);
+    Musica.detener();
+    Sonido.sonar("tocar");
+    conTransicion(irACasa);
+  });
+  document.getElementById("btn-mes-abrir").addEventListener("click", () => {
+    Sonido.sonar("tocar");
+    abrirMes(mes, "casa");
   });
 }
 
@@ -3336,7 +3584,7 @@ let borradorHoy = null; // { animo, texto } mientras no se guarda (sobrevive a i
 let escribiendo = { clave: null, alDiario: false };
 
 function irAlDiario() {
-  verCartas = false;
+  verCartas = verAlbum = verMeses = false;
   controller.abrirConsulta("diary");
   controller.vista = "consulta";
   renderVistaActual();
@@ -3560,6 +3808,8 @@ async function restaurarDesdeArchivo(archivo, mensaje) {
       cargarAmigos(guardado.extras && guardado.extras.amigos);
       jardin = Jardin.desdeObjeto(guardado.extras && guardado.extras.jardin);
       estiloCuaderno = limpiarCuaderno(guardado.extras && guardado.extras.cuaderno);
+      palabras = Palabras.desdeObjeto(guardado.extras && guardado.extras.palabras);
+      mesesReg = cargarMeses(guardado.extras && guardado.extras.meses);
       mascota.actualizarTiempo(Date.now());
       mensaje(`Backup restored${nFotos ? ` (+${nFotos} ${nFotos === 1 ? "photo" : "photos"})` : ""}. Welcome back, Baozi!`, "ok");
       // se recarga para que todo (records, el cuarto, el album) arranque del backup
@@ -4377,7 +4627,7 @@ function tick() {
   elegirDeseo();
   if (deseos.pendiente() && amigos.puesto) eventoDeseo({ tipo: "estado", puesto: amigos.puesto });
   talVezLluviaRiega(); // v45 (regar, siempre; contarlo va en la fila)
-  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezContarVelitas() && !talVezAvisarTienda() && !talVezContarLluvia() && !celebrarDeseo() && !talVezCartaAtrasada() && !talVezAvisarBackup(ahora)) {
+  if (!talVezMudanza() && !talVezPreguntarPasos() && !talVezContarVelitas() && !talVezAvisarTienda() && !talVezContarLluvia() && !celebrarDeseo() && !talVezEntregarMes() && !talVezCartaAtrasada() && !talVezAvisarBackup(ahora)) {
     talVezVisita();
     talVezPedirDiario();
   }
@@ -4465,6 +4715,9 @@ window.__mochi = {
   tienda: () => tienda,
   jardin: () => jardin, // v45
   decosPuestas: () => estadoPieza().decoraciones, // v47
+  estadoPiezaAvisos: () => estadoPieza().avisos || [], // v50
+  tocar: (id) => tocarObjeto(id), // v50
+  aCasa: () => conTransicion(irACasa), // v50
   deseos: () => deseos,
   pesca: () => pesca,
   juegoTele: () => juegoTele,
