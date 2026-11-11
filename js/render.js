@@ -32,6 +32,7 @@ import { TRAITS, TRAIT_NOMBRES, PESO_HISTORICO, PESO_RECIENTE, FELICIDAD_A_BOCA 
 import { LUGARES, NPCS, VECES_PARA_ENAMORADO, CATEGORIAS, SELLOS_PROPIOS } from "./mundo.js";
 import { resumenDelDia, fotoDelDia, fechaLegible, ANIMOS, preguntaDelDia, claveDelDia, claveDelDiaLogico } from "./diario.js";
 import { buscarCarta } from "./cartas.js";
+import { papelDe, HOJAS, ANILLOS, PAPELES_CUADERNO } from "./estiloDiario.js";
 import { fotosDelDia, fotoDeLugar } from "./camara.js";
 import { RECORTES_MENU } from "./recortes.js";
 import { AMIGOS, REGALOS, MAX_CORAZONES } from "./amigos.js";
@@ -696,9 +697,10 @@ export const PESTANAS_CUADERNO = [
 ];
 
 /** Envuelve el contenido de una consulta en las hojas del cuaderno. */
-export function renderCuaderno(container, pestana, contenido) {
+export function renderCuaderno(container, pestana, contenido, estilo = null) {
+  const cl = estilo ? `hojas-${estilo.hojas} anillos-${estilo.anillos}` : "";
   container.innerHTML = `
-    <div class="cuaderno" data-pestana="${pestana}">
+    <div class="cuaderno ${cl}" data-pestana="${pestana}">
       <div class="cuaderno-hoja">
         <div class="cuaderno-espiral" aria-hidden="true"></div>
         <div class="cuaderno-contenido">${contenido}</div>
@@ -1581,7 +1583,7 @@ function caraAnimo(id, clase = "") {
 }
 
 /** Arriba del diario: la pagina de hoy (o el boton para escribirla), la semana y un recuerdo. */
-function cabezaDiario(diario) {
+function cabezaDiario(diario, cartas = 0) {
   if (!diario) return "";
   const hoy = diario.entrada(claveDelDiaLogico()); // v35: la pagina escrita va por dia logico
   const escrita = diario.hoyEscrito();
@@ -1627,6 +1629,10 @@ function cabezaDiario(diario) {
         <div class="racha">${esc(rachaTxt)}</div>
       </div>
       ${tarjetaRecuerdo}
+      <div class="fila-cabeza-diario">
+        ${cartas ? `<button class="tarjeta-cartas" id="btn-ver-cartas" type="button">${glifo("corazon")} <span>Letters</span><b>${cartas}</b></button>` : ""}
+        <button class="tarjeta-estilo" id="btn-estilo-cuaderno" type="button"><span class="muestra-estilo" aria-hidden="true"></span> Notebook style</button>
+      </div>
     </div>`;
 }
 
@@ -1649,20 +1655,45 @@ function imagenDeItem(item, i = 0) {
   return `<img class="imagen-polaroid foto-real ${esLisa(item) ? "lisa" : ""}" src="${item.dataUrl}" alt="" draggable="false" data-item="${i}" />`;
 }
 
-export function htmlPolaroid(e, { puedeRepetirFinal = false } = {}) {
+/**
+ * v49: las clases y los stickers de una pagina decorada.
+ * htmlSticker(id) -> html del sticker (main.js arma el catalogo); si no esta, no se dibuja.
+ */
+export function clasesPagina(e, cuaderno) {
+  const st = e.estilo || {};
+  const c = [`papel-${papelDe(st, cuaderno, e.fecha)}`];
+  if (st.papel) c.push("papel-elegido"); // (la del dia del si conserva su rosa si ella no eligio otro)
+  if (st.cinta) c.push(`cinta-${st.cinta}`);
+  if (st.tinta) c.push(`tinta-${st.tinta}`);
+  if (st.giro != null) c.push(`giro-${st.giro < 0 ? "izq" : st.giro > 0 ? "der" : "recta"}`);
+  return c.join(" ");
+}
+
+export function htmlStickersPagina(stickers, htmlSticker) {
+  if (!stickers || !stickers.length || !htmlSticker) return `<div class="stickers-pagina" aria-hidden="true"></div>`;
+  return `<div class="stickers-pagina" aria-hidden="true">${stickers
+    .map((st, i) => {
+      const h = htmlSticker(st.id);
+      if (!h) return "";
+      return `<div class="sticker-pagina" data-sticker="${i}" style="left:${st.x}px;top:${st.y}px;width:${st.s}px;height:${st.s}px;transform:translate(-50%,-50%) rotate(${st.r}deg)">${h}</div>`;
+    })
+    .join("")}</div>`;
+}
+
+export function htmlPolaroid(e, { puedeRepetirFinal = false, htmlSticker = null, cuaderno = null, edicion = false } = {}) {
   const items = itemsDelDia(e.fecha);
   const hayMapa = items.some((x) => x.tipo === "mapa");
   const dorada = items.some((x) => x.tipo === "final") || e.hitos.some((h) => h.startsWith("The day you said yes"));
   const notas = e.cartas
     .map((id) => buscarCarta(id))
     .filter(Boolean)
-    .map((c) => `<div class="nota-polaroid">${glifo("corazon")} ${esc(c.titulo)}</div>`)
+    .map((c) => `<button class="nota-polaroid" type="button" data-leer-carta="${esc(c.id)}">${glifo("corazon")} ${esc(c.titulo)}</button>`)
     .join("");
   const hitos = e.hitos.slice(-2).map((h) => `<div class="hito-polaroid">${glifo("estrella")} ${esc(h)}</div>`).join("");
   const imagen = items.length ? imagenDeItem(items[0]) : fotoArteDelDia(e);
   const lugares = Donde.pinesDe(e.fecha).pines.length;
   return `
-    <figure class="polaroid ${dorada ? "dorada" : ""}" data-dia="${e.fecha}" data-indice="0" data-total="${items.length}">
+    <figure class="polaroid ${dorada ? "dorada" : ""} ${clasesPagina(e, cuaderno)}" data-dia="${e.fecha}" data-indice="0" data-total="${items.length}">
       <div class="marco-imagen">
         ${imagen}
         ${items.length > 1 ? `<span class="contador-fotos">1/${items.length}</span>` : ""}
@@ -1673,11 +1704,17 @@ export function htmlPolaroid(e, { puedeRepetirFinal = false } = {}) {
         ${e.texto ? `<div class="escrito-polaroid" data-sin-nombre>${esc(e.texto)}</div>` : ""}
         <div class="texto-polaroid ${e.texto ? "chico" : ""}">${esc(resumenDelDia(e, lugares))}</div>
         ${hitos}${notas}
-        <div class="botones-polaroid">
+        ${
+          edicion
+            ? ""
+            : `<div class="botones-polaroid">
           ${hayMapa ? `<button class="boton-mapa-dia" data-ver-mapa="1" type="button">${glifo("pin")} Our day's map</button>` : ""}
           ${items.length ? `<button class="boton chico boton-fantasma boton-galeria" data-guardar-foto="1" type="button">Save to Photos</button>` : ""}
-        </div>
+          <button class="boton-mapa-dia boton-decorar" data-decorar="1" type="button">✎ Decorate</button>
+        </div>`
+        }
       </figcaption>
+      ${htmlStickersPagina(e.estilo && e.estilo.stickers, htmlSticker)}
     </figure>`;
 }
 
@@ -1690,7 +1727,7 @@ export function renderDiario(container, diario, opts = {}) {
 
   container.innerHTML = `
     ${encabezado("Diary", "btn-volver-consulta")}
-    ${cabezaDiario(diario)}
+    ${cabezaDiario(diario, opts.cartas || 0)}
     ${cuerpo}
   `;
 }
@@ -1699,22 +1736,23 @@ export function renderDiario(container, diario, opts = {}) {
  * Escribir la pagina de hoy: el personaje a la izquierda (pone la cara del
  * animo que ella elige) y una hoja a la derecha.
  */
-export function renderEscribir(container, { entrada = null, foto = null } = {}) {
+export function renderEscribir(container, { entrada = null, foto = null, clave = null } = {}) {
   const animo = entrada && entrada.animo ? entrada.animo : null;
   const a = animoDe(animo) || ANIMOS[1];
-  const pregunta = (entrada && entrada.pregunta) || preguntaDelDia();
+  const pasado = !!clave; // v49: la pagina de un dia que ya paso
+  const pregunta = (entrada && entrada.pregunta) || preguntaDelDia(clave || undefined);
   container.innerHTML = `
     <div class="pantalla-escribir con-cuarto">
       <div class="escribir-personaje" id="escribir-personaje">${spriteCara(a.ojo, a.boca)}</div>
       <div class="hoja-escribir papel">
-        <div class="hoja-fecha">${esc(fechaLegible(claveDelDiaLogico()))}</div>
+        <div class="hoja-fecha">${esc(fechaLegible(clave || claveDelDiaLogico()))}</div>
         <div class="hoja-pregunta">${esc(pregunta)}</div>
         <div class="fila-animos" role="radiogroup" aria-label="How was today?">
           ${ANIMOS.map((x) => `<button class="boton-animo ${x.id === animo ? "elegido" : ""}" data-animo="${x.id}" role="radio" aria-checked="${x.id === animo}" aria-label="${x.nombre}">${caraAnimo(x.id, "mini")}<span>${x.nombre}</span></button>`).join("")}
         </div>
         <textarea id="texto-hoy" maxlength="400" rows="3" placeholder="A few words about today…" data-sin-nombre>${esc((entrada && entrada.texto) || "")}</textarea>
         <div class="hoja-pie">
-          ${foto ? `<img class="hoja-foto ${esLisa(foto) ? "lisa" : ""}" src="${foto.dataUrl}" alt="" />` : `<button class="boton boton-fantasma chico" id="btn-foto-hoy">${glifo("camara")} Photo</button>`}
+          ${foto ? `<img class="hoja-foto ${esLisa(foto) ? "lisa" : ""}" src="${foto.dataUrl}" alt="" />` : pasado ? "<span></span>" : `<button class="boton boton-fantasma chico" id="btn-foto-hoy">${glifo("camara")} Photo</button>`}
           <div class="hoja-botones">
             <button class="boton boton-fantasma" id="btn-cancelar-hoy">Later</button>
             <button class="boton" id="btn-guardar-hoy">${glifo("check")} Save</button>
@@ -1959,14 +1997,58 @@ export function renderDeseo(container, { texto, real = false, estado = "escuchad
     </div>`;
 }
 
-export function renderCarta(container, carta) {
+export function renderCarta(container, carta, { releer = false, fecha = "" } = {}) {
   if (!carta) return;
   container.innerHTML = `
-    <div class="papel carta-papel">
+    <div class="papel carta-papel ${releer ? "releida" : ""}">
       <div class="sello-carta">${glifo("corazon", "x4")}</div>
       <div class="carta-titulo">${esc(carta.titulo)}</div>
       <div class="carta-texto" data-sin-nombre>${esc(carta.texto)}</div>
-      <button id="btn-continuar-carta" class="boton">Continue</button>
+      ${releer && fecha ? `<div class="carta-fecha">${esc(fecha)}</div>` : ""}
+      <button id="btn-continuar-carta" class="boton">${releer ? "Back" : "Continue"}</button>
     </div>
   `;
+}
+
+/** v49: el cartel para elegir como se ve el cuaderno entero (se aplica en vivo). */
+export function htmlEstiloCuaderno(estilo) {
+  const op = (grupo, x, actual, muestra) =>
+    `<button class="op-estilo ${x.id === actual ? "puesto" : ""}" type="button" data-estilo-${grupo}="${x.id}" aria-pressed="${x.id === actual}"><i class="muestra-${grupo} muestra-${grupo}-${x.id}" ${muestra ? `style="background:${muestra}"` : ""}></i><span>${esc(x.nombre)}</span></button>`;
+  return `
+    <div class="velo-estilo" id="velo-estilo">
+      <div class="papel cartel-estilo" role="dialog" aria-label="Notebook style">
+        <div class="titulo-estilo">NOTEBOOK STYLE</div>
+        <div class="fila-estilo"><span class="etiqueta-estilo">Pages</span><div class="ops-estilo">${HOJAS.map((x) => op("hojas", x, estilo.hojas)).join("")}</div></div>
+        <div class="fila-estilo"><span class="etiqueta-estilo">Rings</span><div class="ops-estilo">${ANILLOS.map((x) => op("anillos", x, estilo.anillos, x.color)).join("")}</div></div>
+        <div class="fila-estilo"><span class="etiqueta-estilo">Page color</span><div class="ops-estilo">${PAPELES_CUADERNO.map((x) => op("papel", x, estilo.papel)).join("")}</div></div>
+        <div class="pie-estilo"><span>Pages you decorate keep their own paper.</span><button class="boton chico" id="btn-estilo-listo" type="button">${glifo("check")} Done</button></div>
+      </div>
+    </div>`;
+}
+
+/**
+ * v48: todas las cartas que ya llegaron, para volver a leerlas (dentro del
+ * cuaderno, en la pestana del diario). cartas: [{ id, titulo, fecha }] en
+ * el orden en que llegaron.
+ */
+export function renderCartas(container, cartas) {
+  container.innerHTML = `
+    ${encabezado("Letters", "btn-volver-consulta")}
+    <div class="lista-journal lista-cartas">
+      <div class="fila-botones"><button class="boton chico boton-fantasma" id="btn-cartas-volver" type="button">${glifo("atras")} Diary</button></div>
+      <div class="subtitulo-lista">Letters</div>
+      ${
+        cartas.length
+          ? cartas
+              .map(
+                (c) => `<button class="fila-carta" type="button" data-leer-carta="${esc(c.id)}">
+                  <span class="fila-carta-sello">${glifo("corazon")}</span>
+                  <span class="fila-carta-titulo">${esc(c.titulo)}</span>
+                  ${c.fecha ? `<span class="fila-carta-fecha">${esc(c.fecha)}</span>` : ""}
+                </button>`,
+              )
+              .join("")
+          : `<div class="vacio-suave">No letters yet.</div>`
+      }
+    </div>`;
 }

@@ -17,6 +17,7 @@
  */
 
 import { LUGARES, NPCS } from "./mundo.js";
+import { limpiarEstilo } from "./estiloDiario.js";
 
 const MAX_ENTRADAS = 400; // ~13 meses; corta el crecimiento sin fin en localStorage
 
@@ -125,6 +126,8 @@ function sumarDias(clave, n) {
 }
 
 const escrita = (e) => !!e && (!!e.animo || !!(e.texto && e.texto.trim()));
+// v49: una pagina escrita despues (editando un dia pasado que no tenia pagina) no cuenta para la racha
+const aTiempo = (e) => escrita(e) && !e.tarde;
 
 export class Diario {
   constructor(entradas = []) {
@@ -248,6 +251,32 @@ export class Diario {
     return e;
   }
 
+  /**
+   * v49: ella corrige (o escribe) la pagina de un dia que ya paso. No toca
+   * la pregunta ni la hora en que se escribio; si ese dia no tenia pagina,
+   * queda marcada "tarde" (se ve, pero no suma a la racha).
+   */
+  escribirDia(clave, { animo = null, texto = "" } = {}) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(clave))) return null;
+    const e = this._entradaCreando(clave);
+    const antes = escrita(e);
+    e.animo = animo;
+    e.texto = String(texto || "").slice(0, 400);
+    if (!e.pregunta) e.pregunta = preguntaDelDia(clave);
+    if (!antes && escrita(e)) e.tarde = true;
+    return e;
+  }
+
+  /** v49: como se ve la pagina de un dia (la decora ella). null = la de siempre. */
+  ponerEstilo(clave, estilo) {
+    const e = this.entradaDe(clave);
+    if (!e) return null;
+    const limpio = limpiarEstilo(estilo);
+    if (limpio) e.estilo = limpio;
+    else delete e.estilo;
+    return limpio;
+  }
+
   entrada(clave) {
     return this.entradas.find((e) => e.fecha === clave) || null;
   }
@@ -259,9 +288,9 @@ export class Diario {
   /** Dias seguidos escribiendo (cuenta hasta hoy, o hasta ayer si hoy todavia no; dia logico). */
   racha(fecha = new Date()) {
     let clave = claveDelDiaLogico(fecha);
-    if (!escrita(this.entrada(clave))) clave = sumarDias(clave, -1);
+    if (!aTiempo(this.entrada(clave))) clave = sumarDias(clave, -1);
     let n = 0;
-    while (escrita(this.entrada(clave))) {
+    while (aTiempo(this.entrada(clave))) {
       n += 1;
       clave = sumarDias(clave, -1);
     }
@@ -303,7 +332,14 @@ export class Diario {
     // Se normaliza cada entrada: un guardado viejo (o a medio migrar)
     // puede no tener todos los campos, y el render no deberia tener que
     // defenderse de eso en cada linea.
-    const entradas = datos.entradas.map((e) => ({ ...entradaVacia(e.fecha), ...e }));
+    const entradas = datos.entradas.map((e) => {
+      const n = { ...entradaVacia(e.fecha), ...e };
+      // v49: el estilo de la pagina, limpio (uno roto no rompe el diario)
+      const estilo = limpiarEstilo(e.estilo);
+      if (estilo) n.estilo = estilo;
+      else delete n.estilo;
+      return n;
+    });
     return new Diario(entradas);
   }
 }

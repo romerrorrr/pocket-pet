@@ -25,7 +25,7 @@ import { vibrar } from "./actuadores.js";
 import * as Sonido from "./sonido.js";
 import * as Musica from "./musica.js";
 import { Diario, claveDelDia, claveDelDiaLogico, fechaLegible, ANIMOS, preguntaDelDia } from "./diario.js";
-import { cartaPendiente, cartaAtrasada } from "./cartas.js";
+import { cartaPendiente, cartaAtrasada, buscarCarta } from "./cartas.js";
 import * as Camara from "./camara.js";
 import { abrirLente } from "./lente.js";
 import * as Final from "./final.js";
@@ -51,6 +51,8 @@ import * as Corcho from "./corchoReal.js";
 import { crearVisor } from "./visorMapa.js";
 import * as Fechas from "./fechas.js";
 import { Jardin, PLANTAS as PLANTAS_JARDIN, SEMILLAS_DE_REGALO } from "./jardin.js";
+import { abrirDecorar } from "./decorar.js"; // v49
+import { limpiarCuaderno } from "./estiloDiario.js";
 
 const NOMBRE_POR_DEFECTO = "friend";
 const DURACION_ESPECIAL_MS = 3000;
@@ -69,7 +71,7 @@ const tabbarEl = document.getElementById("tabbar");
 const marcoEl = document.querySelector(".marco-manito");
 
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas", "jardin"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas", "jardin", "decorar"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -91,7 +93,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla, jardin: jardin.aObjeto() });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla, jardin: jardin.aObjeto(), cuaderno: estiloCuaderno });
 }
 
 // v35: actualizaciones seguras (ver el comentario de arriba de sw.js).
@@ -206,6 +208,7 @@ let amigos = new RegistroAmigos(); // amistad, secretos, misiones y regalos (ami
 let tienda = new Tienda(); // v23: las monedas y lo comprado (tienda.js)
 let deseos = Deseos.desdeObjeto(null, DESEOS_PROPIOS); // v24: el deseo del dia (deseos.js)
 let jardin = new Jardin(); // v45: el jardin del balcon (jardin.js)
+let estiloCuaderno = limpiarCuaderno(null); // v49: como se ve el cuaderno (estiloDiario.js)
 // v24: despues del si, el personaje de rom se muda: "no" -> "llega" (golpea la puerta) -> "vive"
 let mudanza = { estado: "no", desde: 0 };
 function cargarMudanza(datos) {
@@ -237,6 +240,8 @@ const todasLasFechas = () => [...Fechas.fechasDeConfig(FECHAS), ...fechasDeElla]
 const bodaEsHoy = () => Fechas.bodaEsHoy(fechasDeElla); // v35: la carta de la boda, solo ese dia
 let cartasEntregadas = [];
 let cartaActual = null;
+let cartaReleida = false; // v48: la carta abierta es una que ya habia llegado (se vuelve al diario)
+let verCartas = false; // v48: en la pestana del diario, la lista de cartas en vez de las paginas
 const controller = new ControladorVistas();
 let guardadoAuto;
 
@@ -526,6 +531,7 @@ function arrancar() {
     cargarMudanza(guardado.extras && guardado.extras.mudanza);
     cargarAmigos(guardado.extras && guardado.extras.amigos);
     jardin = Jardin.desdeObjeto(guardado.extras && guardado.extras.jardin);
+    estiloCuaderno = limpiarCuaderno(guardado.extras && guardado.extras.cuaderno);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
@@ -673,6 +679,7 @@ function confirmarNombre() {
   cargarMudanza(null);
   cargarAmigos(null);
   jardin = new Jardin();
+  estiloCuaderno = limpiarCuaderno(null);
   cargarLugaresDeElla(null);
   cargarFechasDeElla(null);
   diario = diario || new Diario();
@@ -748,6 +755,10 @@ function renderVistaActual() {
   switch (controller.vista) {
     case "escribir":
       abrirEscribir();
+      break;
+    case "decorar":
+      if (decorando) abrirDecorarDia(decorando.clave, decorando.estilo, false);
+      else irACasa();
       break;
     case "elegir":
       R.renderElegir(screenEl, { cargaFallida: storage.estadoDeCarga().fallida });
@@ -864,6 +875,21 @@ function renderVistaActual() {
       wirePreguntaPasos();
       break;
     case "carta":
+      if (cartaReleida) {
+        // v48: una que ya habia llegado: "Back" vuelve al cuaderno (a la lista o al diario)
+        R.renderCarta(screenEl, cartaActual, { releer: true, fecha: fechaDeCarta(cartaActual && cartaActual.id) });
+        document.getElementById("btn-continuar-carta").addEventListener("click", () => {
+          Sonido.sonar("tocar");
+          conTransicion(() => {
+            cartaActual = null;
+            cartaReleida = false;
+            controller.abrirConsulta("diary");
+            controller.vista = "consulta";
+            renderVistaActual();
+          });
+        });
+        break;
+      }
       R.renderCarta(screenEl, cartaActual);
       document.getElementById("btn-continuar-carta").addEventListener("click", () => {
         Musica.detener();
@@ -2803,7 +2829,10 @@ function renderConsulta() {
   const tipo = controller.consultaActual;
   // Cada pestaña se arma con su render de siempre y se pega en la hoja del cuaderno.
   const tmp = document.createElement("div");
-  if (tipo === "diary") R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi() });
+  if (tipo === "diary") {
+    if (verCartas) R.renderCartas(tmp, cartasQueLlegaron());
+    else R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi(), cartas: cartasQueLlegaron().length, ...opcionesPagina() });
+  }
   else if (tipo === "stats") {
     elegirDeseo();
     const d = deseos.actual();
@@ -2822,13 +2851,41 @@ function renderConsulta() {
   else R.renderProgress(tmp, mascota, lugaresReg);
   const cabecera = tmp.querySelector(".encabezado-vista");
   if (cabecera) cabecera.remove();
-  R.renderCuaderno(screenEl, tipo === "backup" ? "ajustes" : tipo, tmp.innerHTML);
+  R.renderCuaderno(screenEl, tipo === "backup" ? "ajustes" : tipo, tmp.innerHTML, estiloCuaderno);
   if (tipo !== "shop") estadoTiendaUI = {};
+  if (tipo !== "diary") verCartas = false;
   if (tipo === "shop") wireTienda();
   const pestanaTienda = screenEl.querySelector('.cuaderno-pestanas [data-pestana="shop"]');
   if (pestanaTienda && tienda.nuevas().length) pestanaTienda.classList.add("con-novedad");
 
   if (tipo === "diary") wireDiario();
+  // v48: volver a leer las cartas (desde la polaroid del dia o desde la lista)
+  if (tipo === "diary") {
+    const ver = document.getElementById("btn-ver-cartas");
+    if (ver) ver.addEventListener("click", () => {
+      Sonido.sonar("tocar");
+      verCartas = true;
+      renderConsulta();
+    });
+    const volver = document.getElementById("btn-cartas-volver");
+    if (volver) volver.addEventListener("click", () => {
+      Sonido.sonar("tocar");
+      verCartas = false;
+      renderConsulta();
+    });
+    if (verCartas) for (const b of screenEl.querySelectorAll("[data-leer-carta]")) b.addEventListener("click", () => releerCarta(b.dataset.leerCarta));
+    const estilo = document.getElementById("btn-estilo-cuaderno");
+    if (estilo) estilo.addEventListener("click", () => {
+      Sonido.sonar("tocar");
+      abrirEstiloCuaderno();
+    });
+    // volver de decorar una pagina: que quede a la vista
+    if (paginaParaMostrar) {
+      const fig = screenEl.querySelector(`.polaroid[data-dia="${paginaParaMostrar}"]`);
+      if (fig) fig.scrollIntoView({ block: "nearest", inline: "center" });
+      paginaParaMostrar = null;
+    }
+  }
   if (tipo === "stats") {
     const b = screenEl.querySelector("[data-ver-deseo]");
     if (b) b.addEventListener("click", () => abrirDeseo("stats"));
@@ -2877,6 +2934,7 @@ function renderConsulta() {
   }
   document.getElementById("btn-volver-consulta").addEventListener("click", () => {
     estadoTiendaUI = {};
+    verCartas = false;
     conTransicion(irACasa);
   });
 }
@@ -2976,6 +3034,93 @@ function wireTienda() {
 }
 
 let urlVideoDiario = null;
+// ------------------------------------------------------------------
+// v49: el diario se decora (decorar.js, estiloDiario.js)
+// ------------------------------------------------------------------
+
+let decorando = null; // { clave, estilo, ui } mientras ella decora una pagina
+let paginaParaMostrar = null; // al volver al diario, la pagina que se estaba tocando
+
+/** Lo que necesita R.htmlPolaroid para dibujar una pagina decorada. */
+function opcionesPagina() {
+  const cat = catalogoStickers();
+  const html = new Map(cat.stickers.map((s) => [s.id, s.html]));
+  return { htmlSticker: (id) => html.get(id) || "", cuaderno: estiloCuaderno };
+}
+
+function abrirDecorarDia(clave, estilo = undefined, transicion = true) {
+  const entrada = diario && diario.entradaDe(clave);
+  if (!entrada) return;
+  const empezar = () => {
+    if (decorando && decorando.ui) decorando.ui.destruir();
+    controller.vista = "decorar";
+    actualizarTabbar();
+    actualizarMarco();
+    screenEl.classList.add("sin-margen");
+    const inicial = estilo !== undefined ? estilo : entrada.estilo || null;
+    decorando = { clave, estilo: inicial, ui: null };
+    const cat = catalogoStickers();
+    const op = { puedeRepetirFinal: false, htmlSticker: (id) => (cat.stickers.find((s) => s.id === id) || {}).html || "", cuaderno: estiloCuaderno, edicion: true };
+    decorando.ui = abrirDecorar(screenEl, {
+      entrada,
+      estilo: inicial,
+      catalogo: { stickers: cat.stickers, grupos: cat.grupos },
+      htmlPagina: (e) => R.htmlPolaroid({ ...entrada, estilo: e }, op),
+      sonar: (n) => Sonido.sonar(n),
+      alCambiar: (e) => {
+        if (decorando) decorando.estilo = e;
+      },
+      alListo: (e) => {
+        diario.ponerEstilo(clave, e);
+        guardarTodo();
+        Sonido.sonar("guardado");
+        terminarDecorar(clave, irAlDiario);
+      },
+      alPalabras: (e) => {
+        diario.ponerEstilo(clave, e); // lo decorado no se pierde
+        guardarTodo();
+        terminarDecorar(clave, () => abrirEscribir({ clave, alDiario: true }));
+      },
+    });
+  };
+  if (transicion) conTransicion(empezar);
+  else empezar();
+}
+
+function terminarDecorar(clave, despues) {
+  if (decorando && decorando.ui) decorando.ui.destruir();
+  decorando = null;
+  paginaParaMostrar = clave;
+  conTransicion(despues);
+}
+
+/** El cartel de "Notebook style": cada opcion se aplica en vivo. */
+function abrirEstiloCuaderno() {
+  const viejo = document.getElementById("velo-estilo");
+  if (viejo) viejo.remove();
+  screenEl.insertAdjacentHTML("beforeend", R.htmlEstiloCuaderno(estiloCuaderno));
+  const velo = document.getElementById("velo-estilo");
+  velo.addEventListener("click", (e) => {
+    if (e.target === velo || e.target.closest("#btn-estilo-listo")) {
+      Sonido.sonar("tocar");
+      velo.remove();
+      return;
+    }
+    const b = e.target.closest("[data-estilo-hojas], [data-estilo-anillos], [data-estilo-papel]");
+    if (!b) return;
+    const campo = b.dataset.estiloHojas ? "hojas" : b.dataset.estiloAnillos ? "anillos" : "papel";
+    estiloCuaderno = limpiarCuaderno({ ...estiloCuaderno, [campo]: b.dataset[`estilo${campo[0].toUpperCase()}${campo.slice(1)}`] });
+    guardarTodo();
+    Sonido.sonar("tocar");
+    const scroll = screenEl.querySelector(".tira-diario");
+    const x = scroll ? scroll.scrollLeft : 0;
+    renderConsulta();
+    const scroll2 = screenEl.querySelector(".tira-diario");
+    if (scroll2) scroll2.scrollLeft = x;
+    abrirEstiloCuaderno();
+  });
+}
+
 function wireDiario() {
   // v21: despues del si, el video del momento arriba del diario (se ve y se guarda)
   if (Final.dijoQueSi()) {
@@ -3010,7 +3155,7 @@ function wireDiario() {
       .catch(() => {});
   }
   const escribirBtn = document.getElementById("btn-escribir-hoy");
-  if (escribirBtn) escribirBtn.addEventListener("click", () => conTransicion(abrirEscribir));
+  if (escribirBtn) escribirBtn.addEventListener("click", () => conTransicion(() => abrirEscribir({ clave: null, alDiario: false })));
   for (const fig of screenEl.querySelectorAll(".polaroid")) wirePolaroid(fig);
   // v28: los mapas de "donde estuvimos" que falten se hacen de a poco y
   // aparecen en su polaroid cuando estan listos
@@ -3020,6 +3165,16 @@ function wireDiario() {
 
 function wirePolaroid(fig) {
   fig.addEventListener("click", (e) => {
+    if (e.target.closest("[data-decorar]")) {
+      Sonido.sonar("tocar");
+      abrirDecorarDia(fig.dataset.dia);
+      return;
+    }
+    const nota = e.target.closest("[data-leer-carta]");
+    if (nota) {
+      releerCarta(nota.dataset.leerCarta);
+      return;
+    }
     if (e.target.closest("[data-ver-mapa]")) {
       Sonido.sonar("tocar");
       abrirMapaDia(fig.dataset.dia);
@@ -3057,7 +3212,7 @@ function refrescarPolaroid(dia) {
   const e = diario && diario.entradaDe(dia);
   if (!vieja || !e) return;
   const caja = document.createElement("div");
-  caja.innerHTML = R.htmlPolaroid(e, { puedeRepetirFinal: Final.dijoQueSi() });
+  caja.innerHTML = R.htmlPolaroid(e, { puedeRepetirFinal: Final.dijoQueSi(), ...opcionesPagina() });
   const nueva = caja.firstElementChild;
   vieja.replaceWith(nueva);
   wirePolaroid(nueva);
@@ -3177,21 +3332,36 @@ function acomodarMapaDia(mapa, orden) {
 
 let borradorHoy = null; // { animo, texto } mientras no se guarda (sobrevive a ir a sacar una foto)
 
-function abrirEscribir() {
+// v49: que pagina se esta escribiendo: { clave: null (hoy) | "AAAA-MM-DD", alDiario: volver al diario al terminar }
+let escribiendo = { clave: null, alDiario: false };
+
+function irAlDiario() {
+  verCartas = false;
+  controller.abrirConsulta("diary");
+  controller.vista = "consulta";
+  renderVistaActual();
+}
+
+function abrirEscribir(como = null) {
+  if (como) escribiendo = { clave: como.clave || null, alDiario: !!como.alDiario };
   controller.vista = "escribir";
   actualizarTabbar();
   actualizarMarco();
   screenEl.classList.add("sin-margen");
   // v35: la pagina es la del dia logico (a la 1 de la mañana, la de ayer)
-  const guardada = diario.entrada(claveDelDiaLogico());
-  const entrada = borradorHoy ? { ...(guardada || {}), ...borradorHoy } : guardada;
-  const fotos = [...Camara.fotosDelDia(claveDelDiaLogico()), ...(claveDelDiaLogico() !== claveDelDia() ? Camara.fotosDelDia(claveDelDia()) : [])];
-  R.renderEscribir(screenEl, { entrada, foto: fotos.length ? fotos[fotos.length - 1] : null });
+  // v49: o la de un dia que ya paso (editada desde el diario)
+  const claveHoy = claveDelDiaLogico();
+  const pasado = !!escribiendo.clave && escribiendo.clave !== claveHoy;
+  const clave = pasado ? escribiendo.clave : claveHoy;
+  const guardada = diario.entrada(clave);
+  const entrada = !pasado && borradorHoy ? { ...(guardada || {}), ...borradorHoy } : guardada;
+  const fotos = pasado ? Camara.fotosDelDia(clave) : [...Camara.fotosDelDia(claveHoy), ...(claveHoy !== claveDelDia() ? Camara.fotosDelDia(claveDelDia()) : [])];
+  R.renderEscribir(screenEl, { entrada, foto: fotos.length ? fotos[fotos.length - 1] : null, clave: pasado ? clave : null });
   let animo = entrada && entrada.animo ? entrada.animo : null;
   const texto = document.getElementById("texto-hoy");
   const personaje = document.getElementById("escribir-personaje");
   const recordar = () => {
-    borradorHoy = { animo, texto: texto.value };
+    if (!pasado) borradorHoy = { animo, texto: texto.value };
   };
   for (const b of screenEl.querySelectorAll("[data-animo]")) {
     b.addEventListener("click", () => {
@@ -3226,7 +3396,7 @@ function abrirEscribir() {
   }
   document.getElementById("btn-cancelar-hoy").addEventListener("click", () => {
     recordar();
-    conTransicion(irACasa);
+    conTransicion(escribiendo.alDiario ? irAlDiario : irACasa);
   });
   document.getElementById("btn-guardar-hoy").addEventListener("click", () => {
     if (!animo && !texto.value.trim()) {
@@ -3236,6 +3406,17 @@ function abrirEscribir() {
       void fila.offsetWidth;
       fila.classList.add("sacude");
       Sonido.sonar("no");
+      return;
+    }
+    if (pasado) {
+      // v49: un dia que ya paso: se corrige y listo (sin monedas ni racha)
+      diario.escribirDia(clave, { animo, texto: texto.value.trim() });
+      guardarTodo();
+      Sonido.sonar("guardado");
+      paginaParaMostrar = clave;
+      controller.vista = "feedback";
+      conTransicion(() => R.renderFeedback(screenEl, "Page updated ♥", { especial: "euforico", sub: fechaLegible(clave) }));
+      setTimeout(() => conTransicion(irAlDiario), DURACION_FEEDBACK_MS + 300);
       return;
     }
     diario.escribirHoy({ animo, texto: texto.value.trim(), pregunta: preguntaDelDia() });
@@ -3258,7 +3439,8 @@ function abrirEscribir() {
     const sub = `${frases[animo] || "Saved."}${racha > 1 ? ` ${racha} days in a row.` : ""}`;
     controller.vista = "feedback";
     conTransicion(() => R.renderFeedback(screenEl, "Page saved ♥", { especial: animo === "triste" ? "enamorado" : "euforico", sub }));
-    setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 900);
+    if (escribiendo.alDiario) paginaParaMostrar = claveHoy;
+    setTimeout(() => conTransicion(escribiendo.alDiario ? irAlDiario : irACasa), DURACION_FEEDBACK_MS + 900);
   });
 }
 
@@ -3377,6 +3559,7 @@ async function restaurarDesdeArchivo(archivo, mensaje) {
       cargarMudanza(guardado.extras && guardado.extras.mudanza);
       cargarAmigos(guardado.extras && guardado.extras.amigos);
       jardin = Jardin.desdeObjeto(guardado.extras && guardado.extras.jardin);
+      estiloCuaderno = limpiarCuaderno(guardado.extras && guardado.extras.cuaderno);
       mascota.actualizarTiempo(Date.now());
       mensaje(`Backup restored${nFotos ? ` (+${nFotos} ${nFotos === 1 ? "photo" : "photos"})` : ""}. Welcome back, Baozi!`, "ok");
       // se recarga para que todo (records, el cuarto, el album) arranque del backup
@@ -3691,9 +3874,36 @@ function talVezCartaAtrasada() {
   return true;
 }
 
+/** v48: las cartas que ya le llegaron, en orden, con el dia en que llegaron (si el diario lo tiene). */
+function cartasQueLlegaron() {
+  return [...new Set(cartasEntregadas)]
+    .map((id) => buscarCarta(id))
+    .filter(Boolean)
+    .map((c) => ({ id: c.id, titulo: c.titulo, fecha: fechaDeCarta(c.id) }));
+}
+
+function fechaDeCarta(id) {
+  const e = id && diario && diario.entradas.find((x) => (x.cartas || []).includes(id));
+  return e ? fechaLegible(e.fecha) : "";
+}
+
+/** v48: abrir otra vez una carta que ya llego (sin musica ni vibracion: es para releer). */
+function releerCarta(id) {
+  const carta = buscarCarta(id);
+  if (!carta || !cartasEntregadas.includes(id)) return;
+  Sonido.sonar("tocar");
+  cartaActual = carta;
+  cartaReleida = true;
+  conTransicion(() => {
+    controller.vista = "carta";
+    renderVistaActual();
+  });
+}
+
 function entregarCarta(carta) {
   cartasEntregadas.push(carta.id);
   cartaActual = carta;
+  cartaReleida = false;
   diario.anotarCarta(carta.id);
   guardarTodo();
   Musica.tocar("carta");

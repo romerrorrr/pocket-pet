@@ -15,8 +15,8 @@
  *   2. La camara entra a la cara de ella, despues a la de el: todo en
  *      el mismo mundo (escena.js), sin cortes. Los dos tienen los ojos
  *      de Baozi y parpadean como el.
- *   3. Pasamos a el: su dialogo, y al lado van pasando TODAS las fotos
- *      que sacaron juntos, con la musica.
+ *   3. Pasamos a el: su dialogo, con la musica. (v48, rom: sin las fotos
+ *      que pasaban al lado: distraian de las palabras.)
  *   4. "Look up." — ella levanta la vista.
  *   5. En la pantalla queda solo un corazon latiendo con la musica,
  *      mientras el le da el anillo. Antes de este punto no hay NINGUNA
@@ -36,8 +36,8 @@
 import { FINAL } from "./config.js";
 import { arte } from "./arte.js";
 import { escribir, conNombre } from "./dialogo.js";
-import { todasLasFotos, cantidadDeFotos } from "./camara.js";
-import { LUGARES, NPCS, distanciaMetros, wgsAGcj } from "./mundo.js";
+import { todasLasFotos } from "./camara.js";
+import { distanciaMetros, wgsAGcj } from "./mundo.js";
 import { claveDelDia, fechaLegible } from "./diario.js";
 import * as Musica from "./musica.js";
 import * as Sonido from "./sonido.js";
@@ -49,7 +49,7 @@ import { crearPieza, posicionEnMapa } from "./pieza.js";
 import { crearMapaFinal } from "./mapa_final.js";
 import * as Grabacion from "./grabacion.js";
 import { guardarVideoEnGaleria } from "./galeria.js";
-import { arteDeLugar, spriteCara } from "./render.js";
+import { spriteCara } from "./render.js";
 import * as Personaje from "./personaje.js";
 import { lanzarPregunta } from "./pregunta.js";
 
@@ -928,29 +928,7 @@ function pasoEnfoque(quien) {
   programar(avanzar, viaje + antes + MS_TRANSFORMAR + quieto);
 }
 
-// 3. su dialogo mientras pasan las fotos -------------------------------
-
-function recuerdos() {
-  const fotos = todasLasFotos();
-  if (fotos.length) {
-    const max = 40;
-    let elegidas = fotos;
-    if (fotos.length > max) elegidas = Array.from({ length: max }, (_, k) => fotos[Math.round((k * (fotos.length - 1)) / (max - 1))]);
-    return elegidas.map((f) => ({ src: f.dataUrl, pie: f.dia ? fechaCorta(f.dia) : "" }));
-  }
-  const { lugaresReg, npcsReg } = ctx.datos();
-  const lista = [];
-  for (const l of LUGARES) if (lugaresReg && lugaresReg.desbloqueados.has(l.id)) lista.push({ src: arteDeLugar(l.id), pie: l.nombre });
-  for (const n of NPCS) if (npcsReg && (npcsReg.vecesEncontrado[n.id] || 0) > 0) lista.push({ src: arte(`npcs/npc_${n.id}_saludo.png`), pie: n.nombre, retrato: true });
-  return lista;
-}
-
-
-/** "SEP 23": entra en el pie de una polaroid chica. */
-function fechaCorta(clave) {
-  const [y, m, d] = clave.split("-").map(Number);
-  return `${new Date(y, m - 1, d).toLocaleString("en-US", { month: "short" }).toUpperCase()} ${d}`;
-}
+// 3. su dialogo (v48: solo las palabras y el lago, sin fotos al lado) ----
 
 // Cada linea se queda el doble de lo que tarda una lectura tranquila
 // (minimo 7 s): ella esta emocionada, y vos al lado. Tocar adelanta.
@@ -961,7 +939,7 @@ function msDeLectura(texto) {
   return Math.max(7000, 2 * (1400 + palabras * 380));
 }
 
-/** Cuanto dura el dialogo entero si nadie toca (para repartir las fotos). */
+/** Cuanto dura el dialogo entero si nadie toca (la camara se acerca durante todo ese rato). */
 function duracionDelDialogo(lineas) {
   return lineas.reduce((total, l) => total + l.length * MS_POR_LETRA + msDeLectura(l), 0);
 }
@@ -977,59 +955,29 @@ const esRelleno = (l) => /^\s*TODO/i.test(l);
 
 function pasoDialogo() {
   const lineas = lineasDeLaCarta(sesion.ensayo && !sesion.repeticion);
-  const fotos = recuerdos();
   const nombre = (FINAL.nombreDeEl || "").trim();
   const { cine, escena } = escenaDelLago("dialogo");
   const duracion = duracionDelDialogo(lineas);
-  // las fotos se reparten a lo largo de todo el dialogo (ni corren ni se amontonan)
-  const msPorFoto = fotos.length && lineas.length ? Math.min(7000, Math.max(3400, duracion / fotos.length)) : 3400;
   escena.mover("dialogo", 2200, () => escena.mover("dialogo-cerca", Math.max(30000, duracion), null, (x) => x));
   const capaDialogo = capa(
     cine,
-    `
-    <div class="mesa-fotos" id="mesa-fotos"></div>
-    ${
-      lineas.length
-        ? `<div class="caja-dialogo cine-dialogo">
-             ${nombre ? `<div class="caja-dialogo-nombre">${esc(nombre.toUpperCase())}</div>` : ""}
-             <div class="caja-dialogo-texto" id="dialogo-texto"></div>
-             <div class="caja-dialogo-siguiente oculto" id="dialogo-siguiente"><i class="glifo g-der"></i></div>
-           </div>`
-        : ""
-    }`,
+    lineas.length
+      ? `<div class="caja-dialogo cine-dialogo">
+           ${nombre ? `<div class="caja-dialogo-nombre">${esc(nombre.toUpperCase())}</div>` : ""}
+           <div class="caja-dialogo-texto" id="dialogo-texto"></div>
+           <div class="caja-dialogo-siguiente oculto" id="dialogo-siguiente"><i class="glifo g-der"></i></div>
+         </div>`
+      : "",
   );
 
-  // Las fotos corren solas, a su ritmo, de principio a fin.
-  const mesa = cine.querySelector("#mesa-fotos");
-  let k = 0;
-  let fotosTerminadas = fotos.length === 0;
   let lineasTerminadas = lineas.length === 0;
   let saliendo = false;
   const quizasSeguir = () => {
-    if (fotosTerminadas && lineasTerminadas && !saliendo) {
+    if (lineasTerminadas && !saliendo) {
       saliendo = true;
       programar(avanzar, 2200);
     }
   };
-  const soltarFoto = () => {
-    if (k >= fotos.length) {
-      fotosTerminadas = true;
-      quizasSeguir();
-      return;
-    }
-    const r = fotos[k];
-    const fig = document.createElement("figure");
-    fig.className = `polaroid-final ${r.retrato ? "retrato" : ""}`;
-    fig.style.setProperty("--giro", `${(Math.random() * 10 - 5).toFixed(1)}deg`);
-    fig.style.setProperty("--dx", `${Math.round(Math.random() * 30 - 15)}px`);
-    fig.style.setProperty("--dy", `${Math.round(Math.random() * 14 - 7)}px`);
-    fig.innerHTML = `<img src="${r.src}" alt="" draggable="false" /><figcaption>${esc(r.pie)}</figcaption>`;
-    mesa.appendChild(fig);
-    while (mesa.children.length > 6) mesa.removeChild(mesa.firstChild);
-    k += 1;
-    programar(soltarFoto, msPorFoto);
-  };
-  programar(soltarFoto, 2000);
 
   // Su dialogo, linea por linea: avanza solo al ritmo de lectura, o con un toque.
   if (lineas.length) {
@@ -1437,8 +1385,7 @@ export async function chequeos({ sonidoHabilitado }) {
     [persistente, persistente ? "Storage is protected" : "Storage not protected yet"],
     [true, sonidoHabilitado ? "Sound on" : "Sound off (the ending plays music anyway)"],
     [!!nombreDeElla(), nombreDeElla() ? `Her name: ${nombreDeElla()}` : "No name set"],
-    [cantidadDeFotos() > 0, `Photos for the montage: ${cantidadDeFotos()}`],
-    [lineas > 0 && !relleno, lineas ? `Your dialogue: ${lineas} lines${relleno ? ` (+${relleno} placeholders, only in rehearsal)` : ""}` : relleno ? `Your dialogue: only ${relleno} placeholders (they don't show on the real day)` : "Your dialogue is empty (only photos + music)"],
+    [lineas > 0 && !relleno, lineas ? `Your dialogue: ${lineas} lines${relleno ? ` (+${relleno} placeholders, only in rehearsal)` : ""}` : relleno ? `Your dialogue: only ${relleno} placeholders (they don't show on the real day)` : "Your dialogue is empty (only music)"],
     [
       estado.fase !== "armado",
       `GPS trigger: ${Math.round(FINAL.lugar.radioMetros)} m around ${FINAL.lugar.nombre} (+ up to ${HOLGURA_GPS_MAX} m GPS error) — ` +
