@@ -5884,3 +5884,77 @@ button.nota-polaroid {
   .mes-pagina { flex-direction: column; gap: 12px; padding-top: max(40px, env(safe-area-inset-top)); }
   .mes-collage { flex-basis: 250px; transform: scale(0.85); }
 }
+
+/* ================================================================
+   v51 — repaso grafico
+   ================================================================ */
+
+/* --- el sello: el sticker nuevo va pegado al lado del sello (antes empujaba los botones fuera de la pantalla) --- */
+.papel-sello { position: relative; }
+.papel-sello .sticker-nuevo {
+  position: absolute;
+  left: calc(50% + 64px);
+  top: 64px;
+  width: min(196px, calc(50% - 70px));
+  gap: 8px;
+  padding: 6px 8px;
+  transform: rotate(3deg);
+}
+.papel-sello .sticker-nuevo img { width: 46px; height: 46px; flex: none; }
+.papel-sello .sticker-nuevo span { font-size: 11px; line-height: 1.15; max-width: none; }
+
+/* --- el cuaderno: las 7 pestañas se reparten el alto y dejan libre el lugar de la X --- */
+.cuaderno-pestanas { gap: 6px; padding: 4px 0 54px; }
+.pestana { flex: 1 1 0; min-height: 0; max-height: 40px; }
+
+/* --- los botones "fantasma" sobre papel: tinta sobre papel (grises parecian apagados) --- */
+.cuaderno .boton-fantasma,
+.papel-sello .boton-fantasma,
+.pantalla-postal .boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+.pantalla-postal .boton-fantasma { --relleno: var(--papel); }
+
+/* --- la palabra del dia y el sobre del mes: el cuarto de fondo, como las demas tarjetas --- */
+.pantalla-palabra.con-cuarto { background: none; }
+
+/* --- Friends: los que faltan se ven (silueta punteada) --- */
+.cuaderno .avatar-npc.desconocido {
+  background: rgba(22, 20, 22, 0.05);
+  color: rgba(22, 20, 22, 0.45);
+  outline: 2px dashed rgba(22, 20, 22, 0.3);
+  outline-offset: -2px;
+  font-size: 14px;
+}
+.cuaderno .fila-npc { border-bottom-color: rgba(22, 20, 22, 0.1); }
+
+/* --- Traits: barras con color y borde de tinta; el rasgo principal se lee --- */
+.cuaderno .barra-trait .pista { height: 12px; margin: 2px; background: rgba(22, 20, 22, 0.07); box-shadow: 0 0 0 2px var(--tinta); }
+.cuaderno .barra-trait .relleno { background: rgb(190, 214, 176); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.14); }
+.cuaderno .barra-trait:nth-last-child(3) .relleno { background: rgb(186, 214, 232); }
+.cuaderno .barra-trait:nth-last-child(2) .relleno { background: rgb(246, 222, 150); }
+.cuaderno .barra-trait:nth-last-child(1) .relleno { background: rgb(246, 190, 206); }
+.cuaderno .barra-trait.dominante .etiqueta { color: var(--rosa-oscuro); }
+.cuaderno .barra-trait.dominante .etiqueta small { opacity: 0.8; }
+.cuaderno .barra-trait .etiqueta small { color: rgba(22, 20, 22, 0.6); opacity: 1; }
+
+/* --- el diario: la polaroid sin foto es Baozi en su cuarto (antes un cuadro negro) --- */
+.cuaderno .cara-polaroid {
+  background:
+    linear-gradient(180deg, transparent 0 70%, rgb(150, 112, 84) 70% 73%, rgb(176, 150, 106) 73%),
+    repeating-linear-gradient(90deg, rgba(120, 90, 60, 0.1) 0 2px, transparent 2px 12px),
+    rgb(232, 218, 196);
+  align-items: flex-end;
+  padding-bottom: 6%;
+}
+
+/* --- Closet: aire entre el titulo y las cajas --- */
+.cuaderno .subtitulo-lista + .grilla-regalos { margin-top: 8px; }
+
+/* --- las pistas de los juegos se leen sobre cualquier fondo --- */
+.pantalla-juego .pista-minijuego, .pista-minijuego { color: var(--crema); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65); }
+
+/* --- Where to?: lista en dos columnas, con el titulo entero y el cuarto de fondo --- */
+.tarjeta-narrativa.destinos { justify-content: flex-start; gap: 10px; padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); min-height: 0; }
+.tarjeta-narrativa.destinos .titulo { flex: none; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
+.tarjeta-narrativa.destinos .opciones-narrativa { flex: 1; min-height: 0; overflow: auto; width: min(640px, 100%); max-width: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; padding: 4px; scrollbar-width: none; }
+.tarjeta-narrativa.destinos .opciones-narrativa .boton { width: auto; white-space: normal; min-height: 44px; font-size: 14px; line-height: 1.1; --relleno: rgba(20, 16, 24, 0.6); }
+.tarjeta-narrativa.destinos .boton-texto { grid-column: 1 / -1; justify-self: center; }
