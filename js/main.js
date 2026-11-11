@@ -736,6 +736,22 @@ function irACasa() {
   // encuentro, un lugar cerca o una carta, el GPS, el acelerometro y la
   // pantalla encendida quedaban prendidos (bateria). Apagar dos veces no hace nada.
   detenerSensoresCaminar();
+  // v51: por si se sale de un juego sin pasar por su boton (que no quede corriendo)
+  if (minijuego) {
+    const m = minijuego;
+    minijuego = null;
+    m.detener();
+  }
+  if (pesca) {
+    const q = pesca;
+    pesca = null;
+    q.destruir();
+  }
+  if (juegoTele) {
+    const j = juegoTele;
+    juegoTele = null;
+    j.destruir();
+  }
   controller.irACara();
   renderVistaActual();
   // v24: si un deseo se cumplio afuera del cuarto, se festeja al volver

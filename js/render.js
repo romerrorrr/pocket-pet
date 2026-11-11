@@ -1063,7 +1063,7 @@ function htmlDiccionario(palabras, total = 0, voz = false) {
 /** v50: la palabra del dia (sale al tocar el calendario). */
 export function renderPalabra(container, p, { fecha = "", voz = false } = {}) {
   container.innerHTML = `
-    <div class="pantalla-palabra">
+    <div class="pantalla-palabra con-cuarto">
       <div class="papel carta-palabra">
         <div class="hoja-calendario">WORD OF THE DAY · ${esc(fecha)}</div>
         <div class="fila-palabra-grande">
@@ -1129,7 +1129,7 @@ export function renderMeses(container, meses) {
 /** v50: Baozi entrega el librito del mes. */
 export function renderSobreMes(container, nombre) {
   container.innerHTML = `
-    <div class="pantalla-palabra pantalla-sobre-mes">
+    <div class="pantalla-palabra pantalla-sobre-mes con-cuarto">
       <div class="papel carta-sobre">
         <div class="sobre-fila">
           <div class="palabra-baozi">${spriteCara("ojo_especial_euforico.png", "boca_especial_euforico.png")}</div>
@@ -1494,7 +1494,7 @@ export function renderLugarCerca(container, lugar) {
 export function renderWhereTo(container, pendientes) {
   const opciones = pendientes.map((l) => `<button class="boton boton-fantasma" data-lugar="${l.id}">${glifo("pin")} ${esc(l.nombre)}</button>`).join("");
   container.innerHTML = `
-    <div class="tarjeta-narrativa">
+    <div class="tarjeta-narrativa destinos con-cuarto">
       <div class="titulo">Where to?</div>
       <div class="opciones-narrativa">
         ${opciones}
