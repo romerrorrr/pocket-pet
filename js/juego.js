@@ -96,7 +96,7 @@ export function iniciarJuego(contenedor, opts) {
   let D = DIFICULTADES[dif];
   let record = leerRecord(dif);
   contenedor.innerHTML = `
-    <div class="pantalla-juego con-cuarto" id="area-minijuego">
+    <div class="pantalla-juego pantalla-snack con-cuarto" id="area-minijuego">
       ${HTML_VOLVER}
       <div class="juego-hud">
         <span class="juego-chip" id="juego-puntos">0</span>
