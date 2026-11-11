@@ -5406,3 +5406,305 @@ img.icono-fecha { width: 22px; height: 21px; }
 .estado-tienda.guardada { color: rgba(22, 20, 22, 0.5); }
 .boton-deco { margin-top: 4px; min-height: 30px; }
 .tarjeta-tienda .boton-deco.boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+
+/* v48 — volver a leer las cartas */
+button.nota-polaroid {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline dotted rgba(160, 60, 90, 0.55);
+  text-underline-offset: 3px;
+}
+.tarjeta-cartas {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: none;
+  background: rgb(252, 236, 240);
+  box-shadow: 0 0 0 1px rgba(160, 60, 90, 0.3);
+  color: var(--rosa-oscuro);
+  font-family: var(--fuente-cuerpo);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.tarjeta-cartas span { flex: 1; }
+.tarjeta-cartas b { font-family: var(--fuente-display); font-size: 9px; }
+.lista-cartas .fila-botones { padding-bottom: 4px; justify-content: flex-start; }
+.lista-cartas .boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+.fila-carta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: none;
+  background: rgb(255, 252, 244);
+  box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.18);
+  font-family: var(--fuente-cuerpo);
+  color: var(--tinta);
+  text-align: left;
+  cursor: pointer;
+}
+.fila-carta-sello { color: var(--rosa-oscuro); }
+.fila-carta-titulo { flex: 1; font-size: 15px; font-weight: 700; }
+.fila-carta-fecha { font-size: 12px; color: rgba(22, 20, 22, 0.55); white-space: nowrap; }
+.carta-fecha { font-size: 12px; color: rgba(22, 20, 22, 0.55); }
+.carta-papel.releida .sello-carta { animation: none; }
+
+/* ================================================================
+   v49 — el diario se decora (decorar.js, estiloDiario.js)
+   ================================================================ */
+
+/* papel de cada pagina (crema = el de siempre) */
+.polaroid.papel-menta { background: rgb(226, 242, 232); }
+.polaroid.papel-rosa { background: rgb(252, 230, 236); }
+.polaroid.papel-lila { background: rgb(234, 230, 250); }
+.polaroid.papel-kraft { background: rgb(226, 204, 164); }
+.polaroid.papel-noche { background: rgb(46, 44, 66); color: rgb(236, 232, 248); }
+.polaroid.papel-noche .escrito-polaroid { color: rgb(244, 240, 252); }
+.polaroid.papel-noche .texto-polaroid,
+.polaroid.papel-noche .fecha-polaroid { color: rgb(214, 208, 236); }
+.polaroid.papel-noche .nota-polaroid { color: rgb(250, 170, 200); }
+.polaroid.papel-noche .hito-polaroid { color: rgb(190, 180, 250); }
+.polaroid.papel-noche .boton-mapa-dia { color: rgb(250, 170, 200); }
+.cuaderno .polaroid.dorada:not(.papel-elegido) { background: linear-gradient(180deg, rgb(253, 236, 238), rgb(247, 216, 224)); color: var(--tinta); }
+
+/* la cinta de arriba */
+.decorar-escala .polaroid::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 54px;
+  height: 14px;
+  margin-left: -27px;
+  background: rgba(246, 170, 196, 0.8);
+  transform: rotate(-3deg);
+  z-index: 1;
+}
+.cuaderno .polaroid.cinta-rosa::before, .decorar-escala .polaroid.cinta-rosa::before { background: rgba(246, 170, 196, 0.85); }
+.cuaderno .polaroid.cinta-azul::before, .decorar-escala .polaroid.cinta-azul::before { background: repeating-linear-gradient(45deg, rgba(120, 170, 230, 0.9) 0 5px, rgba(200, 226, 250, 0.9) 5px 10px); }
+.cuaderno .polaroid.cinta-amarilla::before, .decorar-escala .polaroid.cinta-amarilla::before { background: repeating-linear-gradient(90deg, rgba(250, 210, 80, 0.9) 0 6px, rgba(255, 240, 180, 0.9) 6px 12px); }
+.cuaderno .polaroid.cinta-verde::before, .decorar-escala .polaroid.cinta-verde::before { background: repeating-linear-gradient(90deg, rgba(120, 190, 120, 0.85) 0 4px, rgba(200, 236, 190, 0.85) 4px 8px); }
+.cuaderno .polaroid.cinta-lunares::before, .decorar-escala .polaroid.cinta-lunares::before { background: radial-gradient(circle, rgba(214, 70, 90, 0.9) 1.6px, rgba(255, 232, 238, 0.95) 2.2px) 0 0 / 7px 7px; }
+.cuaderno .polaroid.cinta-ninguna::before, .decorar-escala .polaroid.cinta-ninguna::before { display: none; }
+
+/* la tinta de lo que ella escribio */
+.polaroid.tinta-negra .escrito-polaroid { color: rgb(22, 20, 22); }
+.polaroid.tinta-azul .escrito-polaroid { color: rgb(48, 84, 170); }
+.polaroid.tinta-rosa .escrito-polaroid { color: rgb(170, 50, 96); }
+.polaroid.tinta-verde .escrito-polaroid { color: rgb(46, 120, 70); }
+.polaroid.tinta-cafe .escrito-polaroid { color: rgb(130, 74, 36); }
+.polaroid.tinta-blanca .escrito-polaroid { color: rgb(244, 240, 252); }
+
+/* para que lado se inclina */
+.polaroid.giro-izq { transform: rotate(-2deg); }
+.polaroid.giro-recta { transform: none; }
+.polaroid.giro-der { transform: rotate(2deg); }
+
+/* los stickers de la pagina */
+.stickers-pagina { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.sticker-pagina { position: absolute; filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.22)); }
+.sticker-pagina .sprite-cara { width: 100%; height: 100%; }
+.sticker-pagina .sticker-extra { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; display: block; }
+.boton-decorar { margin-left: auto; }
+
+/* la cabeza del diario: cartas y estilo */
+.fila-cabeza-diario { flex: 1 1 100%; display: flex; gap: 10px; flex-wrap: wrap; }
+.fila-cabeza-diario .tarjeta-cartas { flex: 2 1 200px; }
+.tarjeta-estilo {
+  flex: 1 1 150px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: none;
+  background: rgb(236, 242, 250);
+  box-shadow: 0 0 0 1px rgba(60, 80, 140, 0.3);
+  color: rgb(50, 66, 120);
+  font-family: var(--fuente-cuerpo);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.muestra-estilo { width: 18px; height: 18px; flex: 0 0 auto; background: repeating-linear-gradient(90deg, transparent 0 4px, rgba(80, 110, 170, 0.5) 4px 5px), repeating-linear-gradient(180deg, transparent 0 4px, rgba(80, 110, 170, 0.5) 4px 5px), rgb(250, 250, 255); box-shadow: 0 0 0 1px rgba(60, 80, 140, 0.5); }
+
+/* el cuaderno entero: las hojas */
+.cuaderno.hojas-cuadricula .cuaderno-hoja {
+  background:
+    linear-gradient(90deg, transparent 0 34px, rgba(214, 110, 120, 0.55) 34px 36px, transparent 36px),
+    repeating-linear-gradient(90deg, transparent 0 15px, rgba(140, 176, 166, 0.38) 15px 16px),
+    repeating-linear-gradient(180deg, transparent 0 15px, rgba(140, 176, 166, 0.38) 15px 16px),
+    rgb(246, 250, 244);
+}
+.cuaderno.hojas-puntos .cuaderno-hoja {
+  background:
+    linear-gradient(90deg, transparent 0 34px, rgba(214, 110, 120, 0.55) 34px 36px, transparent 36px),
+    radial-gradient(circle, rgba(130, 130, 150, 0.55) 1px, transparent 1.6px) 0 0 / 14px 14px,
+    rgb(252, 248, 236);
+}
+.cuaderno.hojas-lisa .cuaderno-hoja {
+  background: linear-gradient(90deg, transparent 0 34px, rgba(214, 110, 120, 0.55) 34px 36px, transparent 36px), rgb(252, 248, 236);
+}
+/* los anillos */
+.cuaderno.anillos-oro .cuaderno-espiral { background: repeating-linear-gradient(180deg, transparent 0 6px, rgb(222, 180, 80) 6px 10px, transparent 10px 14px); }
+.cuaderno.anillos-rosa .cuaderno-espiral { background: repeating-linear-gradient(180deg, transparent 0 6px, rgb(236, 150, 184) 6px 10px, transparent 10px 14px); }
+.cuaderno.anillos-negro .cuaderno-espiral { background: repeating-linear-gradient(180deg, transparent 0 6px, rgb(54, 52, 62) 6px 10px, transparent 10px 14px); }
+
+/* el cartel de Notebook style */
+.velo-estilo { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; background: rgba(20, 16, 24, 0.3); padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+.cartel-estilo.papel { flex: 0 0 auto; min-height: 0; height: auto; justify-content: flex-start; gap: 8px; box-shadow: 0 0 0 2px var(--tinta), 4px 5px 0 2px rgba(0, 0, 0, 0.3); }
+.cartel-estilo { width: min(600px, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; color: var(--tinta); text-align: left; align-items: stretch; }
+.titulo-estilo { font-family: var(--fuente-display); font-size: 10px; color: var(--rosa-oscuro); }
+.fila-estilo { display: flex; align-items: center; gap: 10px; }
+.etiqueta-estilo { flex: 0 0 86px; font-family: var(--fuente-cuerpo); font-weight: 700; font-size: 13px; }
+.ops-estilo { display: flex; flex-wrap: wrap; gap: 8px; }
+.op-estilo { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0; border: none; background: none; font-family: var(--fuente-cuerpo); font-size: 11px; color: var(--tinta); cursor: pointer; }
+.op-estilo i { display: block; width: 46px; height: 30px; box-shadow: 0 0 0 2px rgba(22, 20, 22, 0.3); }
+.op-estilo.puesto i { box-shadow: 0 0 0 3px var(--rosa-oscuro); }
+.op-estilo.puesto span { font-weight: 700; color: var(--rosa-oscuro); }
+.muestra-hojas-rayas { background: repeating-linear-gradient(180deg, transparent 0 6px, rgba(140, 170, 210, 0.6) 6px 7px), rgb(252, 248, 236); }
+.muestra-hojas-cuadricula { background: repeating-linear-gradient(90deg, transparent 0 6px, rgba(140, 176, 166, 0.55) 6px 7px), repeating-linear-gradient(180deg, transparent 0 6px, rgba(140, 176, 166, 0.55) 6px 7px), rgb(246, 250, 244); }
+.muestra-hojas-puntos { background: radial-gradient(circle, rgba(130, 130, 150, 0.7) 1px, transparent 1.5px) 0 0 / 7px 7px, rgb(252, 248, 236); }
+.muestra-hojas-lisa { background: rgb(252, 248, 236); }
+.op-estilo .muestra-anillos { width: 30px; height: 30px; }
+.muestra-papel-crema { background: rgb(250, 246, 234); }
+.muestra-papel-menta { background: rgb(226, 242, 232); }
+.muestra-papel-rosa { background: rgb(252, 230, 236); }
+.muestra-papel-mix { background: linear-gradient(90deg, rgb(250, 246, 234) 33%, rgb(226, 242, 232) 33% 66%, rgb(252, 230, 236) 66%); }
+.pie-estilo { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-family: var(--fuente-cuerpo); font-size: 12px; color: rgba(22, 20, 22, 0.6); }
+
+/* decorar una pagina */
+.pantalla-decorar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 12px;
+  padding: 10px max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
+  color: var(--tinta);
+  background: repeating-linear-gradient(180deg, transparent 0 23px, rgba(140, 170, 210, 0.4) 23px 24px), rgb(250, 246, 234);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.decorar-izq { flex: 0 0 44%; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.decorar-escenario { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; }
+.decorar-escala { position: absolute; width: 160px; transform-origin: top left; }
+.decorar-escala .polaroid { box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.25), 4px 5px 0 rgba(0, 0, 0, 0.3); }
+.decorar-escala .stickers-pagina { pointer-events: none; }
+.decorar-escala .sticker-pagina { pointer-events: auto; cursor: grab; touch-action: none; }
+.decorar-escala .sticker-pagina.elegido { outline: 1px dashed rgb(192, 70, 110); outline-offset: 1px; }
+.decorar-manijas { display: flex; justify-content: center; gap: 6px; }
+.decorar-manijas button {
+  width: 38px;
+  height: 34px;
+  border: none;
+  background: var(--papel);
+  color: var(--tinta);
+  box-shadow: 0 0 0 2px var(--tinta), 2px 2px 0 1px rgba(0, 0, 0, 0.25);
+  font-family: var(--fuente-cuerpo);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.decorar-manijas button.quitar { background: rgb(246, 170, 170); }
+.decorar-manijas button:disabled { opacity: 0.35; cursor: default; }
+.decorar-der { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.decorar-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab-decorar {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: none;
+  background: rgba(22, 20, 22, 0.05);
+  color: var(--tinta);
+  box-shadow: 0 0 0 2px var(--tinta);
+  font-family: var(--fuente-cuerpo);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tab-decorar.activa { background: rgb(252, 220, 232); }
+.decorar-panel { flex: 1; min-height: 0; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; align-items: stretch; text-align: left; }
+.decorar-panel.papel { justify-content: flex-start; min-height: 0; }
+.decorar-panel > * { flex: 0 0 auto; }
+.grupos-decorar { display: flex; gap: 6px; flex-wrap: wrap; }
+.grupo-decorar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 3px 8px;
+  border: none;
+  background: rgba(22, 20, 22, 0.05);
+  color: var(--tinta);
+  font-family: var(--fuente-cuerpo);
+  font-size: 12px;
+  cursor: pointer;
+}
+.grupo-decorar.activo { background: rgb(236, 244, 230); font-weight: 700; box-shadow: 0 0 0 1px rgba(54, 96, 48, 0.5); }
+.grupo-decorar .sprite-cara, .grupo-decorar .sticker-extra { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
+.grilla-decorar { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 6px; }
+.celda-sticker {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border: none;
+  background: rgba(22, 20, 22, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(22, 20, 22, 0.15);
+  cursor: pointer;
+  overflow: hidden;
+}
+.celda-sticker .sprite-cara { width: 100%; height: 100%; }
+.celda-sticker .sticker-extra { width: 78%; height: 78%; object-fit: contain; image-rendering: pixelated; }
+.aviso-decorar, .nota-decorar { font-family: var(--fuente-cuerpo); font-size: 12px; color: rgba(22, 20, 22, 0.6); }
+.fila-decorar { display: flex; align-items: center; gap: 10px; }
+.etiqueta-decorar { flex: 0 0 52px; font-family: var(--fuente-cuerpo); font-weight: 700; font-size: 13px; }
+.ops-decorar { display: flex; flex-wrap: wrap; gap: 8px; }
+.op-decorar { padding: 0; border: none; background: none; cursor: pointer; }
+.op-decorar i {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 30px;
+  font-style: normal;
+  font-family: var(--fuente-cuerpo);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(22, 20, 22, 0.6);
+  box-shadow: 0 0 0 2px rgba(22, 20, 22, 0.3);
+}
+.op-decorar.puesto i { box-shadow: 0 0 0 3px var(--rosa-oscuro); }
+.muestra-papel-def::after, .muestra-cinta-def::after { content: "auto"; }
+.muestra-papel-def { background: rgb(252, 248, 236); }
+.muestra-cinta-def { background: rgb(252, 248, 236); }
+.muestra-cinta-rosa { background: rgba(246, 170, 196, 0.85); }
+.muestra-cinta-azul { background: repeating-linear-gradient(45deg, rgba(120, 170, 230, 0.9) 0 5px, rgba(200, 226, 250, 0.9) 5px 10px); }
+.muestra-cinta-amarilla { background: repeating-linear-gradient(90deg, rgba(250, 210, 80, 0.9) 0 6px, rgba(255, 240, 180, 0.9) 6px 12px); }
+.muestra-cinta-verde { background: repeating-linear-gradient(90deg, rgba(120, 190, 120, 0.85) 0 4px, rgba(200, 236, 190, 0.85) 4px 8px); }
+.muestra-cinta-lunares { background: radial-gradient(circle, rgba(214, 70, 90, 0.9) 1.6px, rgba(255, 232, 238, 0.95) 2.2px) 0 0 / 7px 7px; }
+.muestra-cinta-ninguna { background: rgb(252, 248, 236); }
+.muestra-tinta, .muestra-tinta-def { background: rgb(252, 248, 236); font-size: 15px !important; }
+.op-decorar .muestra-tinta[style*="244"] { background: rgb(46, 44, 66); }
+.muestra-giro { background: rgb(252, 248, 236); width: 26px !important; height: 32px !important; }
+.palabras-decorar { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.cita-decorar { font-family: var(--fuente-cuerpo); font-size: 15px; line-height: 1.35; }
+.decorar-pie { display: flex; align-items: center; gap: 8px; }
+.decorar-ayuda { flex: 1; font-family: var(--fuente-cuerpo); font-size: 12px; color: rgba(22, 20, 22, 0.6); }
+.decorar-pie .boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+@media (orientation: portrait) {
+  .pantalla-decorar { flex-direction: column; padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .decorar-izq { flex: 0 0 52%; }
+}
