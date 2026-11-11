@@ -698,7 +698,6 @@ export const PESTANAS_CUADERNO = [
   ["closet", "Closet"],
   ["shop", "Shop"],
   ["stats", "Baozi"],
-  ["traits", "Traits"],
   ["ajustes", "Settings"],
 ];
 

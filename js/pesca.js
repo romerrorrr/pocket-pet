@@ -11,6 +11,8 @@
  *      esta en lo verde. Los peces raros tienen lo verde mas chico.
  *
  *   carpa +1 · dorado +2 · koi +4 · koi dorado +10 (muy raro) · sandalia y hoja 0
+ *   v52: camaron +2 · mandarin +3 · cangrejo +3 · tortuga +5 · raiz 0 · botella 0 (trae una notita)
+ *        y solo de noche: bagre +3 · pez luna +8 (raro)
  *
  * La partida dura 60 s. Hay un record por dificultad. El arte sale de
  * tools/pesca_arte.py; el personaje se dibuja con sus capas (y su ropa),
@@ -38,8 +40,28 @@ export const PECES = [
   { id: "koi_dorado", nombre: "Golden koi", puntos: 10, peso: 3, zona: 0.11, vel: 1.45 },
   { id: "sandalia", nombre: "An old sandal…", puntos: 0, peso: 8, zona: 0.42, vel: 0.9 },
   { id: "hoja", nombre: "A lotus leaf…", puntos: 0, peso: 9, zona: 0.42, vel: 0.9 },
+  // v52: mas peces. "solo: noche" = solo pican de noche. La botella trae una notita.
+  { id: "camaron", nombre: "Longjing shrimp", puntos: 2, peso: 14, zona: 0.28, vel: 1.1 },
+  { id: "mandarin", nombre: "Mandarin fish", puntos: 3, peso: 9, zona: 0.22, vel: 1.15 },
+  { id: "cangrejo", nombre: "Hairy crab", puntos: 3, peso: 8, zona: 0.22, vel: 1.25 },
+  { id: "tortuga", nombre: "Turtle", puntos: 5, peso: 5, zona: 0.16, vel: 1.05 },
+  { id: "bagre", nombre: "Catfish", puntos: 3, peso: 12, zona: 0.22, vel: 1.15, solo: "noche" },
+  { id: "luna", nombre: "Moon fish", puntos: 8, peso: 4, zona: 0.12, vel: 1.4, solo: "noche" },
+  { id: "raiz", nombre: "A lotus root…", puntos: 0, peso: 6, zona: 0.42, vel: 0.9 },
+  { id: "botella", nombre: "A message in a bottle!", puntos: 0, peso: 2, zona: 0.36, vel: 0.95 },
 ];
 export const pezPorId = (id) => PECES.find((p) => p.id === id) || null;
+
+// v52: lo que dice la notita de la botella (una al azar)
+export const NOTAS_BOTELLA = [
+  "“You're my favorite catch.”",
+  "“Meet me by the lake?”",
+  "“Dumplings later? ♥”",
+  "“The lake says hi.”",
+  "“Found you!”",
+  "“I ♥ fishing with you.”",
+];
+
 
 export function leerRecordPesca(dif = null) {
   if (!dif) return Math.max(...Object.keys(DIFICULTADES_PESCA).map((d) => leerRecordPesca(d)));
@@ -68,7 +90,7 @@ function leerDificultad() {
 }
 
 function elegirPez(noche, azar = Math.random) {
-  const tabla = PECES.map((p) => ({ p, peso: p.id === "koi_dorado" && noche ? p.peso * 2 : p.peso }));
+  const tabla = PECES.filter((p) => !p.solo || (p.solo === "noche") === !!noche).map((p) => ({ p, peso: p.id === "koi_dorado" && noche ? p.peso * 2 : p.peso }));
   let r = azar() * tabla.reduce((s, x) => s + x.peso, 0);
   for (const x of tabla) {
     r -= x.peso;
@@ -268,7 +290,8 @@ export function iniciarPesca(contenedor, opts) {
       cartel(`+${pez.puntos} ${pez.nombre}!`, 1300);
     } else {
       sonar("mimo");
-      cartel(pez.nombre, 1300);
+      if (pez.id === "botella") cartel(NOTAS_BOTELLA[Math.floor(Math.random() * NOTAS_BOTELLA.length)], 2400);
+      else cartel(pez.nombre, 1300);
     }
     pista("Tap to cast");
   }
