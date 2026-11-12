@@ -6177,3 +6177,20 @@ button.nota-polaroid {
 .item-tienda.manana .cuantos-tienda { right: -40%; background: var(--rosa-oscuro); }
 .item-tienda.sacude { animation: rest-no 0.3s steps(3); }
 @keyframes rest-no { 33% { translate: -4px 0; } 66% { translate: 4px 0; } }
+
+/* ================================================================
+   v57 — Lanterns on the Lake como fila (faroles.js)
+   ================================================================ */
+.far-como { display: grid; gap: 6px; margin: 2px auto 10px; max-width: 360px; text-align: left; }
+.far-como > div { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 1.2; color: var(--tinta); background: var(--papel); padding: 5px 8px; box-shadow: 0 0 0 2px var(--tinta); }
+.far-como b { flex: none; width: 18px; height: 18px; display: grid; place-items: center; font-family: var(--fuente-display); font-size: 9px; color: #fff; background: var(--rosa-oscuro); }
+.far-ico { flex: none; width: 46px; text-align: center; font-size: 12px; letter-spacing: 1px; }
+.far-ico.yo { color: rgb(220, 70, 60); }
+.far-ico.fila { color: rgb(240, 150, 60); }
+.far-ico.bote { color: rgb(60, 56, 80); font-size: 16px; }
+.far-aviso { position: absolute; z-index: 4; left: 50%; bottom: 12%; transform: translateX(-50%); padding: 5px 10px; font-size: 14px; color: var(--crema); background: rgba(20, 18, 40, 0.75); box-shadow: 0 0 0 2px rgba(255, 214, 140, 0.6); white-space: nowrap; animation: aparecer 0.2s steps(3); }
+.far-chip-fila { color: rgb(200, 60, 70); }
+@media (max-height: 380px) {
+  .far-como { gap: 4px; margin-bottom: 6px; }
+  .far-como > div { font-size: 12px; padding: 3px 6px; }
+}
