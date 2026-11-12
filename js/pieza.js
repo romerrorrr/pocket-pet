@@ -320,6 +320,7 @@ const ETIQUETAS = {
   radio: "Radio: change the station",
   reloj: "Clock",
   calendario: "Calendar",
+  cartel: "Shop sign: Baozi's Dumpling Shop",
   camara: "Camera: Baozi's Lens",
   farol: "Lantern: bedtime",
   corcho: "Map of Hangzhou: stamps",
@@ -1552,7 +1553,7 @@ export function crearPieza(contenedor, { estado, alTocar, alRayo = () => {} }) {
 
     // 3. los objetos
     for (const [id, caja] of Object.entries(PIEZA.objetos)) {
-      let rel = rutaCuarto(`${id}.png`);
+      let rel = id === "cartel" ? "pieza/cartel.png" : rutaCuarto(`${id}.png`); // v54: el cartel es igual en todos los cuartos
       if (id === "farol" && !lamparas) rel = rutaCuarto("farol_apagado.png");
       if (id === "radio" && (!e.sonido || e.dormido)) rel = rutaCuarto("radio_apagada.png"); // dormido: la radio se calla (main.js)
       let dx = 0;

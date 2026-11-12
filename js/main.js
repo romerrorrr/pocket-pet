@@ -41,6 +41,8 @@ import { Tienda, porId as productoTienda } from "./tienda.js";
 import { leerRecord } from "./juego.js";
 import { iniciarPesca, leerRecordPesca, PECES, pezPorId } from "./pesca.js";
 import { iniciarTorre, leerRecordTorre } from "./torre.js";
+import { Restaurante, abrirRestaurante } from "./restaurante.js"; // v54
+import { iniciarFaroles, leerRecordFaroles } from "./faroles.js"; // v54
 import { iniciarRitmo } from "./ritmo.js";
 import { iniciarTejo, leerRecordTejo } from "./tejo.js"; // v40: el tejo reemplaza a Boat Ride
 import * as Galeria from "./galeria.js";
@@ -74,7 +76,7 @@ const tabbarEl = document.getElementById("tabbar");
 const marcoEl = document.querySelector(".marco-manito");
 
 // Vistas que llegan hasta el borde de la pantalla del aparato.
-const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas", "jardin", "decorar", "palabra", "mes", "sobremes"]);
+const VISTAS_SIN_MARGEN = new Set(["intro", "escribir", "pasos", "deseo", "juegos", "pesca", "mudanza", "elegir", "huevo", "nombre", "feedback", "cara", "descubrimiento", "lugarcerca", "encuentro", "carta", "final", "lente", "caminar", "heladera", "mapa", "sello", "postal", "consulta", "mapadia", "torre", "ritmo", "tejo", "fechas", "jardin", "decorar", "palabra", "mes", "sobremes", "restaurante", "faroles"]);
 // La botonera de abajo ya no existe: el cuarto es el menu.
 const VISTAS_CON_TABBAR = new Set([]);
 
@@ -96,7 +98,7 @@ function actualizarMarco() {
 /** Un solo lugar que sabe todo lo que hay que persistir. */
 function guardarTodo() {
   if (!mascota) return false;
-  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla, jardin: jardin.aObjeto(), cuaderno: estiloCuaderno, palabras: palabras.aObjeto(), meses: mesesReg });
+  return storage.guardar(mascota, npcsReg, lugaresReg, diario, cartasEntregadas, { final: Final.estadoParaGuardar(), personaje: Personaje.actual(), amigos: amigos.aObjeto(), tienda: tienda.aObjeto(), deseos: deseos.aObjeto(), pesca: pescaReg, mudanza, lugaresPropios: lugaresDeElla, fechasPropias: fechasDeElla, jardin: jardin.aObjeto(), cuaderno: estiloCuaderno, palabras: palabras.aObjeto(), meses: mesesReg, restaurante: restauranteReg.aObjeto() });
 }
 
 // v35: actualizaciones seguras (ver el comentario de arriba de sw.js).
@@ -213,6 +215,8 @@ let deseos = Deseos.desdeObjeto(null, DESEOS_PROPIOS); // v24: el deseo del dia 
 let jardin = new Jardin(); // v45: el jardin del balcon (jardin.js)
 let estiloCuaderno = limpiarCuaderno(null); // v49: como se ve el cuaderno (estiloDiario.js)
 let palabras = new Palabras(); // v50: la palabra del dia (palabras.js)
+let restauranteReg = new Restaurante(); // v54: Baozi's Dumpling Shop (restaurante.js)
+let restaurante = null; // la pantalla del local, viva mientras la vista es "restaurante"
 let mesesReg = { entregados: [] }; // v50: los librillos del mes que Baozi ya entrego (nuestroMes.js)
 const cargarMeses = (d) => ({ entregados: (d && Array.isArray(d.entregados) ? d.entregados : []).filter((m) => typeof m === "string" && /^\d{4}-\d{2}$/.test(m)) });
 // v24: despues del si, el personaje de rom se muda: "no" -> "llega" (golpea la puerta) -> "vive"
@@ -542,6 +546,7 @@ function arrancar() {
     estiloCuaderno = limpiarCuaderno(guardado.extras && guardado.extras.cuaderno);
     palabras = Palabras.desdeObjeto(guardado.extras && guardado.extras.palabras);
     mesesReg = cargarMeses(guardado.extras && guardado.extras.meses);
+    restauranteReg = Restaurante.desdeObjeto(guardado.extras && guardado.extras.restaurante);
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
@@ -692,6 +697,7 @@ function confirmarNombre() {
   estiloCuaderno = limpiarCuaderno(null);
   palabras = new Palabras();
   mesesReg = cargarMeses(null);
+  restauranteReg = new Restaurante();
   cargarLugaresDeElla(null);
   cargarFechasDeElla(null);
   diario = diario || new Diario();
@@ -751,6 +757,11 @@ function irACasa() {
     const j = juegoTele;
     juegoTele = null;
     j.destruir();
+  }
+  if (restaurante) {
+    const r = restaurante;
+    restaurante = null;
+    r.destruir();
   }
   controller.irACara();
   renderVistaActual();
@@ -875,15 +886,17 @@ function renderVistaActual() {
         recordPesca: leerRecordPesca(),
         recordTorre: leerRecordTorre(),
         recordTejo: leerRecordTejo(),
+        recordFaroles: leerRecordFaroles(),
         cancionesRitmo: Musica.estacionesParaJugar().length,
         libro: PECES.map((p) => ({ id: p.id, nombre: p.nombre, n: pescaReg.libro[p.id] || 0 })),
-        primeras: Object.fromEntries(["snack", "pesca", "torre", "ritmo", "tejo"].map((j) => [j, tienda.primeraDelDia(j)])), // v44
+        primeras: Object.fromEntries(["snack", "pesca", "torre", "ritmo", "tejo", "faroles"].map((j) => [j, tienda.primeraDelDia(j)])), // v44
       });
       document.getElementById("btn-juego-snack").addEventListener("click", () => conTransicion(iniciarMinijuego));
       document.getElementById("btn-juego-pesca").addEventListener("click", () => conTransicion(iniciarPescaJuego));
       document.getElementById("btn-juego-torre").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("torre")));
       document.getElementById("btn-juego-ritmo").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("ritmo")));
       document.getElementById("btn-juego-tejo").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("tejo")));
+      document.getElementById("btn-juego-faroles").addEventListener("click", () => conTransicion(() => iniciarJuegoTele("faroles")));
       document.getElementById("btn-volver-juegos").addEventListener("click", () => conTransicion(irACasa));
       break;
     case "deseo": {
@@ -939,11 +952,15 @@ function renderVistaActual() {
     case "director":
       abrirDirector();
       break;
+    case "restaurante":
+      if (!restaurante) abrirElRestaurante();
+      break;
     case "minijuego":
     case "pesca":
     case "torre":
     case "ritmo":
     case "tejo":
+    case "faroles":
     case "lente":
     case "final":
     case "intro":
@@ -1101,6 +1118,11 @@ function tocarObjeto(id) {
     case "corcho":
       Sonido.sonar("tocar");
       abrirMapa();
+      break;
+    case "cartel":
+      // v54: el cartelito rojo abre el restaurante
+      Sonido.sonar("tocar");
+      conTransicion(abrirElRestaurante);
       break;
     case "calendario":
       // v50: el calendario muestra la palabra del dia (y desde ahi, las fechas de ustedes)
@@ -3200,6 +3222,39 @@ function fechaCortaHoy() {
   return `${f.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${f.getDate()}`;
 }
 
+// ------------------------------------------------------------------
+// v54: Baozi's Dumpling Shop (restaurante.js)
+// ------------------------------------------------------------------
+function abrirElRestaurante() {
+  if (restaurante) restaurante.destruir();
+  prepararVista("restaurante");
+  Musica.detener(0.3);
+  restaurante = abrirRestaurante(screenEl, {
+    arte,
+    sprite: (ojo, boca) => R.spriteCara(ojo, boca),
+    cambiarCara: (el, ojo, boca) => R.cambiarCara(el, ojo, boca),
+    sonar: (n) => Sonido.sonar(n),
+    vibrar,
+    reg: restauranteReg,
+    tienda,
+    sellados: lugaresReg.desbloqueados,
+    nombreLugar: nombreDeLugar,
+    amigos: NPCS.map((n) => ({ id: n.id, nombre: n.nombre, conocido: (npcsReg.vecesEncontrado[n.id] || 0) > 0 })),
+    nombre: Personaje.nombre(),
+    guardar: () => guardarTodo(),
+    alSalir: () => conTransicion(irACasa),
+    alCerrarTurno: ({ paga, felices, sobras }) => {
+      if (paga) tienda.ganar("restaurante", paga);
+      for (const id of sobras) tienda.darComida(id, 1);
+      if (felices) {
+        mascota.resultadoMinijuego(Math.min(felices, 10), Date.now());
+        diario.anotarJuego(paga);
+      }
+      if (paga) setTimeout(() => mostrarMonedas(paga), 400);
+    },
+  });
+}
+
 function abrirPalabra() {
   palabras.ver(claveDelDia());
   guardarTodo();
@@ -3826,6 +3881,7 @@ async function restaurarDesdeArchivo(archivo, mensaje) {
       estiloCuaderno = limpiarCuaderno(guardado.extras && guardado.extras.cuaderno);
       palabras = Palabras.desdeObjeto(guardado.extras && guardado.extras.palabras);
       mesesReg = cargarMeses(guardado.extras && guardado.extras.meses);
+    restauranteReg = Restaurante.desdeObjeto(guardado.extras && guardado.extras.restaurante);
       mascota.actualizarTiempo(Date.now());
       mensaje(`Backup restored${nFotos ? ` (+${nFotos} ${nFotos === 1 ? "photo" : "photos"})` : ""}. Welcome back, Baozi!`, "ok");
       // se recarga para que todo (records, el cuarto, el album) arranque del backup
@@ -4495,6 +4551,7 @@ function iniciarJuegoTele(cual) {
   };
   if (cual === "torre") juegoTele = iniciarTorre(screenEl, { ...comunes, alTerminar: (r) => terminarJuegoTele("torre", r) });
   else if (cual === "ritmo") juegoTele = iniciarRitmo(screenEl, { ...comunes, musica: Musica, alTerminar: (r) => terminarJuegoTele("ritmo", r) });
+  else if (cual === "faroles") juegoTele = iniciarFaroles(screenEl, { ...comunes, alTerminar: (r) => terminarJuegoTele("faroles", r) });
   else juegoTele = iniciarTejo(screenEl, { ...comunes, alTerminar: (r) => terminarJuegoTele("tejo", r) });
 }
 
@@ -4515,6 +4572,10 @@ function terminarJuegoTele(cual, r) {
     const notas = r.total ? Math.round(((r.perfectos + r.buenos) / r.total) * 100) : 0;
     titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos.toLocaleString("en-US")}!` : r.fallados === 0 && r.total ? "Full combo!" : `${notas}% of the notes!`;
     sub = `${r.nombreCancion} · ${r.perfectos} perfect · best ${r.record.toLocaleString("en-US")}`;
+  } else if (cual === "faroles") {
+    bien = (r.faroles || 0) > 0;
+    titulo = r.nuevoRecord && puntos > 0 ? `New record: ${puntos}!` : r.faroles ? `${r.faroles} lantern${r.faroles === 1 ? "" : "s"} together!` : "The lake is quiet tonight…";
+    sub = `${puntos} points · best ${r.record}`;
   } else {
     // v40: el tejo
     bien = puntos > 0;
@@ -4527,7 +4588,7 @@ function terminarJuegoTele(cual, r) {
   if (r.nuevoRecord && puntos > 0) monedas += tienda.ganar("record");
   // v35 (F38): cuantas cosas buenas hizo de verdad (0 si salio enseguida con la flechita):
   // pisos de la torre, notas acertadas / 4, mechas y embocinadas del tejo
-  const logros = cual === "torre" ? r.pisos || 0 : cual === "ritmo" ? Math.floor(((r.perfectos || 0) + (r.buenos || 0)) / 4) : (r.mechas || 0) + (r.embocinadas || 0);
+  const logros = cual === "torre" ? r.pisos || 0 : cual === "ritmo" ? Math.floor(((r.perfectos || 0) + (r.buenos || 0)) / 4) : cual === "faroles" ? Math.floor((r.faroles || 0) / 3) : (r.mechas || 0) + (r.embocinadas || 0);
   mascota.resultadoMinijuego(logros, Date.now());
   diario.anotarJuego(puntos);
   eventoDeseo({ tipo: cual, puntos });

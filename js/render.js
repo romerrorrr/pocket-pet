@@ -2048,7 +2048,7 @@ export function renderMudanza(container, { quien = "baozi", texto = "" } = {}) {
 }
 
 /** v24: la tele tiene dos juegos: se elige cual (con el libro de peces). */
-export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, recordTorre = 0, recordTejo = 0, cancionesRitmo = 5, libro = [], primeras = {} } = {}) {
+export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, recordTorre = 0, recordTejo = 0, recordFaroles = 0, cancionesRitmo = 5, libro = [], primeras = {} } = {}) {
   const pescados = libro.filter((p) => p.n > 0).length;
   // v44: una monedita en la tarjeta del juego cuya primera partida de hoy todavia paga segun el puntaje
   const moneda = (j) => (primeras[j] ? `<span class="juego-moneda" title="First game today: coins for your score"><img src="${arte("tienda/moneda.png")}" alt="coins today" draggable="false" /></span>` : "");
@@ -2086,6 +2086,12 @@ export function renderJuegos(container, { recordSnack = 0, recordPesca = 0, reco
           <span class="juego-arte icono"><img src="${arte("juegos/icono_tejo.png")}" alt="" draggable="false" /></span>
           <span class="juego-nombre">Tejo</span>
           <span class="juego-best">Best ${recordTejo}</span>
+        </button>
+        <button class="tarjeta-juego" id="btn-juego-faroles">
+          ${moneda("faroles")}
+          <span class="juego-arte icono"><img src="${arte("juegos/icono_faroles.png")}" alt="" draggable="false" /></span>
+          <span class="juego-nombre">Lanterns</span>
+          <span class="juego-best">Best ${recordFaroles}</span>
         </button>
       </div>
       <div class="libro-peces" aria-label="Fish book: ${pescados} of ${libro.length}">

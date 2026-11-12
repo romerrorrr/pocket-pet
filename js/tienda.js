@@ -115,6 +115,7 @@ export function valorJuego(juego, r = {}) {
   else if (juego === "pesca") v = (p * 2) / 3; // 8 pts (unos 5 peces) -> 5
   else if (juego === "torre") v = p / 2; // 10 pts -> 5, 20 -> 10
   else if (juego === "tejo") v = p / 2; // 10 pts -> 5, 20 -> 10
+  else if (juego === "faroles") v = p / 2; // v54: 10 pts -> 5, 20 -> 10
   else if (juego === "ritmo") {
     // depende de la cancion: cuenta que parte de las notas acerto (un "bien" vale menos que un "perfecto")
     const total = Number(r.total) || 0;
