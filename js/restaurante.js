@@ -1,46 +1,99 @@
 /**
  * restaurante.js
  * ==============
- * v54: Baozi's Dumpling Shop. Un puestito en la calle Hefang que se abre
- * desde el cartelito rojo del cuarto. Ella lo pidio ("uno de cocina").
+ * v54/v55: Baozi's Dumpling Shop, un juego propio que se abre desde el
+ * cartelito rojo del cuarto. Ella lo pidio ("uno de cocina") y rom pidio
+ * que se pueda "preparar cada item, que se sienta como un juego en si".
  *
- *   - La pantalla del local: lo de hoy, el menu (lo que falta, con candado),
- *     las mejoras que se compran con monedas y "Open the shop".
- *   - El turno: 90 s. Llegan clientes con un pedido de 1 o 2 cosas y una
- *     barra de paciencia. Lo que va al vapor (bao, jiaozi) se pone en una
- *     vaporera libre y se cocina; tocando la vaporera lista pasa al plato.
- *     Lo demas (te, Longjing, pastel de osmanto, mooncake) va directo al
- *     plato. Tocando al cliente se le sirve: si el plato es su pedido, paga
- *     (mas propina si no espero mucho). El tacho vacia el plato.
- *   - Las recetas nuevas salen sellando lugares: Longjing (longjing), pastel
- *     de osmanto (el Jardin Botanico) y mooncake (Three Pools Mirroring the Moon).
- *   - Monedas: el primer turno del dia paga todo lo que se gano; los
- *     siguientes, un tercio (como los otros juegos, que no se "farmee").
- *   - Lo que sobra en el plato y es comida de la heladera, va a la heladera.
+ *   - El local (antes de abrir): el especial del dia (paga el doble), como
+ *     le fue la ultima vez, la fama (1 a 5 estrellas), el libro de recetas
+ *     y la decoracion del frente.
+ *   - El dia: llegan clientes de a uno con su ticket (plato y extras). Cada
+ *     plato se prepara paso a paso (cocina.js): amasar, estirar, rellenar,
+ *     plegar, cocinar en el punto, verter, emplatar. Cada paso da 1-3
+ *     estrellas y el plato sale con el promedio. Sin reloj: ritmo tranquilo.
+ *   - Servir: monedas segun la calidad (+ propina con 3 estrellas), una
+ *     resena del cliente, y fama.
+ *   - Recetas: 18 (dim sum, platos y postres chinos, comida colombiana). Se
+ *     desbloquean con los dias del local, sellando lugares o comprandolas.
+ *   - Monedas: el primer dia del local de cada dia real paga todo; los
+ *     siguientes, un tercio (que no se "farmee").
  *
- * La logica (Restaurante) no toca el DOM: se prueba en test/unit_v54.mjs.
+ * La logica (Restaurante, recetas, pagos) no toca el DOM: test/unit_v55.mjs.
  */
 
 import { HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
+import { crearPaso, RELLENOS, LIQUIDOS, COCCIONES } from "./cocina.js";
 
-export const TURNO_MS = 90000;
+// ------------------------------------------------------------------
+// Los datos
+// ------------------------------------------------------------------
 
-/** La comida del local. vapor: va a la vaporera. heladera: el id de la tienda (si sobra, va a la heladera). */
-export const PLATOS = {
-  bao: { nombre: "Bao", precio: 6, vapor: true },
-  jiaozi: { nombre: "Jiaozi", precio: 6, vapor: true },
-  te: { nombre: "Tea", precio: 3 },
-  longjing: { nombre: "Longjing tea", precio: 5, lugar: "longjing", heladera: "longjing" },
-  osmanto: { nombre: "Osmanthus cake", precio: 7, lugar: "botanico", heladera: "osmanto" },
-  luna: { nombre: "Mooncake", precio: 8, lugar: "santan", heladera: "luna" },
+/** Lo que se puede poner al emplatar (el ticket pide 0 a 2). */
+export const EXTRAS = {
+  vinagre: { nombre: "Vinegar", color: "rgb(90,60,50)" },
+  chile: { nombre: "Chili oil", color: "rgb(214,60,50)" },
+  jengibre: { nombre: "Ginger", color: "rgb(240,210,140)" },
+  cebollin: { nombre: "Scallions", color: "rgb(110,180,90)" },
+  sesamo: { nombre: "Sesame", color: "rgb(240,226,190)" },
+  soya: { nombre: "Soy sauce", color: "rgb(70,40,30)" },
+  azucar: { nombre: "Sugar", color: "rgb(255,255,255)" },
+  perlas: { nombre: "Pearls", color: "rgb(60,40,40)" },
+  hielo: { nombre: "Ice", color: "rgb(200,230,250)" },
+  limon: { nombre: "Lime", color: "rgb(150,200,80)" },
+  aji: { nombre: "Ají", color: "rgb(120,170,60)" },
+  queso: { nombre: "Extra cheese", color: "rgb(250,230,150)" },
+  panela: { nombre: "Panela", color: "rgb(190,130,60)" },
+  huevo: { nombre: "Egg", color: "rgb(255,214,90)" },
+  bokchoy: { nombre: "Bok choy", color: "rgb(90,160,80)" },
+  osmanto: { nombre: "Osmanthus", color: "rgb(250,190,70)" },
+  fresa: { nombre: "Strawberry", color: "rgb(220,60,70)" },
+  espino: { nombre: "Hawthorn", color: "rgb(180,40,40)" },
+  uva: { nombre: "Grape", color: "rgb(120,60,140)" },
+  mandarina: { nombre: "Mandarin", color: "rgb(250,150,40)" },
 };
-export const ORDEN_MENU = ["bao", "jiaozi", "te", "longjing", "osmanto", "luna"];
 
-export const MEJORAS = [
-  { id: "vapor2", nombre: "Second steamer", texto: "Cook two things at once", precio: 120 },
-  { id: "faroles", nombre: "Lanterns outside", texto: "Customers wait a little longer", precio: 90 },
-  { id: "fuego", nombre: "Faster fire", texto: "Steaming takes half the time", precio: 150 },
-  { id: "lugar4", nombre: "Fourth spot", texto: "Up to 4 customers at a time", precio: 200 },
+const BAO = (relleno) => [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno }, { t: "plegar", n: 9, relleno }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }];
+
+/**
+ * Las recetas. desbloqueo: { dia } (dias del local), { lugar } (sellarlo) o nada (desde el principio).
+ * precio: lo que paga un plato de 3 estrellas. compra: lo que cuesta desbloquearla antes de tiempo.
+ */
+export const RECETAS = [
+  { id: "bao_cerdo", nombre: "Pork bao", grupo: "dimsum", precio: 8, pasos: BAO("carne"), extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Soft and round, like you know who." },
+  { id: "jiaozi", nombre: "Jiaozi", grupo: "dimsum", precio: 8, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "carne" }, { t: "plegar", n: 7, forma: "media", relleno: "carne" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["vinagre", "chile", "jengibre"], amigo: "mimi", nota: "On my planet these are called ‘moon pockets’." },
+  { id: "te_leche", nombre: "Milk tea", grupo: "chino", precio: 6, pasos: [{ t: "cocinar", como: "calentar" }, { t: "verter", liquido: "te" }, { t: "verter", liquido: "leche" }, { t: "emplatar" }], extras: ["perlas", "hielo", "azucar"], amigo: "chagee", nota: "Extra pearls, darling. Always." },
+  { id: "arepa", nombre: "Arepa with cheese", grupo: "colombia", precio: 8, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "cocinar", como: "plancha" }, { t: "rellenar", relleno: "queso" }, { t: "emplatar" }], extras: ["queso", "huevo"], nota: "Breakfast in Bogotá, lunch in Hangzhou." },
+  { id: "guotie", nombre: "Guotie", grupo: "dimsum", precio: 9, desbloqueo: { dia: 2 }, compra: 60, pasos: [{ t: "estirar" }, { t: "rellenar", relleno: "carne" }, { t: "plegar", n: 6, forma: "media", relleno: "carne" }, { t: "cocinar", como: "plancha" }, { t: "emplatar" }], extras: ["vinagre", "chile", "sesamo"], nota: "Crispy bottom, soft top." },
+  { id: "bao_verdura", nombre: "Veggie bao", grupo: "dimsum", precio: 8, desbloqueo: { dia: 2 }, compra: 50, pasos: BAO("verdura"), extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Usagi's favorite. Lots of greens." },
+  { id: "tinto", nombre: "Tinto", grupo: "colombia", precio: 5, desbloqueo: { dia: 2 }, compra: 40, pasos: [{ t: "cocinar", como: "calentar" }, { t: "verter", liquido: "cafe" }, { t: "emplatar" }], extras: ["panela", "azucar"], nota: "A little black coffee. Wakes you right up." },
+  { id: "xiaolongbao", nombre: "Xiaolongbao", grupo: "dimsum", precio: 12, desbloqueo: { dia: 3 }, compra: 90, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "caldo" }, { t: "plegar", n: 14, relleno: "caldo" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["vinagre", "jengibre"], amigo: "ruchong", nota: "Careful… the soup inside is hot!" },
+  { id: "fideos", nombre: "Noodle soup", grupo: "chino", precio: 10, desbloqueo: { dia: 3 }, compra: 70, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "cocinar", como: "hervir" }, { t: "elegir", topping: true }, { t: "emplatar" }], toppings: ["huevo", "bokchoy", "cebollin"], extras: ["chile", "soya", "sesamo"], nota: "Long noodles, long life." },
+  { id: "empanada", nombre: "Empanadas", grupo: "colombia", precio: 9, desbloqueo: { dia: 3 }, compra: 70, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "pollo" }, { t: "plegar", n: 8, forma: "media", relleno: "pollo" }, { t: "cocinar", como: "freir" }, { t: "emplatar" }], extras: ["aji", "limon"], nota: "With ají and a squeeze of lime." },
+  { id: "bao_frijol", nombre: "Red bean bao", grupo: "dimsum", precio: 9, desbloqueo: { dia: 4 }, compra: 60, pasos: BAO("frijol"), extras: ["sesamo", "azucar"], nota: "Sweet bao with a red dot on top." },
+  { id: "jugo", nombre: "Passion fruit juice", grupo: "colombia", precio: 6, desbloqueo: { dia: 4 }, compra: 50, pasos: [{ t: "verter", liquido: "jugo" }, { t: "verter", liquido: "agua" }, { t: "emplatar" }], extras: ["hielo", "azucar"], nota: "Maracuyá! Sour and sunny." },
+  { id: "hargow", nombre: "Har gow", grupo: "dimsum", precio: 12, desbloqueo: { dia: 5 }, compra: 100, pasos: [{ t: "estirar" }, { t: "rellenar", relleno: "camaron" }, { t: "plegar", n: 10, relleno: "camaron" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "See-through skin, a whole shrimp inside." },
+  { id: "bunuelos", nombre: "Buñuelos", grupo: "colombia", precio: 9, desbloqueo: { dia: 5 }, compra: 70, pasos: [{ t: "amasar" }, { t: "amasar" }, { t: "cocinar", como: "freir" }, { t: "emplatar" }], extras: ["azucar", "panela"], nota: "Golden cheese balls, like at Christmas." },
+  { id: "longjing", nombre: "Longjing tea", grupo: "chino", precio: 7, desbloqueo: { lugar: "longjing" }, pasos: [{ t: "cocinar", como: "calentar" }, { t: "verter", liquido: "te" }, { t: "emplatar" }], extras: [], nota: "Dragon Well green tea. Not too hot!" },
+  { id: "tanghulu", nombre: "Tanghulu", grupo: "chino", precio: 8, desbloqueo: { lugar: "hefang" }, pasos: [{ t: "elegir", frutas: true }, { t: "cocinar", como: "caramelo" }, { t: "emplatar" }], frutas: ["espino", "fresa", "uva", "mandarina"], extras: ["sesamo"], nota: "Candied fruit on a stick from Hefang Street." },
+  { id: "luna", nombre: "Mooncake", grupo: "chino", precio: 11, desbloqueo: { lugar: "santan" }, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "loto" }, { t: "estirar" }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Round like the moon over Three Pools." },
+  { id: "osmanto", nombre: "Osmanthus cake", grupo: "chino", precio: 10, desbloqueo: { lugar: "botanico" }, pasos: [{ t: "verter", liquido: "jarabe" }, { t: "elegir", flores: true }, { t: "cocinar", como: "enfriar" }, { t: "emplatar" }], extras: ["osmanto"], nota: "Hangzhou's sweet flower, in a jelly." },
+];
+export const recetaPorId = (id) => RECETAS.find((r) => r.id === id) || null;
+export const GRUPOS = [
+  ["dimsum", "DIM SUM"],
+  ["chino", "CHINESE"],
+  ["colombia", "COLOMBIA"],
+];
+
+/** Lo que se puede poner en el frente del local (arte de la tienda). */
+export const DECOR = [
+  { id: "farolitos", nombre: "Red lanterns", precio: 80, arte: "tienda/deco_farolitos.png" },
+  { id: "bonsai", nombre: "Bonsai", precio: 60, arte: "tienda/deco_bonsai.png" },
+  { id: "orquidea", nombre: "Orchid", precio: 70, arte: "tienda/deco_orquidea.png" },
+  { id: "banderin", nombre: "Bunting", precio: 90, arte: "tienda/deco_banderin.png" },
+  { id: "luces", nombre: "Fairy lights", precio: 100, arte: "tienda/deco_luces.png" },
+  { id: "saco", nombre: "Coffee sack", precio: 60, arte: "tienda/deco_saco.png" },
 ];
 
 /**
@@ -49,60 +102,104 @@ export const MEJORAS = [
  * Formato: { id, nombre, gracias: ["...", "..."] }
  */
 export const CLIENTES = [];
-/** Lo que dicen los amigos de Baozi cuando vienen a comer (pagan el doble). */
 export const GRACIAS_AMIGOS = {
   usagi: "Quiet, warm, perfect. Thank you.",
   mimi: "Earth food is the best food. Photo for my album!",
   ruchong: "It's… it's so good. Can I paint it?",
   chagee: "Bravo, chef! Bravo!",
 };
+const PIDE = ["Something warm, please.", "I'm sooo hungry!", "The usual, chef!", "Surprise me… no wait, this one!", "Can I have…", "Your best one, please."];
+const RESENAS = {
+  3: ["Best on Hefang!", "Perfect. Coming back tomorrow!", "Chef's kiss!", "I'd marry this dish."],
+  2: ["Really good!", "Yummy, thank you!", "Nice and warm."],
+  1: ["Hmm… it's okay.", "A little odd, but thanks!", "Interesting…"],
+};
 
-export const VAPOR_MS = 4000;
-const PACIENCIA_MS = 24000;
-const PROB_AMIGO = 0.15;
+/** Fama: cada 8 puntos, una estrella (de 1 a 5). */
+export const PUNTOS_POR_ESTRELLA = 8;
+export const famaDe = (puntos) => Math.max(1, Math.min(5, 1 + Math.floor(Math.max(0, puntos) / PUNTOS_POR_ESTRELLA)));
+export const clientesPorDia = (fama) => 2 + fama; // 3 a 7
+
+/** Lo que paga un plato: el precio segun la calidad, propina con 3 estrellas, el especial el doble. */
+export function pagoDe(receta, estrellas, especial = false) {
+  const base = Math.round(receta.precio * [0, 0.5, 0.8, 1][Math.max(1, Math.min(3, estrellas))]);
+  const propina = estrellas === 3 ? 3 : 0;
+  return (base + propina) * (especial ? 2 : 1);
+}
+/** Las estrellas del plato: el promedio de los pasos, redondeado. */
+export const estrellasDelPlato = (pasos) => (pasos.length ? Math.max(1, Math.min(3, Math.round(pasos.reduce((s, x) => s + x, 0) / pasos.length))) : 3);
 
 const claveDia = (t) => {
   const d = new Date(t);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+function semilla(str) {
+  let h = 2166136261;
+  for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
 
 export class Restaurante {
   constructor() {
-    this.turnos = 0; // cuantos turnos abrio en total
-    this.mejoras = new Set();
-    this.mejorTurno = 0; // lo maximo ganado en un turno
+    this.turnos = 0; // cuantos dias abrio el local en total
+    this.mejoras = new Set(); // (v54; ya no se usan: ver desdeObjeto)
+    this.reembolso = 0; // monedas a devolver por las mejoras de v54 (no se guarda)
+    this.mejorTurno = 0;
     this.hoy = { dia: null, turnos: 0, felices: 0, ganado: 0 };
+    this.fama = 0; // puntos de fama
+    this.compradas = new Set(); // recetas desbloqueadas comprandolas
+    this.libro = {}; // id -> { mejor, vendidos }
+    this.decor = new Set(); // lo que compro para el frente
+    this.ultimo = null; // { felices, ganado, resenas: [{ quien, texto, estrellas }] }
   }
 
-  tiene(m) {
-    return this.mejoras.has(m);
+  /** ¿Esta receta ya se puede cocinar? sellados: Set de lugares. */
+  desbloqueada(id, sellados = new Set()) {
+    const r = recetaPorId(id);
+    if (!r) return false;
+    if (!r.desbloqueo || this.compradas.has(id)) return true;
+    if (r.desbloqueo.dia) return this.turnos + 1 >= r.desbloqueo.dia;
+    if (r.desbloqueo.lugar) return sellados.has(r.desbloqueo.lugar);
+    return false;
   }
 
-  /** Lo que se puede cocinar, segun los lugares sellados (Set de ids). */
   menu(sellados = new Set()) {
-    return ORDEN_MENU.filter((id) => !PLATOS[id].lugar || sellados.has(PLATOS[id].lugar));
+    return RECETAS.filter((r) => this.desbloqueada(r.id, sellados)).map((r) => r.id);
   }
 
-  vaporeras() {
-    return this.tiene("vapor2") ? 2 : 1;
-  }
-  lugares() {
-    return this.tiene("lugar4") ? 4 : 3;
-  }
-  msVapor() {
-    return this.tiene("fuego") ? VAPOR_MS / 2 : VAPOR_MS;
-  }
-  msPaciencia() {
-    return this.tiene("faroles") ? PACIENCIA_MS * 1.3 : PACIENCIA_MS;
-  }
-
-  /** Compra una mejora con la tienda (sus monedas). true si se pudo. */
-  comprar(id, tienda) {
-    const m = MEJORAS.find((x) => x.id === id);
-    if (!m || this.tiene(id) || !tienda || tienda.monedas < m.precio) return false;
-    tienda.monedas -= m.precio;
-    this.mejoras.add(id);
+  comprarReceta(id, tienda) {
+    const r = recetaPorId(id);
+    if (!r || !r.compra || this.compradas.has(id) || !tienda || tienda.monedas < r.compra) return false;
+    tienda.monedas -= r.compra;
+    this.compradas.add(id);
     return true;
+  }
+
+  comprarDecor(id, tienda) {
+    const d = DECOR.find((x) => x.id === id);
+    if (!d || this.decor.has(id) || !tienda || tienda.monedas < d.precio) return false;
+    tienda.monedas -= d.precio;
+    this.decor.add(id);
+    return true;
+  }
+
+  estrellasFama() {
+    return famaDe(this.fama);
+  }
+
+  /** El especial del dia: una receta del menu, la misma todo el dia. */
+  especial(sellados = new Set(), ahora = Date.now()) {
+    const m = this.menu(sellados);
+    return m.length ? m[semilla(claveDia(ahora)) % m.length] : null;
+  }
+
+  /** Anota un plato servido: fama y libro. */
+  anotarPlato(id, estrellas) {
+    this.fama = Math.max(0, this.fama + (estrellas === 3 ? 2 : estrellas === 2 ? 1 : -1));
+    const l = this.libro[id] || { mejor: 0, vendidos: 0 };
+    l.mejor = Math.max(l.mejor, estrellas);
+    l.vendidos += 1;
+    this.libro[id] = l;
   }
 
   _alDia(ahora) {
@@ -110,17 +207,13 @@ export class Restaurante {
     if (this.hoy.dia !== d) this.hoy = { dia: d, turnos: 0, felices: 0, ganado: 0 };
   }
 
-  /** ¿El proximo turno de hoy paga todo? */
   primeroDeHoy(ahora = Date.now()) {
     this._alDia(ahora);
     return this.hoy.turnos === 0;
   }
 
-  /**
-   * Cierra un turno: cuanto se gano en el local (ganado) y cuanto de eso se
-   * cobra de verdad (el primero del dia, todo; los siguientes, un tercio).
-   */
-  cerrarTurno({ ganado = 0, felices = 0 } = {}, ahora = Date.now()) {
+  /** Cierra un dia del local: el primero de cada dia real paga todo; los siguientes, un tercio. */
+  cerrarTurno({ ganado = 0, felices = 0, resenas = [] } = {}, ahora = Date.now()) {
     this._alDia(ahora);
     const g = Math.max(0, Math.floor(ganado));
     const paga = this.hoy.turnos === 0 ? g : Math.floor(g / 3);
@@ -130,44 +223,56 @@ export class Restaurante {
     this.turnos += 1;
     const record = g > this.mejorTurno;
     if (record) this.mejorTurno = g;
+    this.ultimo = { felices, ganado: paga, resenas: resenas.slice(0, 3) };
     return { paga, record };
   }
 
   aObjeto() {
-    return { turnos: this.turnos, mejoras: [...this.mejoras], mejorTurno: this.mejorTurno, hoy: { ...this.hoy } };
+    return { turnos: this.turnos, mejoras: [...this.mejoras], mejorTurno: this.mejorTurno, hoy: { ...this.hoy }, fama: this.fama, compradas: [...this.compradas], libro: this.libro, decor: [...this.decor], ultimo: this.ultimo };
   }
 
   static desdeObjeto(d) {
     const r = new Restaurante();
     if (!d || typeof d !== "object") return r;
-    r.turnos = Number.isFinite(d.turnos) && d.turnos > 0 ? Math.floor(d.turnos) : 0;
-    r.mejoras = new Set((Array.isArray(d.mejoras) ? d.mejoras : []).filter((id) => MEJORAS.some((m) => m.id === id)));
-    r.mejorTurno = Number.isFinite(d.mejorTurno) && d.mejorTurno > 0 ? Math.floor(d.mejorTurno) : 0;
+    const ent = (x) => (Number.isFinite(x) && x > 0 ? Math.floor(x) : 0);
+    r.turnos = ent(d.turnos);
+    // v54 -> v55: las mejoras viejas ya no existen. Los farolitos pasan al frente
+    // y lo demas se devuelve en monedas (main.js lo suma a la tienda una vez).
+    const viejas = (Array.isArray(d.mejoras) ? d.mejoras : []).filter((x) => typeof x === "string");
+    r.reembolso = viejas.reduce((s, m) => s + ({ vapor2: 120, fuego: 150, lugar4: 200 }[m] || 0), 0);
+    r.mejorTurno = ent(d.mejorTurno);
     const h = d.hoy || {};
-    if (typeof h.dia === "string") r.hoy = { dia: h.dia, turnos: Math.max(0, Math.floor(h.turnos) || 0), felices: Math.max(0, Math.floor(h.felices) || 0), ganado: Math.max(0, Math.floor(h.ganado) || 0) };
+    if (typeof h.dia === "string") r.hoy = { dia: h.dia, turnos: ent(h.turnos), felices: ent(h.felices), ganado: ent(h.ganado) };
+    r.fama = ent(d.fama);
+    r.compradas = new Set((Array.isArray(d.compradas) ? d.compradas : []).filter((id) => recetaPorId(id)));
+    if (d.libro && typeof d.libro === "object") {
+      for (const [id, l] of Object.entries(d.libro)) if (recetaPorId(id) && l) r.libro[id] = { mejor: Math.max(0, Math.min(3, ent(l.mejor))), vendidos: ent(l.vendidos) };
+    }
+    r.decor = new Set((Array.isArray(d.decor) ? d.decor : []).filter((id) => DECOR.some((x) => x.id === id)));
+    if (viejas.includes("faroles")) r.decor.add("farolitos");
+    if (d.ultimo && typeof d.ultimo === "object") r.ultimo = { felices: ent(d.ultimo.felices), ganado: ent(d.ultimo.ganado), resenas: (Array.isArray(d.ultimo.resenas) ? d.ultimo.resenas : []).filter((x) => x && typeof x.texto === "string").slice(0, 3) };
     return r;
   }
 }
 
-/** ¿El plato (lista de ids) es exactamente el pedido (lista de ids)? */
-export function esElPedido(plato, pedido) {
-  if (plato.length !== pedido.length) return false;
-  const a = [...plato].sort().join();
-  const b = [...pedido].sort().join();
-  return a === b;
-}
-
-/** Un pedido al azar: 1 cosa (55 %) o 2, del menu. */
-export function pedidoAlAzar(menu, azar = Math.random) {
-  const una = () => menu[Math.floor(azar() * menu.length)];
-  return azar() < 0.55 ? [una()] : [una(), una()];
-}
-
-/** Lo que paga un pedido: los precios + propina (hasta 3 si no espero nada). */
-export function pagoDe(pedido, fraccionPaciencia, amigo = false) {
-  const base = pedido.reduce((s, id) => s + (PLATOS[id] ? PLATOS[id].precio : 0), 0);
-  const propina = Math.round(3 * Math.max(0, Math.min(1, fraccionPaciencia)));
-  return (base + propina) * (amigo ? 2 : 1);
+/** Arma los pedidos del dia. azar: para las pruebas. */
+export function armarDia(menu, { fama = 1, especial = null, amigos = [], azar = Math.random } = {}) {
+  const n = clientesPorDia(fama);
+  const pool = [...amigos.map((a) => ({ ...a, amigo: true })), ...CLIENTES.map((c) => ({ ...c, amigo: false }))];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const quien = pool.length ? pool[Math.floor(azar() * pool.length)] : { id: "usagi", nombre: "Usagi", amigo: true };
+    const id = especial && menu.includes(especial) && azar() < 0.3 ? especial : menu[Math.floor(azar() * menu.length)];
+    const r = recetaPorId(id);
+    const nExtras = r.extras.length ? Math.min(r.extras.length, Math.floor(azar() * Math.min(3, fama + 1))) : 0;
+    const extras = [...r.extras].sort(() => azar() - 0.5).slice(0, nExtras);
+    const extra2 = {};
+    if (r.toppings) extra2.toppings = [...r.toppings].sort(() => azar() - 0.5).slice(0, 1 + Math.floor(azar() * 2));
+    if (r.frutas) extra2.frutas = [...r.frutas].sort(() => azar() - 0.5).slice(0, 2);
+    if (r.id === "osmanto") extra2.flores = ["osmanto"];
+    out.push({ quien, receta: id, extras, ...extra2, frase: PIDE[Math.floor(azar() * PIDE.length)] });
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------
@@ -175,405 +280,388 @@ export function pagoDe(pedido, fraccionPaciencia, amigo = false) {
 // ------------------------------------------------------------------
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const estrellas = (n, de = 3) => "★".repeat(n) + "☆".repeat(Math.max(0, de - n));
+const NOMBRE_PASO = { amasar: "KNEAD", estirar: "ROLL", rellenar: "FILL", plegar: "FOLD", verter: "POUR", elegir: "PICK", emplatar: "PLATE" };
+const nombrePaso = (p) => (p.t === "cocinar" ? (COCCIONES[p.como] || COCCIONES.vapor).verbo : NOMBRE_PASO[p.t] || p.t.toUpperCase());
+
+function textoPaso(p) {
+  if (p.t === "amasar") return "Knead the dough";
+  if (p.t === "estirar") return "Roll it out";
+  if (p.t === "rellenar") return `Fill: ${(RELLENOS[p.relleno] || RELLENOS.carne).nombre}`;
+  if (p.t === "plegar") return p.forma === "media" ? `Fold in a half moon (${p.n} pleats)` : `Pleat it closed (${p.n} pleats)`;
+  if (p.t === "verter") return `Pour the ${(LIQUIDOS[p.liquido] || LIQUIDOS.agua).nombre}`;
+  if (p.t === "cocinar") return { vapor: "Steam until fluffy", hervir: "Boil until they float", plancha: "Grill both sides", freir: "Fry until golden", horno: "Bake in the oven", caramelo: "Dip in hot sugar", calentar: "Heat the water", enfriar: "Chill until set" }[p.como] || "Cook it";
+  if (p.t === "elegir") return p.topping ? "Add the toppings" : p.frutas ? "Skewer the fruit" : p.flores ? "Sprinkle the flowers" : "Pick";
+  if (p.t === "emplatar") return "Plate it";
+  return p.t;
+}
 
 /**
  * opts:
  *   arte(ruta), sprite(ojo, boca), cambiarCara(el, ojo, boca), sonar(n), vibrar(ms)
- *   reg: Restaurante, tienda: Tienda, sellados: Set, amigos: [{ id, nombre }] (los que ya conocio)
- *   nombre: el de la mascota ("Baozi" / "Mantou")
- *   guardar(), alSalir(), alCerrarTurno({ paga, felices, record, sobras })
+ *   reg: Restaurante, tienda: Tienda, sellados: Set, nombreLugar(id),
+ *   amigos: [{ id, nombre, conocido }], nombre: el de la mascota
+ *   guardar(), alSalir(), alCerrarTurno({ paga, felices, record, sobras, ganado })
  */
 export function abrirRestaurante(contenedor, opts) {
   const { arte, sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, reg, tienda, sellados = new Set(), amigos = [], nombre = "Baozi", guardar = () => {}, alSalir = () => {}, alCerrarTurno = () => {} } = opts;
-  let turno = null; // el turno en curso (o null: la pantalla del local)
+  const nombreLugar = opts.nombreLugar || ((id) => id);
   let vivo = true;
-  const imgPlato = (id, cl = "") => `<img class="rest-comida ${cl}" src="${arte(`restaurante/plato_${id}.png`)}" alt="${esc(PLATOS[id].nombre)}" draggable="false" />`;
+  let dia = null; // el dia en curso: { pedidos, i, ganado, felices, resenas, especial }
+  let paso = null; // el paso en curso (cocina.js)
+  let pausa = null;
+  const imgPlato = (id, cl = "") => `<img class="rest-comida ${cl}" src="${arte(`restaurante/plato_${id}.png`)}" alt="${esc((recetaPorId(id) || {}).nombre || id)}" draggable="false" />`;
+  const moneda = () => `<img class="rest-moneda" src="${arte("tienda/moneda.png")}" alt="" draggable="false" />`;
+  const hud = (titulo) => `
+    <div class="rest-hud">
+      <span class="juego-chip rest-hud-titulo">${esc(titulo)}</span>
+      <span class="rest-esp"></span>
+      <span class="juego-chip">${moneda()}<b id="rest-monedas">${tienda.monedas}</b></span>
+      <span class="juego-chip rest-fama" title="Fame">${estrellas(reg.estrellasFama(), 5)}</span>
+    </div>`;
+  const quitarPausa = () => {
+    if (pausa) pausa.destruir();
+    pausa = null;
+  };
 
-  // ---------------- la pantalla del local ----------------
+  /**
+   * El frente del local: la planta baja de nuestra casa (restaurante/fachada.png,
+   * 240x112). El cliente se asoma por la ventana del mostrador; el letrero y los
+   * adornos van encima, en % de la imagen (ver tools/v56_arte.py: VENTANA, LETRERO).
+   */
+  function frente(cliente = "") {
+    const d = (id) => (reg.decor.has(id) ? `<img class="rest-deco rest-deco-${id}" src="${arte(DECOR.find((x) => x.id === id).arte)}" alt="" draggable="false" />` : "");
+    return `
+      <div class="rest-frente">
+        <div class="rest-escena">
+          <img class="rest-fachada-img" src="${arte("restaurante/fachada.png")}" alt="" draggable="false" />
+          <div class="rest-ventana">${cliente}</div>
+          ${d("banderin")}${d("farolitos")}${d("luces")}${d("bonsai")}${d("orquidea")}${d("saco")}
+          <div class="rest-letrero"><span lang="zh-CN">包子</span> ${esc(nombre).toUpperCase()}'S</div>
+        </div>
+      </div>`;
+  }
+
+  // ---------------- el local ----------------
   function local(mensaje = "") {
-    if (turno) terminarSinCerrar();
+    quitarPausa();
+    if (paso) paso.destruir();
+    paso = null;
+    dia = null;
     const menu = reg.menu(sellados);
-    const h = reg.primeroDeHoy() ? null : reg.hoy;
-    const faltan = ORDEN_MENU.filter((id) => !menu.includes(id));
+    const esp = reg.especial(sellados);
+    const u = reg.ultimo;
+    const proxFama = PUNTOS_POR_ESTRELLA - (reg.fama % PUNTOS_POR_ESTRELLA);
     contenedor.innerHTML = `
       <div class="pantalla-rest local">
+        ${frente(`<div class="rest-baozi-ventana">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>`)}
         ${HTML_VOLVER}
-        <div class="rest-titulo"><span>${esc(nombre).toUpperCase()}'S DUMPLING SHOP</span><span class="rest-monedas"><img src="${arte("tienda/moneda.png")}" alt="" draggable="false" /><b id="rest-monedas">${tienda.monedas}</b></span></div>
-        <div class="rest-paneles">
-          <div class="papel rest-panel">
-            <div class="rest-sub">TODAY</div>
-            <div class="rest-hoy">${
-              h
-                ? `${h.felices} happy customer${h.felices === 1 ? "" : "s"} · +${h.ganado} coins<br><small>Next shift pays a third. The first one of each day pays it all.</small>`
-                : `The shop is ready.${reg.turnos ? "" : `<br><small>Customers come with an order. Steam the buns, pour the tea, and tap them to serve.</small>`}`
-            }</div>
-            ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
-            <div class="rest-sub">MENU</div>
-            <div class="rest-menu">${ORDEN_MENU.map((id) => `<span class="rest-ficha ${menu.includes(id) ? "" : "bloq"}" title="${esc(PLATOS[id].nombre)}">${imgPlato(id)}</span>`).join("")}</div>
-            ${faltan.length ? `<div class="rest-nota">${faltan.map((id) => `${esc(PLATOS[id].nombre)}: stamp ${esc(opts.nombreLugar ? opts.nombreLugar(PLATOS[id].lugar) : PLATOS[id].lugar)}`).join(" · ")}</div>` : ""}
-            <button class="boton rest-abrir" id="btn-rest-abrir" type="button">Open the shop ♥</button>
-          </div>
-          <div class="papel rest-panel">
-            <div class="rest-sub">IMPROVE THE SHOP</div>
-            ${MEJORAS.map(
-              (m) => `
-              <div class="rest-mejora">
-                <div><b>${esc(m.nombre)}</b><small>${esc(m.texto)}</small></div>
-                ${
-                  reg.tiene(m.id)
-                    ? `<span class="rest-tuya">✓ YOURS</span>`
-                    : `<button class="boton boton-fantasma rest-comprar" type="button" data-mejora="${m.id}" ${tienda.monedas < m.precio ? "disabled" : ""}><img src="${arte("tienda/moneda.png")}" alt="" draggable="false" />${m.precio}</button>`
-                }
-              </div>`,
-            ).join("")}
+        ${hud(`${nombre.toUpperCase()}'S DUMPLING SHOP · DAY ${reg.turnos + 1}`)}
+        <div class="rest-col izq">
+          ${esp ? `<div class="papel rest-card"><div class="rest-sub">TODAY'S SPECIAL</div><div class="rest-especial">${imgPlato(esp)}<span>${esc(recetaPorId(esp).nombre)}<b>pays ×2</b></span></div></div>` : ""}
+          <div class="papel rest-card"><div class="rest-sub">${u ? "LAST TIME" : "WELCOME"}</div>${
+            u
+              ? `<div>${u.felices} happy customer${u.felices === 1 ? "" : "s"} · +${u.ganado}</div>${u.resenas.length ? `<small>“${esc(u.resenas[0].texto)}” — ${esc(u.resenas[0].quien)}</small>` : ""}`
+              : `<small>Friends come with a ticket. Cook each dish step by step, at your own pace. Better dishes, happier customers.</small>`
+          }</div>
+        </div>
+        <div class="rest-col der">
+          <div class="papel rest-card"><div class="rest-sub">FAME ${estrellas(reg.estrellasFama(), 5)}</div><small>${reg.estrellasFama() >= 5 ? "The most famous stall on Hefang!" : `${proxFama} more point${proxFama === 1 ? "" : "s"} for the next star · more customers, bigger orders`}</small></div>
+          ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
+          <button class="boton rest-abrir" id="btn-rest-abrir" type="button">Open the shop ♥</button>
+          <div class="rest-fila-botones">
+            <button class="boton boton-fantasma" id="btn-rest-libro" type="button">Recipes ${menu.length}/${RECETAS.length}</button>
+            <button class="boton boton-fantasma" id="btn-rest-decor" type="button">Decorate</button>
           </div>
         </div>
       </div>`;
-    const area = contenedor.querySelector(".pantalla-rest");
-    blindarToques(area);
-    cablearVolver(contenedor, () => {
-      if (vivo) alSalir();
-    });
+    blindarToques(contenedor.querySelector(".pantalla-rest"));
+    cablearVolver(contenedor, () => vivo && alSalir());
     contenedor.querySelector("#btn-rest-abrir").addEventListener("click", () => {
       sonar("tocar");
-      empezar();
+      abrirDia();
     });
-    for (const b of contenedor.querySelectorAll("[data-mejora]")) {
+    contenedor.querySelector("#btn-rest-libro").addEventListener("click", () => {
+      sonar("tocar");
+      libro();
+    });
+    contenedor.querySelector("#btn-rest-decor").addEventListener("click", () => {
+      sonar("tocar");
+      decorar();
+    });
+  }
+
+  // ---------------- el libro de recetas ----------------
+  function libro(sel = null, mensaje = "") {
+    const menu = reg.menu(sellados);
+    sel = sel || menu[0] || RECETAS[0].id;
+    const r = recetaPorId(sel);
+    const tengo = menu.includes(sel);
+    const l = reg.libro[sel] || { mejor: 0, vendidos: 0 };
+    const amigo = r.amigo && amigos.find((a) => a.id === r.amigo);
+    const bloqueo = !tengo
+      ? r.desbloqueo.dia
+        ? `Opens on shop day ${r.desbloqueo.dia}${r.compra ? ` · or learn it now` : ""}`
+        : `Stamp ${esc(nombreLugar(r.desbloqueo.lugar))} to learn it`
+      : "";
+    contenedor.innerHTML = `
+      <div class="pantalla-rest libro">
+        ${HTML_VOLVER}
+        ${hud(`RECIPE BOOK · ${menu.length} OF ${RECETAS.length}`)}
+        <div class="rest-libro">
+          <div class="rest-hoja">
+            ${GRUPOS.map(
+              ([g, t]) => `<div class="rest-sub">${t}</div><div class="rest-grilla">${RECETAS.filter((x) => x.grupo === g)
+                .map((x) => {
+                  const ok = menu.includes(x.id);
+                  const m = (reg.libro[x.id] || {}).mejor || 0;
+                  return `<button type="button" class="rest-rec ${ok ? "" : "no"} ${x.id === sel ? "sel" : ""}" data-receta="${x.id}">${imgPlato(x.id)}<span>${esc(x.nombre)}</span><small>${ok ? estrellas(m) : "?"}</small></button>`;
+                })
+                .join("")}</div>`,
+            ).join("")}
+          </div>
+          <div class="rest-hoja detalle">
+            <div class="rest-receta-cabeza">${imgPlato(sel, tengo ? "" : "no")}<div><b>${esc(r.nombre)}</b><span class="rest-estr">${tengo ? estrellas(l.mejor) : ""}</span><small>${tengo ? (l.vendidos ? `Best: ${l.mejor} star${l.mejor === 1 ? "" : "s"} · served ${l.vendidos}` : "Not cooked yet") : bloqueo}</small></div></div>
+            <ol class="rest-pasos-lista">${r.pasos.map((p) => `<li>${esc(textoPaso(p))}</li>`).join("")}</ol>
+            <div class="rest-nota">${amigo ? `<i>${esc(amigo.nombre)}: “${esc(r.nota)}”</i>` : esc(r.nota)}</div>
+            ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
+            ${!tengo && r.compra ? `<button class="boton rest-comprar-receta" type="button" data-comprar-receta="${r.id}" ${tienda.monedas < r.compra ? "disabled" : ""}>${moneda()} ${r.compra} · Learn it</button>` : ""}
+          </div>
+        </div>
+      </div>`;
+    blindarToques(contenedor.querySelector(".pantalla-rest"));
+    cablearVolver(contenedor, () => local());
+    for (const b of contenedor.querySelectorAll("[data-receta]"))
       b.addEventListener("click", () => {
-        if (reg.comprar(b.dataset.mejora, tienda)) {
+        sonar("tocar");
+        libro(b.dataset.receta);
+      });
+    const c = contenedor.querySelector("[data-comprar-receta]");
+    if (c)
+      c.addEventListener("click", () => {
+        if (reg.comprarReceta(c.dataset.comprarReceta, tienda)) {
+          sonar("hallazgo");
+          guardar();
+          libro(sel, "New recipe! ♥");
+        } else sonar("no");
+      });
+  }
+
+  // ---------------- decorar ----------------
+  function decorar(mensaje = "") {
+    contenedor.innerHTML = `
+      <div class="pantalla-rest local decor">
+        ${frente()}
+        ${HTML_VOLVER}
+        ${hud("DECORATE THE SHOP")}
+        <div class="rest-col der">
+          <div class="papel rest-card rest-decor-lista">
+            ${DECOR.map(
+              (d) => `<div class="rest-mejora"><img src="${arte(d.arte)}" alt="" draggable="false" /><b>${esc(d.nombre)}</b>${
+                reg.decor.has(d.id) ? `<span class="rest-tuya">✓ YOURS</span>` : `<button class="boton boton-fantasma" type="button" data-decor="${d.id}" ${tienda.monedas < d.precio ? "disabled" : ""}>${moneda()}${d.precio}</button>`
+              }</div>`,
+            ).join("")}
+          </div>
+          ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
+        </div>
+      </div>`;
+    blindarToques(contenedor.querySelector(".pantalla-rest"));
+    cablearVolver(contenedor, () => local());
+    for (const b of contenedor.querySelectorAll("[data-decor]"))
+      b.addEventListener("click", () => {
+        if (reg.comprarDecor(b.dataset.decor, tienda)) {
           sonar("hallazgo");
           vibrar(25);
           guardar();
-          local(`${MEJORAS.find((m) => m.id === b.dataset.mejora).nombre}: done!`);
+          decorar(`${DECOR.find((x) => x.id === b.dataset.decor).nombre}: up!`);
         } else sonar("no");
       });
-    }
   }
 
-  // ---------------- el turno ----------------
-  function empezar() {
+  // ---------------- el dia ----------------
+  function abrirDia() {
     const menu = reg.menu(sellados);
+    const esp = reg.especial(sellados);
+    dia = { pedidos: armarDia(menu, { fama: reg.estrellasFama(), especial: esp, amigos }), i: 0, ganado: 0, felices: 0, resenas: [], especial: esp };
+    cliente();
+  }
+
+  /** Llega el cliente: su ticket, y a cocinar. */
+  function cliente() {
+    const p = dia.pedidos[dia.i];
+    const r = recetaPorId(p.receta);
+    p.notas = [];
+    p.k = 0;
     contenedor.innerHTML = `
-      <div class="pantalla-rest turno">
-        <img class="rest-calle" src="${arte("restaurante/calle.png")}" alt="" draggable="false" />
+      <div class="pantalla-rest cocina">
         ${HTML_VOLVER}
-        <div class="rest-hud">
-          <span class="juego-chip"><img src="${arte("tienda/moneda.png")}" alt="" draggable="false" /><b id="rest-ganado">0</b></span>
-          <span class="juego-chip" id="rest-felices">♥ 0</span>
-          <span class="rest-esp"></span>
-          <span class="juego-chip" id="rest-reloj">1:30</span>
+        ${hud(`DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
+        <div class="rest-pasos" id="rest-pasos">${r.pasos.map((x, k) => `<span class="rest-paso" data-k="${k}">${nombrePaso(x)}</span>`).join("")}</div>
+        <div class="rest-ticket">
+          <div class="rest-ticket-quien"><img src="${arte(p.quien.amigo ? `npcs/npc_${p.quien.id}.png` : `restaurante/cliente_${p.quien.id}.png`)}" alt="" draggable="false" /><span>${esc(p.quien.nombre)}<small>“${esc(p.frase)}”</small></span></div>
+          <div class="rest-ticket-plato">${imgPlato(r.id)}<b>${esc(r.nombre)}</b>${p.receta === dia.especial ? `<span class="rest-tag">SPECIAL ×2</span>` : ""}</div>
+          <div class="rest-ticket-extras">${[...(p.toppings || []), ...(p.frutas || []), ...p.extras].map((x) => `<span>+ ${esc(EXTRAS[x].nombre)}</span>`).join("") || `<span class="sin">plain, please</span>`}</div>
         </div>
-        <div class="rest-clientes" id="rest-clientes" style="--lugares:${reg.lugares()}">
-          ${Array.from({ length: reg.lugares() }, (_, i) => `<button class="rest-lugar vacio" type="button" data-lugar="${i}"></button>`).join("")}
+        <div class="rest-tabla" id="rest-tabla"></div>
+        <div class="rest-lado">
+          <div class="papel rest-card"><div class="rest-sub">THIS DISH</div><span class="rest-estr" id="rest-estr-plato">☆☆☆</span><small id="rest-notas-pasos"></small></div>
+          <button class="boton rest-accion oculto" id="rest-accion" type="button"></button>
+          <div class="rest-baozi" id="rest-baozi">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
         </div>
-        <img class="rest-mostrador" src="${arte("restaurante/mostrador.png")}" alt="" draggable="false" />
-        <div class="rest-baozi" id="rest-baozi">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
-        <div class="rest-barra">
-          <div class="rest-vaporeras">
-            ${Array.from({ length: reg.vaporeras() }, (_, i) => `<button class="rest-vapor" type="button" data-vapor="${i}"><span class="rest-vapor-dentro"></span><span class="rest-vapor-t"><i></i></span><span class="rest-vapor-listo">READY!</span></button>`).join("")}
-          </div>
-          <div class="rest-plato-caja">
-            <button class="rest-plato" id="rest-plato" type="button" aria-label="Your plate"></button>
-            <button class="rest-tacho" id="rest-tacho" type="button" aria-label="Empty the plate">✕</button>
-          </div>
-          <div class="rest-ings">
-            ${menu.map((id) => `<button class="rest-ing" type="button" data-ing="${id}">${imgPlato(id)}<small>${esc(PLATOS[id].nombre).toUpperCase()}</small></button>`).join("")}
-          </div>
-        </div>
-        <div class="pista-minijuego" id="rest-pista">Tap the food · ${PLATOS.bao.nombre} and ${PLATOS.jiaozi.nombre} go in the steamer</div>
-        <div class="rest-cartel oculto" id="rest-cartel"></div>
+        <div class="rest-ayuda" id="rest-ayuda"></div>
       </div>`;
-    const $ = (id) => contenedor.querySelector(`#${id}`);
     const area = contenedor.querySelector(".pantalla-rest");
     blindarToques(area);
-    const pausa = crearPausa(area, { activa: () => !!turno && turno.estado === "abierto" });
-    turno = {
-      estado: "abierto",
-      menu,
-      t0: pausa.ahora(),
-      lugares: Array.from({ length: reg.lugares() }, () => null),
-      vapores: Array.from({ length: reg.vaporeras() }, () => null), // { id, desde }
-      plato: [],
-      ganado: 0,
-      felices: 0,
-      idos: 0,
-      proximo: 600,
-      pausa,
-      raf: 0,
-      caraHasta: 0,
-    };
-    cablearVolver(contenedor, () => {
-      if (!turno) return;
-      if (turno.ganado || turno.felices) cerrar();
-      else local();
-    });
+    quitarPausa();
+    pausa = crearPausa(area, { activa: () => false }); // la pantalla prendida mientras cocina
+    cablearVolver(contenedor, () => terminarDia());
+    sonar("tocar");
+    siguientePaso();
+  }
 
-    const cara = (ojo, boca, ms = 900) => {
-      const el = contenedor.querySelector("#rest-baozi .sprite-cara");
-      if (el) cambiarCara(el, ojo, boca);
-      turno.caraHasta = pausa.ahora() + ms;
-    };
-    const cartel = (t, ms = 1400) => {
-      const c = $("rest-cartel");
-      if (!c) return;
-      c.textContent = t;
-      c.classList.remove("oculto");
-      clearTimeout(cartel.tm);
-      cartel.tm = setTimeout(() => c && c.classList.add("oculto"), ms);
-    };
+  function cara(ojo, boca, ms = 900) {
+    const el = contenedor.querySelector("#rest-baozi .sprite-cara");
+    if (!el) return;
+    cambiarCara(el, ojo, boca);
+    clearTimeout(cara.t);
+    cara.t = setTimeout(() => el.isConnected && cambiarCara(el, "ojo_base_energia_alta.png", "boca_base_feliz.png"), ms);
+  }
 
-    function dibujarPlato() {
-      $("rest-plato").innerHTML = turno.plato.map((id) => imgPlato(id)).join("");
-      $("rest-plato").classList.toggle("lleno", turno.plato.length >= 3);
+  function siguientePaso() {
+    const p = dia.pedidos[dia.i];
+    const r = recetaPorId(p.receta);
+    const $ = (id) => contenedor.querySelector(`#${id}`);
+    for (const s of contenedor.querySelectorAll(".rest-paso")) {
+      const k = Number(s.dataset.k);
+      s.className = `rest-paso ${k < p.k ? "hecho" : k === p.k ? "ahora" : ""}`;
+      if (k < p.k) s.textContent = `✓ ${nombrePaso(r.pasos[k])}`;
     }
-
-    function ponerEnPlato(id) {
-      if (turno.plato.length >= 3) {
-        sonar("no");
-        cartel("The plate is full!");
-        return false;
-      }
-      turno.plato.push(id);
-      dibujarPlato();
-      return true;
+    if (p.k >= r.pasos.length) {
+      servir();
+      return;
     }
-
-    // la comida
-    for (const b of contenedor.querySelectorAll("[data-ing]")) {
-      b.addEventListener("click", () => {
-        if (!turno || turno.estado !== "abierto") return;
-        const id = b.dataset.ing;
-        if (PLATOS[id].vapor) {
-          const i = turno.vapores.findIndex((v) => !v);
-          if (i < 0) {
-            sonar("no");
-            cartel(turno.vapores.length > 1 ? "Both steamers are busy!" : "The steamer is busy!");
+    let def = r.pasos[p.k];
+    if (def.t === "emplatar") def = { t: "elegir", opciones: r.extras.map((x) => ({ id: x, ...EXTRAS[x] })), pedido: p.extras };
+    else if (def.t === "elegir") {
+      const lista = def.topping ? r.toppings : def.frutas ? r.frutas : def.flores ? ["osmanto"] : [];
+      const pedido = def.topping ? p.toppings : def.frutas ? p.frutas : def.flores ? p.flores : [];
+      def = { t: "elegir", opciones: lista.map((x) => ({ id: x, ...EXTRAS[x] })), pedido, ayuda: def.frutas ? "Skewer the fruit on the ticket, then tap Ready" : def.flores ? "Sprinkle the osmanthus flowers, then tap Ready" : "Add the toppings on the ticket, then tap Ready" };
+    }
+    const accion = $("rest-accion");
+    paso = crearPaso(
+      $("rest-tabla"),
+      def,
+      {
+        sonar,
+        vibrar,
+        plato: arte(`restaurante/plato_${r.id}.png`),
+        ayuda: (t) => {
+          const a = $("rest-ayuda");
+          if (a) a.textContent = t;
+        },
+        boton: (texto, fn) => {
+          if (!accion) return;
+          if (!texto) {
+            accion.classList.add("oculto");
+            accion.onclick = null;
             return;
           }
-          turno.vapores[i] = { id, desde: pausa.ahora() };
-          const v = contenedor.querySelector(`[data-vapor="${i}"]`);
-          v.querySelector(".rest-vapor-dentro").innerHTML = imgPlato(id);
-          v.classList.add("cocinando");
-          sonar("tocar");
-        } else if (ponerEnPlato(id)) sonar("tocar");
-      });
-    }
-    // las vaporeras
-    for (const v of contenedor.querySelectorAll("[data-vapor]")) {
-      v.addEventListener("click", () => {
-        if (!turno || turno.estado !== "abierto") return;
-        const i = Number(v.dataset.vapor);
-        const x = turno.vapores[i];
-        if (!x) return;
-        if (pausa.ahora() - x.desde < reg.msVapor()) {
-          sonar("no");
-          cartel("Not ready yet…", 900);
-          return;
-        }
-        if (!ponerEnPlato(x.id)) return;
-        turno.vapores[i] = null;
-        v.classList.remove("cocinando", "listo");
-        v.querySelector(".rest-vapor-dentro").innerHTML = "";
-        sonar("tocar");
-      });
-    }
-    $("rest-tacho").addEventListener("click", () => {
-      if (!turno || !turno.plato.length) return;
-      turno.plato = [];
-      dibujarPlato();
-      sonar("mimo");
-    });
-    // los clientes
-    for (const b of contenedor.querySelectorAll("[data-lugar]")) {
-      b.addEventListener("click", () => {
-        if (!turno || turno.estado !== "abierto") return;
-        const i = Number(b.dataset.lugar);
-        const c = turno.lugares[i];
-        if (!c || c.yendose) return;
-        if (!turno.plato.length) {
-          cartel("Put their order on the plate first", 1200);
-          return;
-        }
-        if (!esElPedido(turno.plato, c.pedido)) {
-          sonar("no");
-          vibrar(30);
-          b.classList.remove("no");
-          void b.offsetWidth;
-          b.classList.add("no");
-          decirCliente(i, "That's not my order!");
-          return;
-        }
-        const resto = 1 - (pausa.ahora() - c.desde) / c.paciencia;
-        const pago = pagoDe(c.pedido, resto, c.amigo);
-        turno.ganado += pago;
-        turno.felices += 1;
-        turno.plato = [];
-        dibujarPlato();
-        $("rest-ganado").textContent = turno.ganado;
-        $("rest-felices").textContent = `♥ ${turno.felices}`;
-        sonar(c.amigo || pago >= 12 ? "hallazgo" : "hito");
-        vibrar(20);
-        cara("ojo_especial_euforico.png", "boca_especial_euforico.png");
-        decirCliente(i, c.gracias, `+${pago}`);
-        c.yendose = pausa.ahora();
-        b.classList.add("feliz");
-      });
-    }
-
-    function decirCliente(i, texto, monedas = "") {
-      const b = contenedor.querySelector(`[data-lugar="${i}"]`);
-      if (!b) return;
-      const g = b.querySelector(".rest-dice");
-      if (!g) return;
-      g.innerHTML = `${esc(texto)}${monedas ? ` <b>${esc(monedas)}</b>` : ""}`;
-      g.classList.remove("oculto");
-      clearTimeout(g.tm);
-      g.tm = setTimeout(() => g.classList.add("oculto"), 1500);
-    }
-
-    function llegaAlguien(ahora) {
-      const libres = turno.lugares.map((c, i) => (c ? -1 : i)).filter((i) => i >= 0);
-      if (!libres.length) return;
-      const i = libres[Math.floor(Math.random() * libres.length)];
-      const enMesa = new Set(turno.lugares.filter(Boolean).map((c) => c.quien));
-      const amigosLibres = amigos.filter((a) => !enMesa.has(a.id));
-      let c;
-      const libresC = CLIENTES.filter((x) => !enMesa.has(x.id));
-      if (amigosLibres.length && (!libresC.length || Math.random() < PROB_AMIGO)) {
-        // los amigos que Baozi ya conoce pagan el doble y llevan su cartelito
-        const a = amigosLibres[Math.floor(Math.random() * amigosLibres.length)];
-        c = { quien: a.id, nombre: a.nombre, src: arte(`npcs/npc_${a.id}.png`), srcFeliz: arte(`npcs/npc_${a.id}_saludo.png`), amigo: !!a.conocido, gracias: GRACIAS_AMIGOS[a.id] || "Thank you, chef!" };
-      } else if (libresC.length) {
-        const x = libresC[Math.floor(Math.random() * libresC.length)];
-        c = { quien: x.id, nombre: x.nombre, src: arte(`restaurante/cliente_${x.id}.png`), srcFeliz: arte(`restaurante/cliente_${x.id}_saludo.png`), amigo: false, gracias: x.gracias[Math.floor(Math.random() * x.gracias.length)] };
-      }
-      if (!c) return; // (todos en la mesa)
-      c.pedido = pedidoAlAzar(turno.menu);
-      c.desde = ahora;
-      c.paciencia = reg.msPaciencia() * (c.pedido.length > 1 ? 1.25 : 1);
-      turno.lugares[i] = c;
-      const b = contenedor.querySelector(`[data-lugar="${i}"]`);
-      b.classList.remove("vacio", "feliz", "enojado", "no");
-      b.innerHTML = `
-        <img class="rest-cliente" src="${c.src}" alt="${esc(c.nombre)}" draggable="false" />
-        <span class="rest-pedido">${c.pedido.map((id) => imgPlato(id)).join("")}</span>
-        <span class="rest-paciencia"><i></i></span>
-        ${c.amigo ? `<span class="rest-amigo">♥ ${esc(c.nombre)}</span>` : ""}
-        <span class="rest-dice oculto"></span>`;
-      b.setAttribute("aria-label", `${c.nombre}: ${c.pedido.map((id) => PLATOS[id].nombre).join(" and ")}`);
-      sonar("tocar");
-    }
-
-    function vaciarLugar(i) {
-      turno.lugares[i] = null;
-      const b = contenedor.querySelector(`[data-lugar="${i}"]`);
-      if (!b) return;
-      b.classList.add("vacio");
-      b.classList.remove("feliz", "enojado", "no");
-      b.innerHTML = "";
-      b.removeAttribute("aria-label");
-    }
-
-    function cuadro() {
-      if (!vivo || !turno || turno.estado !== "abierto") return;
-      turno.raf = requestAnimationFrame(cuadro);
-      if (pausa.pausado()) return;
-      const ahora = pausa.ahora();
-      const t = ahora - turno.t0;
-      const resta = Math.max(0, TURNO_MS - t);
-      const s = Math.ceil(resta / 1000);
-      const reloj = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-      const r = $("rest-reloj");
-      if (r && r.textContent !== reloj) r.textContent = reloj;
-      if (r) r.classList.toggle("apurado", s <= 10);
-      // llegan clientes (no en los ultimos 8 s)
-      if (t >= turno.proximo && resta > 8000) {
-        llegaAlguien(ahora);
-        turno.proximo = t + 4200 + Math.random() * 3600;
-      }
-      // la paciencia
-      turno.lugares.forEach((c, i) => {
-        if (!c) return;
-        const b = contenedor.querySelector(`[data-lugar="${i}"]`);
-        if (c.yendose) {
-          if (ahora - c.yendose > 1300) vaciarLugar(i);
-          return;
-        }
-        const f = Math.max(0, 1 - (ahora - c.desde) / c.paciencia);
-        const bar = b && b.querySelector(".rest-paciencia i");
-        if (bar) {
-          bar.style.width = `${Math.round(f * 100)}%`;
-          bar.className = f > 0.5 ? "" : f > 0.25 ? "medio" : "poco";
-        }
-        if (f <= 0) {
-          turno.idos += 1;
-          c.yendose = ahora;
-          b.classList.add("enojado");
-          decirCliente(i, "I'll come back later…");
-          sonar("mimo");
-          cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png");
-        }
-      });
-      // las vaporeras
-      turno.vapores.forEach((x, i) => {
-        const v = contenedor.querySelector(`[data-vapor="${i}"]`);
-        if (!v) return;
-        if (!x) return;
-        const f = Math.min(1, (ahora - x.desde) / reg.msVapor());
-        const bar = v.querySelector(".rest-vapor-t i");
-        if (bar) bar.style.width = `${Math.round(f * 100)}%`;
-        if (f >= 1 && !v.classList.contains("listo")) {
-          v.classList.add("listo");
-          sonar("hito");
-        }
-      });
-      if (turno.caraHasta && ahora > turno.caraHasta) {
-        turno.caraHasta = 0;
-        const el = contenedor.querySelector("#rest-baozi .sprite-cara");
-        if (el) cambiarCara(el, "ojo_base_energia_alta.png", "boca_base_feliz.png");
-      }
-      if (resta <= 0) cerrar();
-    }
-    turno.raf = requestAnimationFrame(cuadro);
-    setTimeout(() => {
-      const p = $("rest-pista");
-      if (p) p.classList.add("oculto");
-    }, 6000);
+          accion.textContent = texto;
+          accion.classList.remove("oculto");
+          accion.onclick = (e) => {
+            e.stopPropagation();
+            fn();
+          };
+        },
+      },
+      (e) => {
+        if (!vivo || !dia) return;
+        p.notas.push(e);
+        p.k += 1;
+        const prom = estrellasDelPlato(p.notas);
+        const pe = $("rest-estr-plato");
+        if (pe) pe.textContent = estrellas(prom);
+        const pn = $("rest-notas-pasos");
+        if (pn) pn.textContent = p.notas.map((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${estrellas(x)}`).join(" · ");
+        if (e === 3) cara("ojo_especial_euforico.png", "boca_especial_euforico.png");
+        else if (e === 1) cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png");
+        siguientePaso();
+      },
+    );
   }
 
-  function terminarSinCerrar() {
-    if (!turno) return;
-    cancelAnimationFrame(turno.raf);
-    turno.pausa.destruir();
-    turno = null;
-  }
-
-  function cerrar() {
-    if (!turno || turno.estado !== "abierto") return;
-    turno.estado = "cerrado";
-    cancelAnimationFrame(turno.raf);
-    const sobras = turno.plato.map((id) => PLATOS[id].heladera).filter(Boolean);
-    const { ganado, felices, idos } = turno;
-    const { paga, record } = reg.cerrarTurno({ ganado, felices });
-    turno.pausa.destruir();
-    turno = null;
-    alCerrarTurno({ paga, felices, record, sobras, ganado });
+  /** Lleva el plato al cliente: estrellas, monedas, resena. */
+  function servir() {
+    const p = dia.pedidos[dia.i];
+    const r = recetaPorId(p.receta);
+    const e = estrellasDelPlato(p.notas);
+    const esp = p.receta === dia.especial;
+    const pago = pagoDe(r, e, esp);
+    const opciones = RESENAS[e];
+    const texto = e === 3 && p.quien.amigo && GRACIAS_AMIGOS[p.quien.id] && Math.random() < 0.5 ? GRACIAS_AMIGOS[p.quien.id] : opciones[Math.floor(Math.random() * opciones.length)];
+    dia.ganado += pago;
+    if (e >= 2) dia.felices += 1;
+    dia.resenas.push({ quien: p.quien.nombre, texto, estrellas: e });
+    if (e === 3) dia.resenas.sort((a, b) => b.estrellas - a.estrellas);
+    reg.anotarPlato(r.id, e);
     guardar();
-    const area = contenedor.querySelector(".pantalla-rest");
-    if (!area) return;
-    const fin = document.createElement("div");
-    fin.className = "rest-fin";
-    fin.innerHTML = `
-      <div class="papel rest-fin-carta">
-        <div class="rest-sub">${record && ganado ? "BEST SHIFT EVER!" : "SHOP CLOSED"}</div>
-        <div class="rest-fin-titulo">${felices ? `${felices} happy customer${felices === 1 ? "" : "s"}!` : "A quiet day…"}</div>
-        <div class="rest-fin-texto">${idos ? `${idos} left hungry · ` : ""}The shop made ${ganado} coins${paga !== ganado ? ` · you keep ${paga}` : ""}${sobras.length ? ` · leftovers went to the fridge` : ""}</div>
-        <div class="rest-fin-monedas"><img src="${arte("tienda/moneda.png")}" alt="" draggable="false" />+${paga}</div>
-        <button class="boton" id="btn-rest-volver" type="button">Back to the shop</button>
+    paso = null;
+    const src = arte(p.quien.amigo ? `npcs/npc_${p.quien.id}_saludo.png` : `restaurante/cliente_${p.quien.id}_saludo.png`);
+    contenedor.innerHTML = `
+      <div class="pantalla-rest local servir">
+        ${frente(`<img class="rest-cliente-servido" src="${src}" alt="" draggable="false" />${imgPlato(r.id, "rest-plato-servido")}`)}
+        ${HTML_VOLVER}
+        ${hud(`DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
+        <div class="papel rest-resena">
+          <div class="rest-estr grande">${estrellas(e)}</div>
+          <div class="rest-resena-texto">“${esc(texto)}”<small>— ${esc(p.quien.nombre)}</small></div>
+          <div class="rest-fin-monedas">${moneda()}+${pago}</div>
+          ${esp || e === 3 ? `<small class="rest-extra-pago">${[esp ? "special ×2" : "", e === 3 ? "+3 tip" : ""].filter(Boolean).join(" · ")}</small>` : ""}
+          <button class="boton" id="btn-rest-siguiente" type="button">${dia.i + 1 < dia.pedidos.length ? "Next customer" : "Close the shop"}</button>
+        </div>
       </div>`;
-    area.appendChild(fin);
+    blindarToques(contenedor.querySelector(".pantalla-rest"));
+    cablearVolver(contenedor, () => terminarDia(true));
+    sonar(e === 3 ? "hallazgo" : e === 2 ? "hito" : "mimo");
+    vibrar(e === 3 ? [20, 40, 20] : 20);
+    contenedor.querySelector("#btn-rest-siguiente").addEventListener("click", () => {
+      sonar("tocar");
+      dia.i += 1;
+      if (dia.i < dia.pedidos.length) cliente();
+      else terminarDia(true);
+    });
+  }
+
+  /** Cierra el dia (al terminar los clientes o con la flechita): cobra lo hecho. */
+  function terminarDia(completo = false) {
+    if (!dia) return local();
+    if (paso) paso.destruir();
+    paso = null;
+    quitarPausa();
+    const { ganado, felices, resenas } = dia;
+    const servidos = dia.resenas.length;
+    dia = null;
+    if (!servidos) return local();
+    const { paga, record } = reg.cerrarTurno({ ganado, felices, resenas });
+    alCerrarTurno({ paga, felices, record, sobras: [], ganado });
+    guardar();
+    contenedor.innerHTML = `
+      <div class="pantalla-rest local">
+        ${frente()}
+        ${hud("SHOP CLOSED")}
+        <div class="rest-fin">
+          <div class="papel rest-fin-carta">
+            <div class="rest-sub">${record ? "BEST DAY EVER!" : completo ? "WHAT A DAY!" : "CLOSED EARLY"}</div>
+            <div class="rest-fin-titulo">${felices} happy customer${felices === 1 ? "" : "s"}</div>
+            ${resenas[0] ? `<div class="rest-fin-texto">“${esc(resenas[0].texto)}” — ${esc(resenas[0].quien)}</div>` : ""}
+            <div class="rest-fin-texto">Fame ${estrellas(reg.estrellasFama(), 5)}${paga !== ganado ? ` · the shop made ${ganado}, you keep ${paga} (one full day per day)` : ""}</div>
+            <div class="rest-fin-monedas">${moneda()}+${paga}</div>
+            <button class="boton" id="btn-rest-volver" type="button">Back to the shop</button>
+          </div>
+        </div>
+      </div>`;
     sonar(felices ? "hallazgo" : "mimo");
-    fin.querySelector("#btn-rest-volver").addEventListener("click", () => {
+    contenedor.querySelector("#btn-rest-volver").addEventListener("click", () => {
       sonar("tocar");
       local();
     });
@@ -583,10 +671,11 @@ export function abrirRestaurante(contenedor, opts) {
   return {
     destruir() {
       vivo = false;
-      terminarSinCerrar();
+      if (paso) paso.destruir();
+      quitarPausa();
     },
     // para las pruebas
-    _turno: () => turno,
-    _cerrar: () => cerrar(),
+    _dia: () => dia,
+    _resolverPaso: (e = 3) => paso && paso.resolver(e),
   };
 }

@@ -469,10 +469,10 @@ export function renderHeladera(container, especiales = []) {
   const deLaTienda = especiales
     .map(
       (it, i) => `
-      <button class="item-heladera item-tienda" data-comida-tienda="${esc(it.id)}"
+      <button class="item-heladera item-tienda ${it.manana ? "manana" : ""}" data-comida-tienda="${esc(it.id)}"
         style="left:${(xTienda(i, especiales.length) / 200) * 100}%;top:${(98 / 112) * 100}%" aria-label="${esc(it.nombre)} (${it.n})">
         <img src="${arte(it.arte)}" alt="" draggable="false" />
-        <span class="cuantos-tienda">×${it.n}</span>
+        <span class="cuantos-tienda">${it.manana ? "Tomorrow" : `×${it.n}`}</span>
         <span class="etiqueta-item">${esc(it.nombre)}</span>
       </button>`,
     )

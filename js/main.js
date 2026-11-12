@@ -547,6 +547,11 @@ function arrancar() {
     palabras = Palabras.desdeObjeto(guardado.extras && guardado.extras.palabras);
     mesesReg = cargarMeses(guardado.extras && guardado.extras.meses);
     restauranteReg = Restaurante.desdeObjeto(guardado.extras && guardado.extras.restaurante);
+    if (restauranteReg.reembolso) {
+      // v55: lo que gasto en las mejoras de v54 vuelve como monedas (una sola vez)
+      tienda.monedas += restauranteReg.reembolso;
+      restauranteReg.reembolso = 0;
+    }
     // (la primera vez despues de actualizar no hay "ultima vista": vale la del guardado)
     const vista = ultimaVista() || Number(guardado.guardadoEn) || Date.now();
     const horasSinVerla = (Date.now() - Math.max(mascota.ultimaInteraccion || 0, vista)) / 3600000;
@@ -830,7 +835,7 @@ function renderVistaActual() {
         Object.keys(tienda.comida)
           .map((id) => productoTienda(id))
           .filter(Boolean)
-          .map((c) => ({ id: c.id, arte: c.arte, nombre: c.nombre, n: tienda.cantidadComida(c.id) })),
+          .map((c) => ({ id: c.id, arte: c.arte, nombre: c.nombre, n: tienda.cantidadComida(c.id), manana: !tienda.puedeUsarHoy(c.id) })),
       );
       wireHeladera();
       break;
@@ -1965,9 +1970,19 @@ function wireHeladera() {
     b.addEventListener("click", () => {
       const c = productoTienda(b.dataset.comidaTienda);
       if (!c || !tienda.cantidadComida(c.id)) return;
+      // v56: el energy juice, uno por dia
+      if (!tienda.puedeUsarHoy(c.id)) {
+        Sonido.sonar("no");
+        vibrar(30);
+        b.classList.remove("sacude");
+        void b.offsetWidth;
+        b.classList.add("sacude");
+        return;
+      }
       const ok = manejarTapItem(c.accion, { item: c.arte });
       if (!ok) return;
       tienda.usarComida(c.id);
+      tienda.marcarUsadoHoy(c.id);
       for (const [stat, v] of Object.entries(c.efecto || {})) {
         if (stat in mascota.stats) mascota.stats[stat] = Math.max(0, Math.min(100, mascota.stats[stat] + v));
       }
@@ -4808,6 +4823,8 @@ window.__mochi = {
   deseos: () => deseos,
   pesca: () => pesca,
   juegoTele: () => juegoTele,
+  restaurante: () => restaurante, // v55
+  restauranteReg: () => restauranteReg,
   mudanza: () => mudanza,
   pescaReg: () => pescaReg,
   velitas: (si) => {

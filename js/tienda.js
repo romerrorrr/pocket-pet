@@ -73,6 +73,8 @@ export const CATALOGO = [
   { id: "semilla_osmanto", tipo: "semilla", planta: "osmanto", nombre: "Osmanthus seeds", precio: 25, semana: 1, arte: "jardin/semilla_osmanto.png", texto: "Ready in 4 days. Two osmanthus cakes for the fridge." },
   { id: "semilla_orquidea", tipo: "semilla", planta: "orquidea", nombre: "Orchid seeds", precio: 30, semana: 1, arte: "jardin/semilla_orquidea.png", texto: "Ready in 5 days. Sell the flower for 60 coins." },
   // v45: la maracuya sale del jardin (no se vende)
+  // v56 (rom: "un energy juice que llene la energia, 1 por dia")
+  { id: "energia", tipo: "comida", nombre: "Energy juice", precio: 25, semana: 0, arte: "tienda/comida_energia.png", accion: "water", efecto: { energia: 100 }, unoPorDia: true, texto: "Fills Baozi's energy all the way up. Only one a day!" },
   { id: "maracuya", tipo: "comida", nombre: "Passion fruit", precio: 0, semana: 0, noSeVende: true, arte: "tienda/comida_maracuya.png", accion: "feed", efecto: { felicidad: 10, energia: 5 }, texto: "Fresh from the balcony garden." },
 ];
 
@@ -148,6 +150,7 @@ export class Tienda {
     this.cuarto = "depto"; // v25: el cuarto puesto ("depto" = el de siempre)
     this.mascota = null; // v25: la mascota que esta afuera (o ninguna)
     this.semillas = {}; // v45: planta -> cuantas semillas tiene
+    this.usadoHoy = {}; // v56: comida de "una por dia" -> el dia que se uso
     this.guardadas = new Set(); // v47: decoraciones (compradas o regaladas) que ella saco del cuarto
   }
 
@@ -249,6 +252,17 @@ export class Tienda {
     if (!c || c.tipo !== "comida") return false;
     this.comida[id] = this.cantidadComida(id) + Math.max(0, Math.floor(n));
     return true;
+  }
+
+  /** v56: ¿se puede usar hoy? (las de "una por dia", como el energy juice) */
+  puedeUsarHoy(id, ahora = Date.now()) {
+    const c = porId(id);
+    return !(c && c.unoPorDia && this.usadoHoy[id] === claveDia(ahora));
+  }
+
+  marcarUsadoHoy(id, ahora = Date.now()) {
+    const c = porId(id);
+    if (c && c.unoPorDia) this.usadoHoy[id] = claveDia(ahora);
   }
 
   /** Usa una comida de la heladera. true si habia. */
@@ -385,6 +399,7 @@ export class Tienda {
       cuarto: this.cuarto,
       mascota: this.mascota,
       semillas: this.semillas,
+      usadoHoy: this.usadoHoy,
       guardadas: [...this.guardadas],
     };
   }
@@ -410,6 +425,7 @@ export class Tienda {
       for (const [k, v] of Object.entries(datos.hoy.por)) t.hoy.por[k] = entero(v);
     }
     for (const [d, v] of Object.entries(datos.pasosPagados || {})) if (/^\d{4}-\d\d-\d\d$/.test(d)) t.pasosPagados[d] = entero(v);
+    for (const [id, d] of Object.entries(datos.usadoHoy || {})) if (porId(id) && typeof d === "string" && /^\d{4}-\d\d-\d\d$/.test(d)) t.usadoHoy[id] = d;
     t.rachaPremiada = entero(datos.rachaPremiada);
     t.avisoSemana = Number.isInteger(datos.avisoSemana) ? datos.avisoSemana : -1;
     t.todoDesbloqueado = datos.todoDesbloqueado === true;
