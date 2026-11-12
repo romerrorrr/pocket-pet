@@ -4264,7 +4264,9 @@ function seguirEncuentro() {
 }
 
 function manejarEleccionEncuentro(eleccion) {
-  const huboEnamorado = npcsReg.procesarEncuentro(mascota, encuentro.npc, eleccion, Date.now());
+  const resultado = npcsReg.procesarEncuentro(mascota, encuentro.npc, eleccion, Date.now());
+  const huboEnamorado = resultado === "amor";
+  if (resultado === "amigo") encuentro.pendienteMejorAmigo = true;
   encuentro.paso = eleccion === "saludar" ? "dialogo" : "despedida";
   if (eleccion !== "saludar") encuentro.desairado = true;
   else ganarMonedas("saludo");
@@ -4276,6 +4278,8 @@ function manejarEleccionEncuentro(eleccion) {
 function terminarEncuentro() {
   if (!encuentro) return;
   const pendienteEnamorado = encuentro.pendienteEnamorado;
+  const pendienteMejorAmigo = encuentro.pendienteMejorAmigo;
+  const encuentroNombre = encuentro.npc.nombre;
   const desairado = encuentro.desairado;
   encuentro = null;
   if (pendienteEnamorado && mostrarCartaSiCorresponde({ huboEnamorado: true })) return;
@@ -4286,6 +4290,12 @@ function terminarEncuentro() {
       Musica.tocar("enamorado");
       R.renderFeedback(screenEl, "In love! ♥", { especial: "enamorado" });
       setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 900);
+    } else if (pendienteMejorAmigo) {
+      // v53: Baozi ya tiene su crush; con los demas, mejores amigos
+      controller.vista = "feedback";
+      Sonido.sonar("hallazgo");
+      R.renderFeedback(screenEl, "Best friends!", { especial: "euforico", sub: `${Personaje.nombre()} and ${encuentroNombre} are inseparable.` });
+      setTimeout(() => conTransicion(irACasa), DURACION_FEEDBACK_MS + 600);
     } else {
       renderVistaActual();
       if (desairado) {

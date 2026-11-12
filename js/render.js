@@ -1176,6 +1176,14 @@ export function renderTraits(container, mascota) {
   `;
 }
 
+/** v53: la marquita al lado del nombre: el crush de Baozi o un mejor amigo. */
+function relacionAmigo(npcId, npcsReg) {
+  const r = npcsReg && npcsReg.relacion ? npcsReg.relacion(npcId) : null;
+  if (r === "amor") return ` <span class="relacion-amigo amor">${glifo("corazon")} ${esc(Personaje.nombre())}'s crush</span>`;
+  if (r === "amigo") return ` <span class="relacion-amigo amigo">${glifo("estrella")} Best friends</span>`;
+  return "";
+}
+
 export function renderNpcs(container, npcsReg, amigos = null, ctx = {}) {
   const filas = NPCS.map((npc) => {
     const veces = npcsReg.vecesEncontrado[npc.id] || 0;
@@ -1213,7 +1221,7 @@ export function renderNpcs(container, npcsReg, amigos = null, ctx = {}) {
       <div class="fila-npc con-detalle">
         <img class="avatar-npc" src="${arte("npcs/npc_" + npc.id + ".png")}" alt="" draggable="false" />
         <div class="columna-amigo">
-          <div class="cabeza-amigo"><span class="nombre-npc">${esc(npc.nombre)}</span><span class="pips">${marcas}</span></div>
+          <div class="cabeza-amigo"><span class="nombre-npc">${esc(npc.nombre)}${relacionAmigo(npc.id, npcsReg)}</span><span class="pips">${marcas}</span></div>
           ${detalle}
         </div>
       </div>`;

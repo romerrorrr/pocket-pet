@@ -42,6 +42,7 @@ export const NPCS = [
     linea: "Oh, hi. I was just listening to the leaves. Walk with me a little?",
     lineaReencuentro: "You again! The trees told me you'd come.",
     lineaEnamorado: "You're my favorite person to be quiet with.",
+    lineaMejorAmigo: "Best friends sit in silence and it's never awkward. Like us.",
   },
   {
     id: "mimi",
@@ -49,6 +50,7 @@ export const NPCS = [
     linea: "Hold still… perfect. I'm collecting Earth photos. You're a good one.",
     lineaReencuentro: "Earthling! The light is great today. Found any good angles?",
     lineaEnamorado: "I've taken a hundred photos of you. Don't tell my planet.",
+    lineaMejorAmigo: "On my planet, you'd have a statue. Best Earth friend ever.",
   },
   {
     id: "ruchong",
@@ -56,6 +58,7 @@ export const NPCS = [
     linea: "Oh! Um… hi. I'm painting. Do you like it? It's not finished.",
     lineaReencuentro: "You came back… I saved you a little spot in my painting.",
     lineaEnamorado: "I keep using your colors without noticing.",
+    lineaMejorAmigo: "I painted us side by side. Best friends look like that, right?",
   },
   {
     id: "chagee",
@@ -63,6 +66,7 @@ export const NPCS = [
     linea: "Darling! Tea is poured, the stage is set. Sit with me a moment.",
     lineaReencuentro: "My favorite audience returns! Bravo, bravo.",
     lineaEnamorado: "Every show I do, I do for you. Don't let it go to your head.",
+    lineaMejorAmigo: "Front row, always reserved for you, darling. That's what best friends get.",
   },
 ];
 
@@ -76,6 +80,7 @@ export class RegistroNPCs {
     this.vecesEncontrado = Object.fromEntries(NPCS.map((n) => [n.id, 0]));
     this._pasosAcumulados = 0;
     this._ultimoEncuentroMs = 0;
+    this.amor = null; // v53: el unico amigo del que Baozi se enamora (el primero en llegar a 5)
   }
 
   /** Llamar cada vez que la mascota registra pasos nuevos. Devuelve un NPC o null. */
@@ -111,8 +116,9 @@ export class RegistroNPCs {
   }
 
   /**
-   * eleccion: "saludar" o "seguir". Devuelve true si este encuentro
-   * desbloqueo la especial "In Love".
+   * eleccion: "saludar" o "seguir". Devuelve "amor" si este encuentro hizo
+   * que Baozi se enamorara (solo pasa una vez, con el primero que llega a 5),
+   * "amigo" si llego a 5 con otro (mejores amigos), o false.
    */
   procesarEncuentro(petState, npc, eleccion, ahoraMs = null) {
     if (eleccion !== "saludar") return false;
@@ -122,13 +128,24 @@ export class RegistroNPCs {
     petState.stats.vinculo = Math.min(100, petState.stats.vinculo + 3);
     petState.registrarEventoRasgo("sociable", 1.0, ahoraMs);
 
-    return this.vecesEncontrado[npc.id] === VECES_PARA_ENAMORADO;
+    if (this.vecesEncontrado[npc.id] !== VECES_PARA_ENAMORADO) return false;
+    if (!this.amor) {
+      this.amor = npc.id;
+      return "amor";
+    }
+    return this.amor === npc.id ? false : "amigo";
   }
 
-  /** Cual de las tres lineas de dialogo corresponde, segun cuantas veces ya se saludo. */
+  /** "amor", "amigo" (mejores amigos) o null, segun como quedo con este amigo. */
+  relacion(npcId) {
+    if ((this.vecesEncontrado[npcId] || 0) < VECES_PARA_ENAMORADO) return null;
+    return this.amor === npcId ? "amor" : "amigo";
+  }
+
+  /** Cual de las lineas de dialogo corresponde, segun cuantas veces ya se saludo. */
   lineaPara(npc) {
     const veces = this.vecesEncontrado[npc.id] ?? 0;
-    if (veces >= VECES_PARA_ENAMORADO) return npc.lineaEnamorado || npc.linea;
+    if (veces >= VECES_PARA_ENAMORADO) return (this.amor === npc.id ? npc.lineaEnamorado : npc.lineaMejorAmigo) || npc.linea;
     if (veces >= 2) return npc.lineaReencuentro || npc.linea;
     return npc.linea;
   }
@@ -138,6 +155,7 @@ export class RegistroNPCs {
       vecesEncontrado: this.vecesEncontrado,
       pasosAcumulados: this._pasosAcumulados,
       ultimoEncuentroMs: this._ultimoEncuentroMs,
+      amor: this.amor,
     };
   }
 
@@ -146,6 +164,12 @@ export class RegistroNPCs {
     obj.vecesEncontrado = { ...obj.vecesEncontrado, ...(datos.vecesEncontrado || {}) };
     obj._pasosAcumulados = datos.pasosAcumulados || 0;
     obj._ultimoEncuentroMs = datos.ultimoEncuentroMs || 0;
+    const llegaron = NPCS.filter((n) => (obj.vecesEncontrado[n.id] || 0) >= VECES_PARA_ENAMORADO);
+    if (datos.amor && llegaron.some((n) => n.id === datos.amor)) obj.amor = datos.amor;
+    else if (llegaron.length) {
+      // v53: guardados de antes (o un backup): el crush es el que mas veces vio (empate: el primero de la lista)
+      obj.amor = llegaron.reduce((a, n) => ((obj.vecesEncontrado[n.id] || 0) > (obj.vecesEncontrado[a.id] || 0) ? n : a)).id;
+    }
     return obj;
   }
 }

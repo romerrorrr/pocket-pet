@@ -56,6 +56,7 @@ export const AMIGOS = {
     linea: "Oh, hi. I was just listening to the leaves. Walk with me a little?",
     lineaReencuentro: "You again! The trees told me you'd come.",
     lineaEnamorado: "You're my favorite person to be quiet with.",
+    lineaMejorAmigo: "Best friends sit in silence and it's never awkward. Like us.",
     secretos: [
       { corazones: 2, lugar: "jiuxi", texto: "Psst… past the tea hills there's a forest where nine creeks sing. It's on your map now." },
       { corazones: 4, lugar: "huanglong", texto: "Want a secret? Yellow Dragon Cave. There's music, and a dragon that spits water. I put it on your map." },
@@ -70,6 +71,7 @@ export const AMIGOS = {
     linea: "Hold still… perfect. I'm collecting Earth photos. You're a good one.",
     lineaReencuentro: "Earthling! The light is great today. Found any good angles?",
     lineaEnamorado: "I've taken a hundred photos of you. Don't tell my planet.",
+    lineaMejorAmigo: "On my planet, you'd have a statue. Best Earth friend ever.",
     secretos: [
       { corazones: 2, lugar: "baochu", texto: "Secret coordinates: Baochu Pagoda, up on the hill. Best sunset on this planet. It's on your map." },
       { corazones: 4, lugar: "gongchen", texto: "Gongchen Bridge at night. The canal looks like outer space. Added it to your map." },
@@ -84,6 +86,7 @@ export const AMIGOS = {
     linea: "Oh! Um… hi. I'm painting. Do you like it? It's not finished.",
     lineaReencuentro: "You came back… I saved you a little spot in my painting.",
     lineaEnamorado: "I keep using your colors without noticing.",
+    lineaMejorAmigo: "I painted us side by side. Best friends look like that, right?",
     secretos: [
       { corazones: 2, lugar: "faxi", texto: "There's a temple with yellow walls… Faxi Temple. I paint it when I'm sad. It's on your map." },
       { corazones: 4, lugar: "xixi", texto: "Xixi Wetland. The water there is every green I know. I put it on your map." },
@@ -98,6 +101,7 @@ export const AMIGOS = {
     linea: "Darling! Tea is poured, the stage is set. Sit with me a moment.",
     lineaReencuentro: "My favorite audience returns! Bravo, bravo.",
     lineaEnamorado: "Every show I do, I do for you. Don't let it go to your head.",
+    lineaMejorAmigo: "Front row, always reserved for you, darling. That's what best friends get.",
     secretos: [
       { corazones: 2, lugar: "meijiawu", texto: "A secret, darling: Meijiawu Tea Village. The best tea hides in the hills. It's on your map." },
       { corazones: 4, lugar: "teatro", texto: "The Grand Theater. When the lights go down… magic. It's on your map now." },
@@ -283,7 +287,7 @@ export class RegistroAmigos {
       return `Remember? ${m.resumen}.${progreso ? ` (${progreso})` : ""} I believe in you!`;
     }
     const veces = (npcsReg && npcsReg.vecesEncontrado[npcId]) || 0;
-    if (veces >= MAX_CORAZONES) return a.lineaEnamorado;
+    if (veces >= MAX_CORAZONES) return npcsReg && npcsReg.amor && npcsReg.amor !== npcId ? a.lineaMejorAmigo : a.lineaEnamorado;
     if (veces >= 2) return a.lineaReencuentro;
     return a.linea;
   }
