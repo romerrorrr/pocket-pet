@@ -4994,7 +4994,7 @@ html[data-momento="noche"] .pantalla-encuentro .npc-grande:not(.npc-sombra) { fi
    v29: los juegos nuevos de la tele (Steamer Stack, Radio Beats, Boat Ride)
    ------------------------------------------------------------------ */
 .juegos-fila { flex-wrap: nowrap; gap: 10px; }
-.tarjeta-juego { width: min(150px, calc((100vw - 110px) / 5)); padding: 8px 6px 10px; }
+.tarjeta-juego { width: min(150px, calc((100vw - 130px) / 6)); padding: 8px 4px 10px; }
 .juego-nombre { font-size: 8px; line-height: 1.4; text-align: center; }
 .juego-best { font-size: 11px; }
 .juego-arte.icono img { width: 96px; height: 64px; }
@@ -5993,3 +5993,149 @@ button.nota-polaroid {
 .relacion-amigo .glifo { width: 9px; height: 9px; }
 .relacion-amigo.amor { background: rgb(255, 214, 226); color: var(--rosa-oscuro); }
 .relacion-amigo.amigo { background: rgb(250, 230, 160); color: rgb(120, 84, 20); }
+
+/* ================================================================
+   v54 — Baozi's Dumpling Shop (restaurante.js)
+   ================================================================ */
+.pantalla-rest { position: absolute; inset: 0; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; color: var(--tinta); }
+.pantalla-rest img { image-rendering: pixelated; }
+.pantalla-rest .oculto { display: none !important; }
+
+/* el local (entre turnos) */
+.pantalla-rest.local { background: rgb(78, 60, 70); padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 10px; }
+.rest-titulo { display: flex; align-items: center; gap: 10px; margin-left: 56px; min-height: 40px; font-family: var(--fuente-display); font-size: 10px; color: var(--crema); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
+.rest-titulo > span:first-child { flex: 1; }
+.rest-monedas { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--papel); color: var(--tinta); text-shadow: none; box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.3); }
+.rest-monedas img, .rest-comprar img, .pantalla-rest .juego-chip img, .rest-fin-monedas img { width: 16px; height: 16px; }
+.rest-paneles { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; }
+.rest-panel.papel { min-height: 0; overflow: auto; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; padding: 10px 12px; text-align: left; scrollbar-width: none; }
+.rest-sub { font-family: var(--fuente-display); font-size: 8px; letter-spacing: 0.06em; color: var(--rosa-oscuro); }
+.rest-hoy { font-size: 14px; line-height: 1.3; }
+.rest-hoy small, .rest-nota { font-size: 12px; opacity: 0.7; }
+.rest-aviso { font-family: var(--fuente-display); font-size: 8px; color: rgb(60, 120, 70); }
+.rest-menu { display: flex; flex-wrap: wrap; gap: 6px; }
+.rest-ficha { width: 44px; height: 44px; display: grid; place-items: center; background: #fff; box-shadow: 0 0 0 2px var(--tinta); position: relative; }
+.rest-ficha .rest-comida { width: 34px; height: 34px; }
+.rest-ficha.bloq .rest-comida { filter: brightness(0) opacity(0.25); }
+.rest-ficha.bloq::after { content: ""; position: absolute; right: 2px; bottom: 2px; width: 10px; height: 10px; background: currentColor; -webkit-mask: url("../assets/ui/g_candado@2.png") center / contain no-repeat; mask: url("../assets/ui/g_candado@2.png") center / contain no-repeat; color: var(--tinta); }
+.rest-abrir { align-self: flex-start; margin-top: auto; }
+.rest-mejora { display: flex; align-items: center; gap: 8px; padding: 4px 0 6px; border-bottom: 2px solid rgba(22, 20, 22, 0.08); }
+.rest-mejora > div { flex: 1; min-width: 0; font-size: 14px; }
+.rest-mejora small { display: block; font-size: 12px; opacity: 0.7; }
+.rest-mejora .boton { min-height: 34px; padding: 6px 10px; font-size: 14px; gap: 5px; }
+.rest-tuya { font-family: var(--fuente-display); font-size: 7px; color: rgb(60, 120, 70); white-space: nowrap; }
+.pantalla-rest .boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+
+/* el turno */
+.pantalla-rest.turno { background: rgb(150, 196, 226); }
+.rest-calle { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 70%; object-fit: cover; object-position: center bottom; }
+.rest-hud { position: absolute; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: calc(max(12px, env(safe-area-inset-left)) + 56px); right: max(12px, env(safe-area-inset-right)); display: flex; gap: 8px; align-items: center; }
+.rest-hud .juego-chip { display: inline-flex; align-items: center; gap: 6px; }
+.rest-esp { flex: 1; }
+#rest-reloj.apurado { background: var(--rosa); }
+.rest-clientes { position: absolute; z-index: 2; left: calc(max(12px, env(safe-area-inset-left)) + 18%); right: max(16px, env(safe-area-inset-right)); top: 14%; height: 46%; display: grid; grid-template-columns: repeat(var(--lugares), 1fr); gap: 8px; }
+.rest-lugar { position: relative; border: none; padding: 0; background: none; display: flex; align-items: flex-end; justify-content: center; }
+.rest-lugar.vacio { pointer-events: none; }
+.rest-cliente { height: 100%; width: auto; aspect-ratio: 1; margin-bottom: -6%; animation: rest-llega 0.35s steps(4); }
+.rest-lugar.feliz .rest-cliente, .rest-lugar.enojado .rest-cliente { animation: rest-se-va 1.2s steps(6) forwards; }
+.rest-lugar.no .rest-cliente { animation: rest-no 0.3s steps(3); }
+@keyframes rest-llega { from { transform: translateY(30%); opacity: 0; } }
+@keyframes rest-se-va { 0%, 40% { transform: none; opacity: 1; } 100% { transform: translateY(25%); opacity: 0; } }
+@keyframes rest-no { 33% { translate: -4px 0; } 66% { translate: 4px 0; } }
+/* el globito del pedido, con la paciencia abajo */
+.rest-pedido { position: absolute; top: -4%; left: 54%; display: flex; gap: 2px; padding: 4px 4px 12px; background: #fff; box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.25); z-index: 1; }
+.rest-pedido::after { content: ""; position: absolute; left: 6px; bottom: -8px; border: 4px solid transparent; border-top-color: var(--tinta); border-left-color: var(--tinta); }
+.rest-pedido .rest-comida { width: 46px; height: 46px; }
+.rest-paciencia { position: absolute; top: calc(-4% + 54px); left: calc(54% + 5px); width: 44px; height: 5px; background: rgba(0, 0, 0, 0.18); z-index: 2; }
+.rest-lugar:has(.rest-pedido .rest-comida + .rest-comida) .rest-paciencia { width: 92px; }
+.rest-paciencia i { display: block; height: 100%; width: 100%; background: rgb(120, 190, 110); }
+.rest-paciencia i.medio { background: rgb(240, 180, 60); }
+.rest-paciencia i.poco { background: rgb(222, 90, 80); animation: latido-suave 0.5s steps(2) infinite; }
+.rest-lugar.feliz .rest-pedido, .rest-lugar.enojado .rest-pedido, .rest-lugar.feliz .rest-paciencia, .rest-lugar.enojado .rest-paciencia { visibility: hidden; }
+.rest-amigo { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); white-space: nowrap; font-family: var(--fuente-display); font-size: 7px; padding: 3px 5px; background: rgb(255, 214, 226); color: var(--rosa-oscuro); box-shadow: 0 0 0 2px var(--tinta); z-index: 4; }
+.rest-dice { position: absolute; bottom: 55%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 160px; padding: 5px 7px; font-size: 13px; line-height: 1.2; background: var(--papel); box-shadow: 0 0 0 2px var(--tinta); z-index: 3; }
+.rest-dice b { color: rgb(170, 110, 20); }
+.rest-mostrador { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 42%; z-index: 3; }
+.rest-baozi { position: absolute; z-index: 2; left: max(6px, env(safe-area-inset-left)); bottom: 32%; height: 40%; aspect-ratio: 1; }
+.rest-baozi .sprite-cara { width: 100%; height: 100%; }
+.rest-barra { position: absolute; z-index: 4; left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); height: 36%; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.rest-vaporeras { display: flex; gap: 10px; }
+.rest-vapor { position: relative; width: 96px; height: 76px; border: none; padding: 0; background: rgb(214, 170, 104); box-shadow: 0 0 0 2px var(--tinta), inset 0 -10px 0 rgb(170, 124, 72), inset 0 5px 0 rgb(236, 200, 136), 2px 4px 0 1px rgba(0, 0, 0, 0.25); display: grid; place-items: center; }
+.rest-vapor::after { content: ""; position: absolute; left: 6px; right: 6px; top: 50%; height: 2px; background: rgba(150, 104, 60, 0.6); }
+.rest-vapor-dentro { position: relative; z-index: 1; display: grid; place-items: center; }
+.rest-vapor-dentro .rest-comida { width: 62px; height: 62px; }
+.rest-vapor-t { position: absolute; left: 10px; right: 10px; bottom: -12px; height: 6px; background: rgba(0, 0, 0, 0.35); box-shadow: 0 0 0 2px var(--tinta); visibility: hidden; }
+.rest-vapor-t i { display: block; height: 100%; width: 0; background: rgb(150, 200, 130); }
+.rest-vapor.cocinando .rest-vapor-t { visibility: visible; }
+.rest-vapor.listo .rest-vapor-t { visibility: hidden; }
+.rest-vapor-listo { position: absolute; z-index: 2; top: -12px; left: 50%; transform: translateX(-50%); font-family: var(--fuente-display); font-size: 7px; padding: 3px 5px; background: var(--rosa-oscuro); color: #fff; box-shadow: 0 0 0 2px var(--tinta); visibility: hidden; }
+.rest-vapor.listo .rest-vapor-listo { visibility: visible; animation: latido-suave 0.6s steps(2) infinite; }
+.rest-vapor.cocinando::before { content: ""; position: absolute; z-index: 2; top: -12px; left: 30%; width: 4px; height: 8px; background: rgba(255, 255, 255, 0.85); box-shadow: 14px -3px 0 rgba(255, 255, 255, 0.7), 28px 1px 0 rgba(255, 255, 255, 0.8); animation: latido-suave 0.8s steps(2) infinite; }
+.rest-plato-caja { position: relative; flex: none; }
+.rest-plato { width: 196px; height: 82px; border: none; padding: 0 10px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--tinta), inset 0 -8px 0 rgb(214, 214, 222), inset 0 0 0 10px rgb(250, 250, 252), 2px 4px 0 1px rgba(0, 0, 0, 0.25); display: flex; align-items: center; justify-content: center; }
+.rest-plato .rest-comida { width: 62px; height: 62px; margin: 0 -4px; }
+.rest-tacho { position: absolute; right: -10px; top: -12px; width: 32px; height: 32px; border: none; padding: 0; font-size: 15px; font-weight: 700; color: var(--tinta); background: var(--papel); box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.25); }
+.rest-ings { display: grid; grid-template-columns: repeat(3, auto); gap: 8px; }
+.rest-ing { position: relative; width: 62px; height: 62px; border: none; padding: 0; display: grid; place-items: center; background: var(--papel); box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.3); }
+.rest-ing .rest-comida { width: 52px; height: 52px; }
+.rest-ing small { display: none; }
+.rest-ing:active, .rest-vapor:active, .rest-plato:active { transform: translateY(2px); }
+.pantalla-rest .pista-minijuego { z-index: 5; left: 50%; right: auto; bottom: auto; top: 57%; transform: translateX(-50%); width: max-content; max-width: 60%; padding: 4px 8px; color: var(--tinta); text-shadow: none; background: rgba(252, 248, 236, 0.95); box-shadow: 0 0 0 2px var(--tinta); font-size: 12px; }
+.rest-cartel { position: absolute; z-index: 8; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 7px 12px; font-family: var(--fuente-display); font-size: 9px; background: var(--papel); box-shadow: 0 0 0 2px var(--tinta), 3px 4px 0 1px rgba(0, 0, 0, 0.3); }
+.rest-fin { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(20, 16, 24, 0.55); }
+.rest-fin-carta.papel { flex: 0 0 auto; width: min(420px, 90%); min-height: 0; gap: 8px; padding: 16px 18px; }
+.rest-fin-titulo { font-size: 22px; font-weight: 700; }
+.rest-fin-texto { font-size: 14px; opacity: 0.8; }
+.rest-fin-monedas { display: inline-flex; align-items: center; gap: 6px; font-family: var(--fuente-display); font-size: 14px; color: rgb(170, 110, 20); }
+.rest-fin-monedas img { width: 22px; height: 22px; }
+
+/* telefonos bajos (568x320, 667x375) */
+@media (max-height: 380px) {
+  .rest-vapor { width: 78px; height: 62px; }
+  .rest-vapor-dentro .rest-comida { width: 50px; height: 50px; }
+  .rest-plato { width: 160px; height: 68px; }
+  .rest-plato .rest-comida { width: 50px; height: 50px; }
+  .rest-ing { width: 50px; height: 50px; }
+  .rest-ing .rest-comida { width: 42px; height: 42px; }
+  .rest-ings { grid-auto-flow: column; grid-template-columns: none; }
+  .rest-pedido .rest-comida { width: 38px; height: 38px; }
+  .rest-paciencia { top: calc(-4% + 46px); width: 36px; }
+  .rest-lugar:has(.rest-pedido .rest-comida + .rest-comida) .rest-paciencia { width: 76px; }
+}
+@media (max-width: 700px) {
+  .rest-barra { gap: 8px; }
+  .rest-vapor { width: 64px; }
+  .rest-plato { width: 140px; }
+  .rest-ing { width: 44px; height: 44px; }
+  .rest-ing .rest-comida { width: 36px; height: 36px; }
+  .rest-ings { gap: 6px; }
+}
+@media (max-height: 380px) {
+  .pantalla-rest.local { gap: 6px; }
+  .rest-ficha { width: 34px; height: 34px; }
+  .rest-ficha .rest-comida { width: 27px; height: 27px; }
+  .rest-panel.papel { padding: 8px 10px; gap: 4px; }
+  .rest-hoy small, .rest-nota { font-size: 11px; }
+  .rest-mejora { padding: 2px 0 4px; }
+  .rest-mejora small { display: none; }
+  .rest-abrir { min-height: 34px; padding: 6px 12px; }
+}
+
+/* --- v54: con 6 juegos, las tarjetas mas angostas --- */
+.juegos-fila { gap: 8px; }
+.tarjeta-juego .juego-arte { width: 100%; max-width: 96px; }
+.tarjeta-juego .juego-nombre { font-size: 7px; }
+
+/* ================================================================
+   v54 — Lanterns on the Lake (faroles.js)
+   ================================================================ */
+.pantalla-faroles { background: rgb(16, 18, 40); }
+.pantalla-faroles .oculto { display: none !important; }
+.pantalla-faroles .juego-lienzo { pointer-events: none; }
+.far-deseo { position: absolute; z-index: 4; left: 50%; top: 22%; transform: translateX(-50%); max-width: 70%; padding: 6px 10px; font-size: 15px; color: var(--tinta); background: var(--papel); box-shadow: 0 0 0 2px var(--tinta), 3px 4px 0 1px rgba(0, 0, 0, 0.35); animation: aparecer 0.25s steps(4); }
+.pantalla-faroles .pista-minijuego { color: var(--crema); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7); }
+@media (max-width: 700px) {
+  .tarjeta-juego .juego-nombre { font-size: 6px; letter-spacing: 0; }
+  .tarjeta-juego .juego-best { font-size: 10px; }
+  .tarjeta-juego { padding-left: 2px; padding-right: 2px; }
+}
