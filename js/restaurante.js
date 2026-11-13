@@ -131,6 +131,8 @@ export const RECETAS = [
   { id: "osmanto", nombre: "Osmanthus cake", grupo: "chino", precio: 10, desbloqueo: { lugar: "botanico" }, pasos: [{ t: "verter", liquido: "jarabe", en: "olla" }, { t: "revolver", color: "rgb(250,210,110)" }, { t: "elegir", flores: true }, { t: "cocinar", como: "enfriar" }, { t: "emplatar" }], extras: ["osmanto"], nota: "Hangzhou's sweet flower, in a jelly." },
 ];
 export const recetaPorId = (id) => RECETAS.find((r) => r.id === id) || null;
+/** v62: las 20 de v61 (solo se pudieron conseguir comprandolas con el sistema de estrellas). */
+const RECETAS_V61 = new Set(["arroz_con_leche", "chocolate", "mango_biche", "chunjuan", "tangyuan", "congyoubing", "dan_ta", "pandebono", "lulada", "salpicon", "jianbing", "mapo", "ouzi", "zongzi", "siumai", "aborrajados", "pollo_mendigo", "sopa_ternera", "liusha", "tamal"]);
 export const GRUPOS = [
   ["dimsum", "DIM SUM"],
   ["chino", "CHINESE"],
@@ -234,6 +236,18 @@ export class Restaurante {
     this.relajado = false; // v59: modo relajado (facil, sin fama)
     this.carta = 0; // v59: la carta del critico pendiente (la estrella nueva), 0 = ninguna
     this.guardados = new Set(); // v60: adornos comprados que saco del frente
+    this.recientes = []; // v62: lo que se pidio en los ultimos dias del local (sale menos)
+    this.nuevas = {}; // v62: receta -> cuando la compro (los primeros dias sale mas)
+  }
+
+  /** v62: las recetas compradas hace menos de 3 dias. */
+  recetasNuevas(ahora = Date.now()) {
+    return Object.entries(this.nuevas).filter(([, t]) => ahora - t < 3 * 864e5).map(([id]) => id);
+  }
+
+  /** v62: anota lo que se pidio hoy (se recuerdan los ultimos ~2 dias del local). */
+  anotarPedidos(ids) {
+    this.recientes = [...ids, ...this.recientes].slice(0, 12);
   }
 
   nivel(id) {
@@ -283,6 +297,7 @@ export class Restaurante {
     if (!this.sePuedeComprar(id) || !tienda || tienda.monedas < r.compra) return false;
     tienda.monedas -= r.compra;
     this.compradas.add(id);
+    this.nuevas[id] = Date.now();
     return true;
   }
 
@@ -325,7 +340,7 @@ export class Restaurante {
 
   _alDia(ahora) {
     const d = claveDia(ahora);
-    if (this.hoy.dia !== d) this.hoy = { dia: d, turnos: 0, felices: 0, ganado: 0, contado: false };
+    if (this.hoy.dia !== d) this.hoy = { dia: d, turnos: 0, felices: 0, ganado: 0, contado: false, esp: 0 };
   }
 
   primeroDeHoy(ahora = Date.now()) {
@@ -358,7 +373,7 @@ export class Restaurante {
   }
 
   aObjeto() {
-    return { version: 2, turnos: this.turnos, mejoras: [...this.mejoras], mejorTurno: this.mejorTurno, hoy: { ...this.hoy }, fama: this.fama, compradas: [...this.compradas], libro: this.libro, decor: [...this.decor], ultimo: this.ultimo, niveles: this.niveles, relajado: this.relajado, carta: this.carta, guardados: [...this.guardados] };
+    return { version: 3, turnos: this.turnos, mejoras: [...this.mejoras], mejorTurno: this.mejorTurno, hoy: { ...this.hoy }, fama: this.fama, compradas: [...this.compradas], libro: this.libro, decor: [...this.decor], ultimo: this.ultimo, niveles: this.niveles, relajado: this.relajado, carta: this.carta, guardados: [...this.guardados], recientes: this.recientes, nuevas: this.nuevas };
   }
 
   static desdeObjeto(d) {
@@ -372,7 +387,7 @@ export class Restaurante {
     r.reembolso = viejas.reduce((s, m) => s + ({ vapor2: 120, fuego: 150, lugar4: 200 }[m] || 0), 0);
     r.mejorTurno = ent(d.mejorTurno);
     const h = d.hoy || {};
-    if (typeof h.dia === "string") r.hoy = { dia: h.dia, turnos: ent(h.turnos), felices: ent(h.felices), ganado: ent(h.ganado), contado: h.contado === true };
+    if (typeof h.dia === "string") r.hoy = { dia: h.dia, turnos: ent(h.turnos), felices: ent(h.felices), ganado: ent(h.ganado), contado: h.contado === true, esp: ent(h.esp) };
     r.fama = ent(d.fama);
     r.compradas = new Set((Array.isArray(d.compradas) ? d.compradas : []).filter((id) => recetaPorId(id)));
     if (d.libro && typeof d.libro === "object") {
@@ -385,15 +400,22 @@ export class Restaurante {
     r.relajado = d.relajado === true;
     r.guardados = new Set((Array.isArray(d.guardados) ? d.guardados : []).filter((id) => r.decor.has(id)));
     r.carta = Number.isInteger(d.carta) && d.carta >= 2 && d.carta <= 5 ? d.carta : 0;
-    if (d.version !== 2) {
-      // v58 -> v59 (rom: "empezar la fama de cero"): fama y dias de cero; las recetas que ya
-      // tenia abiertas por dias quedan compradas (no pierde nada de lo que cocinaba)
-      const diaViejo = { guotie: 2, bao_verdura: 2, tinto: 2, xiaolongbao: 3, fideos: 3, empanada: 3, bao_frijol: 4, jugo: 4, hargow: 5, bunuelos: 5, arroz_frito: 6, patacones: 6, camarones_longjing: 7, lamian: 7, ajiaco: 8, pescado_vinagre: 8, dongpo: 9, obleas: 9 };
-      for (const [id, dia] of Object.entries(diaViejo)) if (r.turnos + 1 >= dia) r.compradas.add(id);
+    r.recientes = (Array.isArray(d.recientes) ? d.recientes : []).filter((id) => recetaPorId(id)).slice(0, 12);
+    if (d.nuevas && typeof d.nuevas === "object") for (const [id, t] of Object.entries(d.nuevas)) if (recetaPorId(id) && Number.isFinite(t)) r.nuevas[id] = t;
+    const version = Number.isInteger(d.version) ? d.version : 1;
+    if (version < 2) {
+      // v58 -> v59 (rom: "empezar la fama de cero"): fama y dias de cero
       r.fama = 0;
       r.turnos = 0;
       r.carta = 0;
       if (r.hoy) r.hoy.contado = false;
+    }
+    if (version < 3) {
+      // v62 (rom: "reseteemos el progreso de recetas, para que no tenga las 23 desde ya sino solo
+      // las que deberia"): las recetas que v59 dejo abiertas por los dias viejos (y las compradas
+      // antes de v59) se cierran; quedan las 4 de siempre, las de los lugares sellados, y las de
+      // v61 (esas solo se pudieron comprar con monedas, en el sistema de ahora)
+      r.compradas = new Set([...r.compradas].filter((id) => RECETAS_V61.has(id)));
     }
     if (d.ultimo && typeof d.ultimo === "object") r.ultimo = { felices: ent(d.ultimo.felices), ganado: ent(d.ultimo.ganado), resenas: (Array.isArray(d.ultimo.resenas) ? d.ultimo.resenas : []).filter((x) => x && typeof x.texto === "string").slice(0, 3) };
     return r;
@@ -401,13 +423,71 @@ export class Restaurante {
 }
 
 /** Arma los pedidos del dia. azar: para las pruebas. */
-export function armarDia(menu, { fama = 1, especial = null, amigos = [], azar = Math.random, asientos = 0 } = {}) {
+/**
+ * Que pide cada cliente (v62, rom: "se estan repitiendo demasiado los mismos pedidos").
+ * Antes cada pedido era un sorteo suelto (y el especial salia en el 30%): con varios
+ * dias del local en el mismo dia real, el especial salia una y otra vez. Ahora:
+ *  - una "bolsa": ninguna receta se repite en el dia hasta que salieron todas
+ *  - nunca el mismo plato dos veces seguidas
+ *  - el especial sale 1 vez por dia real (2 si hay 6+ clientes), aunque abra el local varias veces
+ *  - lo que se pidio hace poco (recientes) sale menos; lo recien comprado (nuevas), mas
+ */
+export function elegirPedidos(menu, n, { especial = null, recientes = [], nuevas = [], azar = Math.random, vecesEspecial = null } = {}) {
+  if (!menu.length || n <= 0) return [];
+  if (menu.length === 1) return Array(n).fill(menu[0]);
+  const conEsp = especial && menu.includes(especial);
+  const resto = conEsp ? menu.filter((x) => x !== especial) : [...menu];
+  // vecesEspecial: cuantas veces puede salir todavia hoy (el local se abre varias veces al dia)
+  const veces = conEsp ? Math.min(n, vecesEspecial ?? (n >= 6 ? 2 : 1)) : 0;
+  // donde va el especial (si son dos, no pegados)
+  const posEsp = new Set();
+  while (posEsp.size < veces) {
+    const k = Math.floor(azar() * n);
+    if (![...posEsp].some((q) => Math.abs(q - k) <= 1) || n < 3) posEsp.add(k);
+  }
+  // lo mas reciente pesa menos todavia (recientes[0] es lo ultimo que se pidio)
+  const hace = (id) => recientes.indexOf(id);
+  const nueva = new Set(nuevas);
+  const peso = (id) => {
+    const h = hace(id);
+    return (h < 0 ? 1 : h < 4 ? 0.08 : h < 8 ? 0.25 : 0.5) * (nueva.has(id) ? 2.5 : 1);
+  };
+  let bolsa = [...resto];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    if (posEsp.has(i)) {
+      out.push(especial);
+      continue;
+    }
+    if (!bolsa.length) bolsa = [...resto];
+    const prev = out[i - 1];
+    let cand = bolsa.filter((x) => x !== prev);
+    if (!cand.length) cand = resto.filter((x) => x !== prev); // la bolsa solo tenia el anterior
+    if (!cand.length) cand = bolsa;
+    const total = cand.reduce((t, x) => t + peso(x), 0);
+    let r = azar() * total;
+    let id = cand[cand.length - 1];
+    for (const x of cand) {
+      r -= peso(x);
+      if (r < 0) {
+        id = x;
+        break;
+      }
+    }
+    bolsa = bolsa.filter((x) => x !== id);
+    out.push(id);
+  }
+  return out;
+}
+
+export function armarDia(menu, { fama = 1, especial = null, amigos = [], azar = Math.random, asientos = 0, recientes = [], nuevas = [], especialHoy = 0 } = {}) {
   const n = clientesPorDia(fama, asientos);
   const pool = [...amigos.map((a) => ({ ...a, amigo: true })), ...CLIENTES.map((c) => ({ ...c, amigo: false }))];
+  const ids = elegirPedidos(menu, n, { especial, recientes, nuevas, azar, vecesEspecial: Math.max(0, (n >= 6 ? 2 : 1) - especialHoy) });
   const out = [];
   for (let i = 0; i < n; i++) {
     const quien = pool.length ? pool[Math.floor(azar() * pool.length)] : { id: "usagi", nombre: "Usagi", amigo: true };
-    const id = especial && menu.includes(especial) && azar() < 0.3 ? especial : menu[Math.floor(azar() * menu.length)];
+    const id = ids[i];
     const r = recetaPorId(id);
     const nExtras = r.extras.length ? Math.min(r.extras.length, Math.floor(azar() * Math.min(3, fama + 1))) : 0;
     const extras = [...r.extras].sort(() => azar() - 0.5).slice(0, nExtras);
@@ -721,7 +801,11 @@ export function abrirRestaurante(contenedor, opts) {
     const cuenta = reg.cuentaHoy();
     // v59: la dificultad sube con la fama (0 en ★1 .. 1 en ★5); en modo relajado, mas facil que nunca
     const dif = reg.relajado ? -0.5 : (reg.estrellasFama() - 1) / 4;
-    dia = { pedidos: armarDia(menu, { fama: reg.estrellasFama(), especial: esp, amigos, asientos: reg.nivel("asientos") }), i: 0, ganado: 0, felices: 0, resenas: [], especial: esp, combo: 0, cuenta, dif, famaAntes: reg.fama };
+    const pedidos = armarDia(menu, { fama: reg.estrellasFama(), especial: esp, amigos, asientos: reg.nivel("asientos"), recientes: reg.recientes, nuevas: reg.recetasNuevas(), especialHoy: reg.hoy.esp || 0 });
+    reg.anotarPedidos(pedidos.map((q) => q.receta));
+    reg.hoy.esp = (reg.hoy.esp || 0) + pedidos.filter((q) => q.receta === esp).length;
+    guardar();
+    dia = { pedidos, i: 0, ganado: 0, felices: 0, resenas: [], especial: esp, combo: 0, cuenta, dif, famaAntes: reg.fama };
     cliente();
   }
 
