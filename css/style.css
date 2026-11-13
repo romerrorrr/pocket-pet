@@ -6027,10 +6027,10 @@ button.nota-polaroid {
 .rest-deco { position: absolute; z-index: 2; }
 .rest-deco-banderin { left: 22.5%; width: 55%; top: 38.6%; }
 .rest-deco-farolitos { left: 61.5%; width: 24%; top: 39.5%; }
-.rest-deco-luces { left: 35.5%; width: 29%; top: 77.5%; }
-.rest-deco-bonsai { left: 11.5%; width: 6.25%; bottom: 12%; }
-.rest-deco-orquidea { left: 81%; width: 6.7%; bottom: 12%; }
-.rest-deco-saco { left: 67%; width: 7.5%; bottom: 12%; }
+.rest-deco-luces { left: 32.5%; width: 35%; top: 49.6%; z-index: 4; }
+.rest-deco-bonsai { left: 11.5%; width: 6.25%; bottom: 12.5%; }
+.rest-deco-orquidea { left: 2.5%; width: 6.7%; bottom: 12.5%; }
+.rest-deco-saco { left: 30%; width: 7.5%; bottom: 4%; z-index: 3; }
 .rest-col { position: absolute; z-index: 5; top: calc(var(--arr) + 48px); bottom: var(--aba); width: min(200px, 28vw); display: flex; flex-direction: column; gap: 8px; }
 .rest-col.izq { left: var(--sx); }
 .rest-col.der { right: var(--dx); }
@@ -6253,3 +6253,19 @@ button.nota-polaroid {
 .rest-col .boton-fantasma { --relleno: var(--papel); }
 .rest-cuantas { font-size: 11px; opacity: 0.7; }
 @media (max-width: 700px) { .rest-cuantas { display: none; } }
+
+/* v60: el interruptor de poner / sacar un adorno */
+.rest-decor-lista .rest-relajado { min-height: 30px; padding: 0 8px; font-size: 12px; }
+
+/* ================================================================
+   v60 — borrar fotos
+   ================================================================ */
+.boton-borrar-foto { color: var(--rosa-oscuro); }
+.boton-borrar-foto.oculto { display: none; }
+.capa-borrar-foto { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; background: rgba(20, 16, 24, 0.55); animation: aparecer 0.2s steps(3); }
+.hoja-borrar-foto.papel { flex: none; min-height: 0; width: min(380px, 88vw); display: grid; grid-template-columns: 90px 1fr; gap: 10px 14px; align-items: center; padding: 14px 16px; }
+.hoja-borrar-foto img { width: 90px; height: 90px; object-fit: cover; box-shadow: 0 0 0 2px var(--tinta); image-rendering: pixelated; }
+.hoja-borrar-texto { display: flex; flex-direction: column; gap: 4px; font-size: 16px; }
+.hoja-borrar-texto small { font-size: 13px; opacity: 0.7; }
+.hoja-borrar-foto .fila-botones { grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; }
+.boton.boton-peligro { --relleno: rgb(214, 84, 76); --texto: #fff; }
