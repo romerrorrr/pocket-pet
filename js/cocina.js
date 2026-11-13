@@ -26,10 +26,15 @@ export const RELLENOS = {
   verdura: { nombre: "veggies", color: "rgb(120,170,90)", sombra: "rgb(84,130,64)" },
   frijol: { nombre: "red bean", color: "rgb(150,50,60)", sombra: "rgb(110,30,44)" },
   caldo: { nombre: "pork & soup", color: "rgb(214,150,100)", sombra: "rgb(176,110,70)" },
-  camaron: { nombre: "shrimp", color: "rgb(244,150,130)", sombra: "rgb(214,104,96)" },
+  camaron: { nombre: "shrimp", color: "rgb(252,232,220)", sombra: "rgb(232,180,160)" }, // clarito: los camarones encima se ven
   loto: { nombre: "lotus paste", color: "rgb(200,150,90)", sombra: "rgb(160,110,60)" },
   queso: { nombre: "cheese", color: "rgb(250,230,150)", sombra: "rgb(220,190,100)" },
   pollo: { nombre: "chicken & potato", color: "rgb(230,190,120)", sombra: "rgb(196,150,80)" },
+  // v61
+  arroz: { nombre: "sticky rice", color: "rgb(250,248,240)", sombra: "rgb(220,214,200)" },
+  natilla: { nombre: "golden custard", color: "rgb(255,200,80)", sombra: "rgb(226,160,50)" },
+  sesamo: { nombre: "black sesame", color: "rgb(60,50,56)", sombra: "rgb(30,26,30)" },
+  repollo: { nombre: "cabbage & carrot", color: "rgb(190,220,140)", sombra: "rgb(150,190,100)" },
 };
 export const LIQUIDOS = {
   agua: { nombre: "hot water", color: "rgb(200,226,240)" },
@@ -38,6 +43,12 @@ export const LIQUIDOS = {
   cafe: { nombre: "coffee", color: "rgb(90,56,40)" },
   jarabe: { nombre: "osmanthus syrup", color: "rgb(250,210,110)" },
   jugo: { nombre: "passion fruit juice", color: "rgb(255,196,60)" },
+  // v61
+  chocolate: { nombre: "hot chocolate", color: "rgb(110,62,40)" },
+  natilla: { nombre: "custard", color: "rgb(255,214,110)" },
+  masa: { nombre: "batter", color: "rgb(250,230,180)" },
+  huevo: { nombre: "beaten egg", color: "rgb(255,220,90)" },
+  caldo: { nombre: "broth", color: "rgb(214,170,110)" },
 };
 /** v58: lo que se corta, se lava o se aplasta */
 export const INGREDIENTES = {
@@ -50,6 +61,21 @@ export const INGREDIENTES = {
   bokchoy: { nombre: "bok choy", color: "rgb(110,170,90)", vena: "rgb(230,246,220)", alto: 30 },
   camaron: { nombre: "shrimp", color: "rgb(250,170,140)", alto: 30 },
   masa_arepa: { nombre: "arepa dough", color: "rgb(250,232,170)", alto: 40, redondo: true },
+  // v61
+  tofu: { nombre: "tofu", color: "rgb(250,246,232)", vena: "rgb(236,228,206)", alto: 40 },
+  res: { nombre: "beef", color: "rgb(190,80,70)", vena: "rgb(240,200,190)", alto: 34 },
+  repollo: { nombre: "cabbage", color: "rgb(190,226,160)", vena: "rgb(236,246,220)", alto: 40, redondo: true },
+  queso: { nombre: "cheese", color: "rgb(250,226,140)", vena: "rgb(255,240,190)", alto: 40 },
+  chocolate: { nombre: "chocolate", color: "rgb(110,62,40)", vena: "rgb(150,90,60)", alto: 40 },
+  coco: { nombre: "coconut", color: "rgb(250,250,246)", vena: "rgb(170,120,80)", alto: 40 },
+  mango: { nombre: "mango", color: "rgb(150,190,70)", pulpa: "rgb(255,200,70)", alto: 40, redondo: true },
+  lulo: { nombre: "lulo", color: "rgb(240,160,40)", vena: "rgb(200,230,120)", pulpa: "rgb(200,230,120)", alto: 40, redondo: true },
+  papaya: { nombre: "papaya", color: "rgb(250,140,70)", vena: "rgb(60,40,40)", alto: 40, redondo: true },
+  maduro: { nombre: "ripe plantain", color: "rgb(240,200,80)", pulpa: "rgb(250,220,140)", alto: 34, redondo: true },
+  loto: { nombre: "lotus root", color: "rgb(214,180,140)", pulpa: "rgb(246,236,220)", alto: 40, redondo: true },
+  hoja: { nombre: "leaves", color: "rgb(110,160,80)", vena: "rgb(170,210,130)", alto: 40 },
+  pollo: { nombre: "chicken", color: "rgb(240,214,170)", vena: "rgb(250,232,200)", alto: 44, redondo: true },
+  arroz: { nombre: "rice", color: "rgb(250,248,240)", alto: 30 },
 };
 export const COCCIONES = {
   vapor: { verbo: "STEAM", boton: "Take it out!", ms: 3600 },
@@ -110,6 +136,170 @@ function el(padre, tag, attrs = {}) {
 const TINTA = "rgb(22,20,22)";
 const MASA = "rgb(250,244,228)";
 const MASA_SOMBRA = "rgb(226,214,190)";
+
+
+// ---------- v61: los ingredientes dibujados de verdad (no rectangulos) ----------
+// rom: "hay varias cosas como los shrimps … que se ven como figuras random"
+let idClip = 0;
+const CAMARON = "rgb(250,160,130)";
+const CAMARON_OSC = "rgb(220,104,90)";
+/** Un camaron curvado (forma de C), con segmentos, cola y patitas. (x, y) = centro, k = escala. */
+export function dibujarCamaron(padre, x, y, k = 1, girado = false) {
+  const g = el(padre, "g", { transform: `translate(${x} ${y}) scale(${girado ? -k : k} ${k})` });
+  // patitas
+  for (let i = 0; i < 4; i++) el(g, "line", { x1: -2 + i * 4, y1: 8, x2: -4 + i * 4, y2: 15, stroke: CAMARON_OSC, "stroke-width": 1.5 });
+  // el cuerpo: un arco grueso (C) con borde de tinta
+  el(g, "path", { d: "M14 -6 A14 14 0 1 0 6 13", fill: "none", stroke: TINTA, "stroke-width": 13, "stroke-linecap": "round" });
+  el(g, "path", { d: "M14 -6 A14 14 0 1 0 6 13", fill: "none", stroke: CAMARON, "stroke-width": 9, "stroke-linecap": "round" });
+  // los segmentos
+  for (const a of [200, 235, 270, 305, 340]) {
+    const r = (a * Math.PI) / 180;
+    el(g, "line", { x1: 9.5 * Math.cos(r), y1: 9.5 * Math.sin(r), x2: 18.5 * Math.cos(r), y2: 18.5 * Math.sin(r), stroke: "rgb(255,214,196)", "stroke-width": 1.6 });
+  }
+  // la cola en abanico
+  el(g, "path", { d: "M6 13 L0 22 L8 20 L14 24 L12 14 Z", fill: CAMARON_OSC, stroke: TINTA, "stroke-width": 2, "stroke-linejoin": "round" });
+  // la cabeza y el ojito
+  el(g, "circle", { cx: 15, cy: -7, r: 2, fill: TINTA });
+  el(g, "path", { d: "M16 -10 Q24 -18 30 -14", fill: "none", stroke: CAMARON_OSC, "stroke-width": 1.5 });
+  return g;
+}
+
+/** Un pescado entero de perfil (cabeza a la izquierda). */
+function dibujarPescado(g, x0, x1, cy, h) {
+  const L = x1 - x0;
+  el(g, "path", { d: `M${x1 - 18} ${cy} L${x1} ${cy - h * 0.55} L${x1 - 4} ${cy} L${x1} ${cy + h * 0.55} Z`, fill: "rgb(200,170,140)", stroke: TINTA, "stroke-width": 3, "stroke-linejoin": "round" });
+  el(g, "ellipse", { cx: x0 + L * 0.45, cy, rx: L * 0.46, ry: h / 2, fill: "rgb(226,214,196)", stroke: TINTA, "stroke-width": 3 });
+  el(g, "path", { d: `M${x0 + L * 0.1} ${cy + 3} Q${x0 + L * 0.45} ${cy + h * 0.32} ${x0 + L * 0.85} ${cy + 2}`, fill: "none", stroke: "rgb(250,244,232)", "stroke-width": 4 }); // la panza clara
+  for (let i = 0; i < 6; i++) {
+    const cx = x0 + L * (0.3 + i * 0.09);
+    el(g, "path", { d: `M${cx} ${cy - h * 0.28} q5 6 0 12`, fill: "none", stroke: "rgb(176,160,140)", "stroke-width": 2 }); // escamas
+  }
+  el(g, "path", { d: `M${x0 + L * 0.2} ${cy - h * 0.38} Q${x0 + L * 0.22} ${cy} ${x0 + L * 0.2} ${cy + h * 0.38}`, fill: "none", stroke: TINTA, "stroke-width": 2 }); // agalla
+  el(g, "circle", { cx: x0 + L * 0.1, cy: cy - h * 0.12, r: 4, fill: "#fff", stroke: TINTA, "stroke-width": 2 });
+  el(g, "circle", { cx: x0 + L * 0.1, cy: cy - h * 0.12, r: 1.6, fill: TINTA });
+  el(g, "path", { d: `M${x0 + L * 0.42} ${cy - h / 2 + 1} L${x0 + L * 0.5} ${cy - h * 0.85} L${x0 + L * 0.62} ${cy - h / 2 + 2} Z`, fill: "rgb(200,170,140)", stroke: TINTA, "stroke-width": 2, "stroke-linejoin": "round" }); // aleta
+}
+
+/** El ingrediente entero, de x0 a x1, centrado en cy (para cortar). */
+export function dibujarIngrediente(g, que, x0, x1, cy) {
+  const I = INGREDIENTES[que] || INGREDIENTES.cebollin;
+  const h = I.alto;
+  const L = x1 - x0;
+  const borde = { stroke: TINTA, "stroke-width": 3 };
+  if (que === "pescado") return dibujarPescado(g, x0, x1, cy, h);
+  if (que === "cebollin") {
+    // un manojito de tres cebollines (parte blanca con raicitas, parte verde)
+    for (let j = 0; j < 3; j++) {
+      const y = cy - 18 + j * 14;
+      const h2 = 12;
+      const xb = x0 + 14 + (j % 2) * 4;
+      for (let i = 0; i < 4; i++) el(g, "line", { x1: xb, y1: y - 2 + i * 1.5, x2: xb - 10, y2: y - 6 + i * 4, stroke: "rgb(200,190,160)", "stroke-width": 1.5 }); // raicitas
+      el(g, "rect", { x: xb, y: y - h2 / 2, width: L * 0.26, height: h2, rx: h2 / 2, fill: "rgb(248,248,238)", ...borde });
+      el(g, "rect", { x: xb + L * 0.22, y: y - h2 / 2, width: L * 0.7 - (j % 2) * 8, height: h2, rx: 3, fill: "rgb(110,180,80)", ...borde });
+      el(g, "rect", { x: xb + L * 0.22, y: y - h2 / 2 + 2.5, width: L * 0.7 - (j % 2) * 8, height: 2.5, fill: "rgb(170,220,130)" });
+    }
+    return;
+  }
+  if (que === "cerdo" || que === "panceta") {
+    el(g, "rect", { x: x0, y: cy - h / 2, width: L, height: h, rx: 4, fill: "rgb(230,140,120)", ...borde });
+    const capas = [["rgb(170,90,60)", 0, 0.16], ["rgb(252,236,214)", 0.16, 0.34], ["rgb(214,110,96)", 0.34, 0.58], ["rgb(252,236,214)", 0.58, 0.72], ["rgb(214,110,96)", 0.72, 1]];
+    for (const [c, a, b] of capas) el(g, "rect", { x: x0 + 1.5, y: cy - h / 2 + 1.5 + (h - 3) * a, width: L - 3, height: (h - 3) * (b - a), fill: c });
+    el(g, "rect", { x: x0, y: cy - h / 2, width: L, height: h, rx: 4, fill: "none", ...borde });
+    return;
+  }
+  if (que === "platano") {
+    // platano verde: gordito y curvo, con sus puntas oscuras
+    el(g, "path", { d: `M${x0 + 4} ${cy - 2} Q${x0 + L / 2} ${cy + 44} ${x1 - 4} ${cy - 4} Q${x1 + 4} ${cy - 22} ${x1 - 16} ${cy - 20} Q${x0 + L / 2} ${cy + 4} ${x0 + 16} ${cy - 22} Q${x0 - 2} ${cy - 20} ${x0 + 4} ${cy - 2} Z`, fill: "rgb(140,186,76)", ...borde });
+    el(g, "path", { d: `M${x0 + 18} ${cy - 8} Q${x0 + L / 2} ${cy + 26} ${x1 - 18} ${cy - 10}`, fill: "none", stroke: "rgb(186,220,120)", "stroke-width": 4 });
+    el(g, "path", { d: `M${x0 + 10} ${cy - 2} Q${x0 + L / 2} ${cy + 36} ${x1 - 10} ${cy - 4}`, fill: "none", stroke: "rgb(110,150,60)", "stroke-width": 2 });
+    el(g, "rect", { x: x1 - 12, y: cy - 22, width: 7, height: 7, fill: "rgb(90,70,40)" });
+    el(g, "rect", { x: x0 + 4, y: cy - 8, width: 6, height: 6, fill: "rgb(90,70,40)" });
+    return;
+  }
+  if (que === "papa") {
+    for (let i = 0; i < 2; i++) {
+      const cx = x0 + L * (0.27 + i * 0.47);
+      el(g, "ellipse", { cx, cy, rx: L * 0.24, ry: h / 2, fill: "rgb(222,184,120)", ...borde });
+      for (const [dx, dy] of [[-8, -6], [6, 4], [12, -8], [-14, 6]]) el(g, "circle", { cx: cx + dx, cy: cy + dy, r: 1.6, fill: "rgb(150,110,60)" });
+    }
+    return;
+  }
+  if (que === "fruta") {
+    for (let i = 0; i < 2; i++) {
+      const cx = x0 + L * (0.27 + i * 0.47);
+      el(g, "ellipse", { cx, cy, rx: L * 0.22, ry: h / 2, fill: "rgb(130,70,120)", ...borde });
+      el(g, "ellipse", { cx: cx - 8, cy: cy - 8, rx: 6, ry: 4, fill: "rgb(170,110,160)" });
+    }
+    return;
+  }
+  // v61 pasada: los de las recetas nuevas, dibujados (no rectangulos)
+  if (que === "tofu") {
+    el(g, "rect", { x: x0 + 8, y: cy - 16, width: L - 16, height: 38, rx: 5, fill: "rgb(236,228,206)", ...borde }); // el costado
+    el(g, "rect", { x: x0 + 8, y: cy - 24, width: L - 16, height: 22, rx: 5, fill: "rgb(252,250,240)", ...borde }); // la cara de arriba
+    el(g, "rect", { x: x0 + 18, y: cy - 20, width: L * 0.4, height: 4, rx: 2, fill: "#fff" });
+    return;
+  }
+  if (que === "res") {
+    el(g, "path", { d: `M${x0 + 8} ${cy - 14} Q${x0 + 12} ${cy - 32} ${x0 + L * 0.35} ${cy - 30} Q${x0 + L * 0.7} ${cy - 36} ${x1 - 10} ${cy - 22} Q${x1 + 4} ${cy} ${x1 - 12} ${cy + 24} Q${x0 + L * 0.5} ${cy + 34} ${x0 + 14} ${cy + 22} Q${x0 - 2} ${cy + 6} ${x0 + 8} ${cy - 14} Z`, fill: "rgb(196,70,66)", ...borde });
+    el(g, "path", { d: `M${x0 + 12} ${cy - 18} Q${x0 + L * 0.4} ${cy - 32} ${x1 - 12} ${cy - 20}`, fill: "none", stroke: "rgb(252,236,220)", "stroke-width": 5 }); // la grasa del borde
+    for (const [fx, fy, fw] of [[0.18, -4, 0.14], [0.42, 6, 0.18], [0.68, -6, 0.14], [0.3, 16, 0.12], [0.58, -14, 0.1], [0.75, 12, 0.1]]) el(g, "path", { d: `M${x0 + L * fx} ${cy + fy} q${(L * fw) / 2} -5 ${L * fw} 2`, fill: "none", stroke: "rgb(244,200,190)", "stroke-width": 2.5 }); // el marmoleo
+    return;
+  }
+  if (que === "mango") {
+    // el mango biche ya pelado: verde clarito, largo
+    el(g, "ellipse", { cx: x0 + L / 2, cy, rx: L * 0.47, ry: 24, fill: "rgb(218,228,140)", ...borde });
+    el(g, "ellipse", { cx: x0 + L / 2, cy: cy + 2, rx: L * 0.32, ry: 10, fill: "rgb(236,240,180)" });
+    el(g, "path", { d: `M${x0 + 20} ${cy - 10} Q${x0 + L / 2} ${cy - 22} ${x1 - 20} ${cy - 10}`, fill: "none", stroke: "rgb(246,248,210)", "stroke-width": 3 });
+    return;
+  }
+  if (que === "repollo") {
+    // medio repollo: hojas verdes por fuera y las capas claras por dentro
+    el(g, "ellipse", { cx: x0 + L / 2, cy, rx: L * 0.42, ry: 34, fill: "rgb(120,180,90)", ...borde });
+    el(g, "ellipse", { cx: x0 + L / 2, cy, rx: L * 0.36, ry: 28, fill: "rgb(214,236,180)" });
+    for (let i = 1; i <= 4; i++) el(g, "ellipse", { cx: x0 + L / 2 + 2 * i, cy: cy + i, rx: L * 0.36 - i * 11, ry: 28 - i * 6, fill: "none", stroke: "rgb(170,206,130)", "stroke-width": 2 });
+    el(g, "path", { d: `M${x0 + L / 2 - 10} ${cy + 24} Q${x0 + L / 2} ${cy + 4} ${x0 + L / 2 + 6} ${cy - 2}`, fill: "none", stroke: "rgb(246,250,226)", "stroke-width": 5 }); // el tronquito
+    return;
+  }
+  if (que === "lulo") {
+    // dos lulos: naranjas, con la pulpa verde y semillitas
+    for (let i = 0; i < 2; i++) {
+      const cx = x0 + L * (0.27 + i * 0.47);
+      el(g, "circle", { cx, cy, r: 30, fill: "rgb(240,150,40)", ...borde });
+      el(g, "circle", { cx, cy, r: 22, fill: "rgb(200,226,120)" });
+      for (let j = 0; j < 10; j++) {
+        const a = (j / 10) * Math.PI * 2;
+        el(g, "circle", { cx: cx + 12 * Math.cos(a), cy: cy + 12 * Math.sin(a), r: 1.8, fill: "rgb(120,140,60)" });
+      }
+      el(g, "circle", { cx, cy, r: 5, fill: "rgb(226,240,170)" });
+    }
+    return;
+  }
+  if (que === "papaya") {
+    // media papaya pelada: pulpa naranja y las semillas negras en el centro
+    el(g, "path", { d: `M${x0 + 8} ${cy} Q${x0 + 10} ${cy - 30} ${x0 + L * 0.5} ${cy - 28} Q${x1 - 4} ${cy - 26} ${x1 - 6} ${cy} Q${x1 - 4} ${cy + 26} ${x0 + L * 0.5} ${cy + 28} Q${x0 + 10} ${cy + 30} ${x0 + 8} ${cy} Z`, fill: "rgb(250,150,90)", ...borde });
+    el(g, "ellipse", { cx: x0 + L * 0.52, cy, rx: L * 0.3, ry: 11, fill: "rgb(236,120,70)" });
+    for (let j = 0; j < 16; j++) el(g, "circle", { cx: x0 + L * 0.27 + j * L * 0.033, cy: cy + (j % 2 ? 4 : -4), r: 2.8, fill: "rgb(50,36,36)" });
+    return;
+  }
+  if (que === "maduro") {
+    // el maduro pelado: amarillo dorado, gordito y curvo
+    el(g, "path", { d: `M${x0 + 4} ${cy - 2} Q${x0 + L / 2} ${cy + 44} ${x1 - 4} ${cy - 4} Q${x1 + 4} ${cy - 22} ${x1 - 16} ${cy - 20} Q${x0 + L / 2} ${cy + 4} ${x0 + 16} ${cy - 22} Q${x0 - 2} ${cy - 20} ${x0 + 4} ${cy - 2} Z`, fill: "rgb(246,204,96)", ...borde });
+    el(g, "path", { d: `M${x0 + 18} ${cy - 8} Q${x0 + L / 2} ${cy + 26} ${x1 - 18} ${cy - 10}`, fill: "none", stroke: "rgb(252,232,160)", "stroke-width": 4 });
+    for (const fx of [0.22, 0.38, 0.55, 0.7, 0.82]) el(g, "circle", { cx: x0 + L * fx, cy: cy + 10 - 22 * Math.abs(fx - 0.5), r: 2, fill: "rgb(200,140,60)" });
+    return;
+  }
+  // los demas: una pieza con su veta
+  el(g, "rect", { x: x0, y: cy - h / 2, width: L, height: h, rx: I.redondo ? h / 2.4 : 4, fill: I.color, ...borde });
+  if (I.vena) el(g, "rect", { x: x0 + 4, y: cy - h / 2 + h * 0.3, width: L - 8, height: Math.max(2, h * 0.16), fill: I.vena });
+}
+
+/** Una hoja de bok choy (tallo blanco, hoja verde con nervaduras). */
+function dibujarBokchoy(g, cx, cy) {
+  el(g, "path", { d: `M${cx - 80} ${cy + 6} Q${cx - 20} ${cy + 18} ${cx + 10} ${cy + 8} L${cx + 10} ${cy - 4} Q${cx - 20} ${cy - 12} ${cx - 80} ${cy - 2} Z`, fill: "rgb(236,244,226)", stroke: TINTA, "stroke-width": 3 });
+  el(g, "path", { d: `M${cx + 4} ${cy + 2} Q${cx + 40} ${cy - 40} ${cx + 84} ${cy - 6} Q${cx + 60} ${cy + 36} ${cx + 4} ${cy + 2} Z`, fill: "rgb(80,150,70)", stroke: TINTA, "stroke-width": 3 });
+  el(g, "path", { d: `M${cx + 6} ${cy + 2} Q${cx + 44} ${cy - 4} ${cx + 78} ${cy - 6}`, fill: "none", stroke: "rgb(200,230,180)", "stroke-width": 3 });
+  for (const t of [0.35, 0.6, 0.82]) el(g, "line", { x1: cx + 6 + 72 * t, y1: cy - 2 - 4 * t, x2: cx + 6 + 72 * t + 6, y2: cy - 18 + 6 * t, stroke: "rgb(200,230,180)", "stroke-width": 2 });
+}
 
 /**
  * Arma un paso dentro de area (un div vacio). paso: { t, ...datos }.
@@ -249,7 +439,72 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let f = 0;
     let apretado = false;
     let barra;
-    if (esVerter) {
+    if (esVerter && (paso.en === "plancha" || paso.en === "plato")) {
+      // v61 pasada: verter sobre la plancha (la masa del jianbing) o sobre el plato (el almibar):
+      // visto desde arriba, el charquito crece hasta el anillo verde
+      const L = LIQUIDOS[paso.liquido] || LIQUIDOS.agua;
+      if (paso.en === "plancha") {
+        el(s, "circle", { cx: 130, cy: 108, r: 82, fill: "rgb(70,70,80)", stroke: TINTA, "stroke-width": 3 });
+        el(s, "circle", { cx: 130, cy: 108, r: 74, fill: "rgb(96,96,108)" });
+        el(s, "rect", { x: 208, y: 102, width: 40, height: 12, rx: 5, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 3 });
+      } else {
+        el(s, "circle", { cx: 130, cy: 108, r: 80, fill: "rgb(252,252,250)", stroke: TINTA, "stroke-width": 3 });
+        el(s, "circle", { cx: 130, cy: 108, r: 62, fill: "none", stroke: "rgb(214,214,222)", "stroke-width": 3 });
+        if (ctx.plato) el(s, "image", { href: ctx.plato, x: 96, y: 74, width: 68, height: 68, style: "image-rendering:pixelated", opacity: 0.9 });
+      }
+      el(s, "circle", { cx: 130, cy: 108, r: 60 * B, fill: "rgba(120,190,110,0.22)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
+      el(s, "circle", { cx: 130, cy: 108, r: 60 * A, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
+      barra = el(s, "circle", { cx: 130, cy: 108, r: 0, fill: L.color, stroke: "rgba(0,0,0,0.25)", "stroke-width": 2, opacity: paso.en === "plato" ? 0.85 : 1 });
+      // la jarrita (o el cucharon) arriba a la derecha
+      const jarra = el(s, "g", { transform: "translate(232 26)" });
+      el(jarra, "rect", { x: 0, y: 0, width: 40, height: 34, rx: 6, fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
+      el(jarra, "path", { d: "M0 8 L-14 2 L-12 10 L0 14 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
+      const chorro = el(s, "path", { d: "", fill: "none", stroke: L.color, "stroke-width": 5, "stroke-linecap": "round" });
+      ayuda("Hold to pour · let go in the green ring");
+      let tPrevV = 0;
+      bucle((t) => {
+        const dt = Math.min(50, t - tPrevV) / (1000 / 60);
+        tPrevV = t;
+        if (apretado) f = Math.min(1, f + 0.0085 * dt);
+        barra.setAttribute("r", (60 * f).toFixed(1));
+        chorro.setAttribute("d", apretado ? "M220 32 Q160 30 132 104" : "");
+        if (f >= 1 && apretado) {
+          apretado = false;
+          fin(1);
+        }
+      });
+    } else if (esVerter && paso.en === "olla") {
+      // v61 pasada: verter en la olla (arroz con leche, la sopa, el te sobre los camarones): vista de lado
+      const L = LIQUIDOS[paso.liquido] || LIQUIDOS.agua;
+      const Y_ARR = 70;
+      const Y_ABA = 164;
+      el(s, "rect", { x: 60, y: Y_ARR, width: 180, height: Y_ABA - Y_ARR, rx: 10, fill: "rgb(150,154,170)", stroke: TINTA, "stroke-width": 3 });
+      el(s, "rect", { x: 40, y: Y_ARR + 8, width: 22, height: 8, fill: "rgb(90,90,100)", stroke: TINTA, "stroke-width": 3 });
+      el(s, "rect", { x: 238, y: Y_ARR + 8, width: 22, height: 8, fill: "rgb(90,90,100)", stroke: TINTA, "stroke-width": 3 });
+      el(s, "rect", { x: 68, y: Y_ARR + 4, width: 164, height: Y_ABA - Y_ARR - 10, fill: "rgb(70,72,84)" });
+      const ALTO = Y_ABA - Y_ARR - 12;
+      barra = el(s, "rect", { x: 68, y: Y_ABA - 6, width: 164, height: 0, fill: L.color });
+      el(s, "rect", { x: 64, y: Y_ABA - 6 - ALTO * B, width: 172, height: ALTO * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
+      el(s, "rect", { x: 60, y: Y_ARR, width: 180, height: Y_ABA - Y_ARR, rx: 10, fill: "none", stroke: TINTA, "stroke-width": 3 });
+      const jarra = el(s, "g", { transform: "translate(212 14)" });
+      el(jarra, "rect", { x: 0, y: 0, width: 46, height: 40, rx: 6, fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
+      el(jarra, "path", { d: "M0 8 L-16 2 L-14 10 L0 14 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
+      const chorro = el(s, "rect", { x: 192, y: 24, width: 6, height: 0, fill: L.color, stroke: TINTA, "stroke-width": 1 });
+      ayuda("Hold to pour · let go on the green line");
+      let tPrevV = 0;
+      bucle((t) => {
+        const dt = Math.min(50, t - tPrevV) / (1000 / 60);
+        tPrevV = t;
+        if (apretado) f = Math.min(1, f + 0.0085 * dt);
+        barra.setAttribute("y", Y_ABA - 6 - ALTO * f);
+        barra.setAttribute("height", ALTO * f);
+        chorro.setAttribute("height", apretado ? Math.max(0, Y_ABA - 6 - ALTO * f - 24) : 0);
+        if (f >= 1 && apretado) {
+          apretado = false;
+          fin(1);
+        }
+      });
+    } else if (esVerter) {
       const L = LIQUIDOS[paso.liquido] || LIQUIDOS.agua;
       // la taza (vidrio): se llena de abajo para arriba
       el(s, "rect", { x: 110, y: 40, width: 80, height: 130, fill: "rgba(255,255,255,0.55)", stroke: TINTA, "stroke-width": 3 });
@@ -261,8 +516,11 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(jarra, "path", { d: "M0 8 L-16 2 L-14 10 L0 14 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
       const chorro = el(s, "rect", { x: 186, y: 30, width: 6, height: 0, fill: L.color, stroke: TINTA, "stroke-width": 1 });
       ayuda(`Hold to pour · let go on the green line`);
-      bucle(() => {
-        if (apretado) f = Math.min(1, f + 0.0085);
+      let tPrevV = 0;
+      bucle((t) => {
+        const dt = Math.min(50, t - tPrevV) / (1000 / 60); // en "cuadros de 60fps" (asi da igual 30, 60 o 120 Hz)
+        tPrevV = t;
+        if (apretado) f = Math.min(1, f + 0.0085 * dt);
         barra.setAttribute("y", 167 - 127 * f);
         barra.setAttribute("height", 127 * f);
         chorro.setAttribute("height", apretado ? 137 - 127 * f : 0);
@@ -273,19 +531,52 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       });
     } else {
       const R = RELLENOS[paso.relleno] || RELLENOS.carne;
-      el(s, "circle", { cx: 130, cy: 108, r: 74, fill: MASA, stroke: TINTA, "stroke-width": 3 });
+      // v61 pasada: la base segun la receta (masa, raiz de loto, hoja, maduro)
+      if (paso.base === "loto") {
+        el(s, "circle", { cx: 130, cy: 108, r: 74, fill: "rgb(236,222,200)", stroke: TINTA, "stroke-width": 3 });
+        el(s, "circle", { cx: 130, cy: 108, r: 68, fill: "none", stroke: "rgb(196,160,120)", "stroke-width": 5 });
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2;
+          el(s, "circle", { cx: 130 + 52 * Math.cos(a), cy: 108 + 52 * Math.sin(a), r: 9, fill: "rgb(200,180,150)", stroke: "rgb(176,150,116)", "stroke-width": 2 });
+        }
+      } else if (paso.base === "hoja") {
+        for (const rot of [-30, 30]) {
+          const gh = el(s, "g", { transform: `rotate(${rot} 130 108)` });
+          el(gh, "path", { d: "M50 108 Q130 50 210 108 Q130 166 50 108 Z", fill: "rgb(100,160,80)", stroke: TINTA, "stroke-width": 3 });
+          el(gh, "line", { x1: 56, y1: 108, x2: 204, y2: 108, stroke: "rgb(170,210,130)", "stroke-width": 2 });
+        }
+      } else if (paso.base === "maduro") {
+        el(s, "ellipse", { cx: 130, cy: 108, rx: 84, ry: 64, fill: "rgb(246,204,96)", stroke: TINTA, "stroke-width": 3 });
+        el(s, "ellipse", { cx: 130, cy: 108, rx: 70, ry: 52, fill: "none", stroke: "rgb(252,228,150)", "stroke-width": 4 });
+      } else el(s, "circle", { cx: 130, cy: 108, r: 74, fill: MASA, stroke: TINTA, "stroke-width": 3 });
       el(s, "circle", { cx: 130, cy: 108, r: 50 * B, fill: "rgba(120,190,110,0.25)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "circle", { cx: 130, cy: 108, r: 50 * A, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       barra = el(s, "ellipse", { cx: 130, cy: 108, rx: 0, ry: 0, fill: R.color, stroke: R.sombra, "stroke-width": 3 });
+      // los camarones se ven como camarones (rom: "los shrimps … se ven como figuras random")
+      let camarones = null;
+      if (paso.relleno === "camaron") {
+        camarones = el(s, "g", { transform: "translate(130 108) scale(0)" });
+        dibujarCamaron(camarones, -16, -4, 0.75);
+        dibujarCamaron(camarones, 14, -8, 0.75, true);
+        dibujarCamaron(camarones, 0, 14, 0.75);
+      }
       // el bol con la cuchara
       el(s, "path", { d: "M222 120 Q252 170 282 120 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
       el(s, "ellipse", { cx: 252, cy: 120, rx: 30, ry: 8, fill: R.color, stroke: TINTA, "stroke-width": 3 });
+      if (paso.relleno === "camaron") {
+        dibujarCamaron(s, 240, 112, 0.5);
+        dibujarCamaron(s, 262, 110, 0.5, true);
+      }
       el(s, "rect", { x: 248, y: 64, width: 6, height: 52, rx: 3, fill: "rgb(196,170,140)", stroke: TINTA, "stroke-width": 2, transform: "rotate(-20 252 116)" });
       ayuda(`Hold to fill · let go in the green ring`);
-      bucle(() => {
-        if (apretado) f = Math.min(1, f + 0.009);
+      let tPrevR = 0;
+      bucle((t) => {
+        const dt = Math.min(50, t - tPrevR) / (1000 / 60);
+        tPrevR = t;
+        if (apretado) f = Math.min(1, f + 0.009 * dt);
         barra.setAttribute("rx", 50 * f);
         barra.setAttribute("ry", 44 * f);
+        if (camarones) camarones.setAttribute("transform", `translate(130 108) scale(${(f * 1.15).toFixed(3)})`);
         if (f >= 1 && apretado) {
           apretado = false;
           fin(1);
@@ -317,6 +608,11 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const barrido = media ? 140 : 360;
     el(s, "circle", { cx: 150, cy: 104, r: 74, fill: MASA, stroke: TINTA, "stroke-width": 3 });
     el(s, "ellipse", { cx: 150, cy: 104, rx: 34, ry: 30, fill: R.color, stroke: R.sombra, "stroke-width": 3 });
+    if (paso.relleno === "camaron") {
+      dibujarCamaron(s, 136, 100, 0.8);
+      dibujarCamaron(s, 166, 98, 0.8, true);
+      dibujarCamaron(s, 150, 116, 0.7);
+    }
     const pliegues = el(s, "g", {});
     const zona = el(s, "path", { fill: "rgba(120,190,110,0.55)", stroke: "rgb(80,150,80)", "stroke-width": 2 });
     const marca = el(s, "rect", { x: -6, y: -90, width: 12, height: 18, fill: "rgb(186,78,104)", stroke: TINTA, "stroke-width": 2 });
@@ -386,7 +682,17 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(s, "rect", { x: 70, y: 70, width: 160, height: 80, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 });
       el(s, "rect", { x: 70, y: 136, width: 160, height: 14, fill: "rgb(170,124,72)" });
       el(s, "rect", { x: 70, y: 70, width: 160, height: 80, fill: "none", stroke: TINTA, "stroke-width": 3 });
-    } else if (f === "hervir" || f === "calentar" || f === "caramelo") {
+    } else if (f === "calentar") {
+      // v61 pasada: calentar el agua en la tetera (antes salia la taza adentro de una olla)
+      el(s, "rect", { x: 96, y: 150, width: 108, height: 8, fill: "rgb(50,46,54)", stroke: TINTA, "stroke-width": 2 }); // el fogon
+      for (let i = 0; i < 6; i++) el(s, "rect", { x: 106 + i * 16, y: 158, width: 8, height: 4, fill: i % 2 ? "rgb(110,150,240)" : "rgb(250,140,50)" });
+      el(s, "path", { d: "M104 146 Q100 86 150 82 Q200 86 196 146 Z", fill: "rgb(196,204,214)", stroke: TINTA, "stroke-width": 3 }); // la tetera
+      el(s, "path", { d: "M114 138 Q112 100 132 92", fill: "none", stroke: "rgb(236,240,246)", "stroke-width": 5, "stroke-linecap": "round" }); // brillo
+      el(s, "path", { d: "M194 118 L232 92 L236 100 L198 130 Z", fill: "rgb(196,204,214)", stroke: TINTA, "stroke-width": 3, "stroke-linejoin": "round" }); // el pico
+      el(s, "path", { d: "M118 90 Q150 44 182 90", fill: "none", stroke: TINTA, "stroke-width": 6 }); // el asa
+      el(s, "path", { d: "M118 90 Q150 44 182 90", fill: "none", stroke: "rgb(110,72,50)", "stroke-width": 3 });
+      el(s, "rect", { x: 140, y: 76, width: 20, height: 8, rx: 3, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 2 }); // la perilla
+    } else if (f === "hervir" || f === "caramelo") {
       el(s, "rect", { x: 60, y: 76, width: 180, height: 76, rx: 8, fill: "rgb(150,154,170)", stroke: TINTA, "stroke-width": 3 });
       el(s, "rect", { x: 66, y: 80, width: 168, height: 14, fill: f === "caramelo" ? "rgb(214,120,60)" : "rgb(200,226,240)" });
       el(s, "rect", { x: 40, y: 82, width: 22, height: 8, fill: "rgb(90,90,100)", stroke: TINTA, "stroke-width": 3 });
@@ -402,7 +708,12 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(s, "ellipse", { cx: 150, cy: 112, rx: 84, ry: 26, fill: f === "freir" ? "rgb(250,200,90)" : "rgb(90,90,100)" });
       el(s, "rect", { x: 240, y: 108, width: 54, height: 10, rx: 4, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 3 });
     }
-    const comida = el(s, "image", { href: ctx.plato || "", x: 110, y: f === "horno" ? 66 : 62, width: 80, height: 80, style: "image-rendering:pixelated" });
+    const comida = el(s, "image", { href: f === "calentar" ? "" : ctx.plato || "", x: 110, y: f === "horno" ? 66 : 62, width: 80, height: 80, style: "image-rendering:pixelated" });
+    if (f === "hervir" || f === "caramelo") {
+      // que se vea adentro del agua (o del caramelo), no flotando delante de la olla
+      el(s, "rect", { x: 63, y: 112, width: 174, height: 37, rx: 4, fill: f === "caramelo" ? "rgba(214,120,60,0.55)" : "rgba(170,206,230,0.6)" });
+      el(s, "rect", { x: 60, y: 76, width: 180, height: 76, rx: 8, fill: "none", stroke: TINTA, "stroke-width": 3 });
+    }
     const humo = el(s, "g", { opacity: 0 });
     for (let i = 0; i < 4; i++) el(humo, "rect", { x: 104 + i * 26, y: 30 + (i % 2) * 8, width: 7, height: 14, fill: "rgba(255,255,255,0.85)" });
     // el medidor
@@ -459,12 +770,15 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const pintar = (cortes) => {
       trozos.innerHTML = "";
       const bordes = [X0, ...cortes.slice().sort((a, b) => a - b), X1];
+      // v61: el ingrediente dibujado entero, partido en trozos (cada uno un recorte que se separa un poquito)
+      const defs = el(trozos, "defs", {});
       for (let i = 0; i < bordes.length - 1; i++) {
-        const sep = i * 3; // cada trozo cortado se corre un poquito
-        const x = bordes[i] + sep - (cortes.length * 3) / 2 + 1;
-        const w = bordes[i + 1] - bordes[i] - 2;
-        el(trozos, "rect", { x, y: 104 - I.alto / 2, width: Math.max(3, w), height: I.alto, rx: I.redondo ? I.alto / 2.4 : 4, fill: I.color, stroke: TINTA, "stroke-width": 3 });
-        if (I.vena) el(trozos, "rect", { x: x + 2, y: 104 - I.alto / 2 + I.alto * 0.35, width: Math.max(1, w - 4), height: Math.max(2, I.alto * 0.18), fill: I.vena });
+        const id = `corte${++idClip}`;
+        const cp = el(defs, "clipPath", { id });
+        el(cp, "rect", { x: bordes[i] - (i === 0 ? 40 : 0), y: 0, width: bordes[i + 1] - bordes[i] + (i === 0 ? 40 : 0) + (i === bordes.length - 2 ? 40 : 0), height: 200 });
+        const desp = (i - (bordes.length - 2) / 2) * (cortes.length ? 4 : 0);
+        const trozo = el(trozos, "g", { "clip-path": `url(#${id})`, transform: `translate(${desp} 0)` });
+        dibujarIngrediente(trozo, paso.que, X0 + 6, X1 - 6, 104);
       }
     };
     const hechos = [];
@@ -535,47 +849,48 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     });
   }
 
-  // ---------- REVOLVER (v58) ----------
-  // circulos con el dedo en la olla, a un ritmo parejo (la aguja en el verde)
+  // ---------- REVOLVER (v58; v61 rehecho) ----------
+  // rom: "el stir no funciona muy bien, o no se como usarlo". Antes habia que medir una
+  // velocidad invisible; ahora una cuchara-guia da vueltas por la olla y ella la sigue con
+  // el dedo: mientras el dedo esta cerca de la guia, se revuelve (y se llena la barra).
   else if (paso.t === "revolver") {
     const color = paso.color || "rgb(214,150,90)";
-    const CX = 120;
-    const CY = 104;
-    el(s, "circle", { cx: CX, cy: CY, r: 82, fill: "rgb(150,154,170)", stroke: TINTA, "stroke-width": 3 });
-    el(s, "circle", { cx: CX, cy: CY, r: 70, fill: color, stroke: TINTA, "stroke-width": 2 });
-    const remolino = el(s, "path", { d: "M80 104 A40 40 0 0 1 160 104", fill: "none", stroke: "rgba(255,255,255,0.45)", "stroke-width": 5, "stroke-linecap": "round" });
-    const cuchara = el(s, "g", {});
-    el(cuchara, "ellipse", { cx: 0, cy: 0, rx: 9, ry: 7, fill: "rgb(214,180,130)", stroke: TINTA, "stroke-width": 3 });
-    el(cuchara, "rect", { x: -3, y: -50, width: 6, height: 46, rx: 3, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 2 });
-    cuchara.setAttribute("transform", `translate(${CX + 40} ${CY})`);
-    // el medidor de velocidad (vertical, a la derecha) y el progreso
-    const VMIN = 6.6 - ancho(2.4); // radianes por segundo
-    const VMAX = 6.6 + ancho(2.4);
-    const MX = 228;
-    const MY = 30;
-    const MH = 140;
-    const yDe = (v) => MY + MH - (Math.min(14, v) / 14) * MH;
-    el(s, "rect", { x: MX, y: MY, width: 18, height: MH, fill: "rgb(240,230,200)" });
-    el(s, "rect", { x: MX, y: yDe(VMAX), width: 18, height: yDe(VMIN) - yDe(VMAX), fill: "rgb(150,200,130)" });
-    el(s, "rect", { x: MX, y: MY, width: 18, height: yDe(VMAX) - MY, fill: "rgb(222,140,110)" });
-    el(s, "rect", { x: MX, y: MY, width: 18, height: MH, fill: "none", stroke: TINTA, "stroke-width": 3 });
-    const aguja = el(s, "rect", { x: MX - 6, y: MY + MH - 2, width: 30, height: 5, fill: TINTA });
-    el(s, "rect", { x: 262, y: MY, width: 14, height: MH, fill: "rgba(255,255,255,0.5)", stroke: TINTA, "stroke-width": 3 });
-    const prog = el(s, "rect", { x: 265, y: MY + MH - 3, width: 8, height: 0, fill: "rgb(120,190,110)" });
-    for (const [tx, txt] of [[237, "SPEED"], [269, "DONE"]]) {
-      const l = el(s, "text", { x: tx, y: MY + MH + 16, "text-anchor": "middle", class: "cocina-cuenta", style: "font-size:7px" });
-      l.textContent = txt;
+    const CX = 150;
+    const CY = 100;
+    const R = 46; // el radio de la vuelta
+    el(s, "ellipse", { cx: CX, cy: CY + 10, rx: 96, ry: 78, fill: "rgb(120,124,140)", stroke: TINTA, "stroke-width": 3 }); // la olla
+    el(s, "ellipse", { cx: CX, cy: CY, rx: 84, ry: 70, fill: color, stroke: TINTA, "stroke-width": 2 });
+    el(s, "ellipse", { cx: CX - 30, cy: CY - 30, rx: 18, ry: 8, fill: "rgba(255,255,255,0.25)" }); // brillo
+    // la pista: un circulo punteado con flechitas
+    el(s, "circle", { cx: CX, cy: CY, r: R, fill: "none", stroke: "rgba(255,255,255,0.75)", "stroke-width": 3, "stroke-dasharray": "4 7" });
+    for (let a = 0; a < 4; a++) {
+      const r = (a * Math.PI) / 2 + 0.4;
+      const x = CX + R * Math.cos(r);
+      const y = CY + R * Math.sin(r);
+      el(s, "path", { d: "M-4 -5 L4 0 L-4 5", fill: "none", stroke: "rgba(255,255,255,0.9)", "stroke-width": 2.5, transform: `translate(${x} ${y}) rotate(${(r * 180) / Math.PI + 90})` });
     }
-    const gotas = el(s, "g", {});
-    ayuda("Stir in circles · keep the needle in the green");
-    let ultimoAng = null;
-    let ultimoT = 0;
-    let v = 0; // velocidad suavizada (rad/s)
+    const remolino = el(s, "path", { d: `M${CX - 20} ${CY} A20 20 0 0 1 ${CX + 20} ${CY}`, fill: "none", stroke: "rgba(255,255,255,0.45)", "stroke-width": 4, "stroke-linecap": "round" });
+    // la cuchara (la mueve ella); empieza en el centro para no tapar la guia
+    const cuchara = el(s, "g", {});
+    el(cuchara, "rect", { x: -3, y: -48, width: 6, height: 44, rx: 3, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 2 });
+    el(cuchara, "ellipse", { cx: 0, cy: 0, rx: 9, ry: 7, fill: "rgb(214,180,130)", stroke: TINTA, "stroke-width": 3 });
+    cuchara.setAttribute("transform", `translate(${CX} ${CY + 6})`);
+    // la guia (a donde tiene que ir el dedo), encima de la cuchara
+    const guia = el(s, "g", { class: "guia-revolver" });
+    const halo = el(guia, "circle", { r: 20, fill: "rgba(120,190,110,0.35)", stroke: "rgb(80,150,80)", "stroke-width": 2 });
+    el(guia, "circle", { r: 7, fill: "rgb(110,190,100)", stroke: TINTA, "stroke-width": 2 });
+    // la barra de progreso
+    el(s, "rect", { x: 30, y: 184, width: 240, height: 10, fill: "rgb(240,230,200)", stroke: TINTA, "stroke-width": 2 });
+    const prog = el(s, "rect", { x: 31, y: 185, width: 0, height: 8, fill: "rgb(120,190,110)" });
+    ayuda("Put your finger on the green dot and follow it around");
+    const VUELTA = 2400 / rapido(0.2); // ms por vuelta de la guia
+    const CERCA = ancho(22) + 6 * (MJ.ollas || 0); // que tan cerca hay que ir
+    let dedo = null;
     let progreso = 0;
-    let tiempoTotal = 0;
-    let tiempoBien = 0;
-    let girando = false;
-    let rot = 0;
+    let tTotal = 0;
+    let tBien = 0;
+    let tPrev = 0;
+    let empezo = false;
     s.addEventListener("pointerdown", (e) => {
       if (!vivo) return;
       e.preventDefault();
@@ -584,60 +899,50 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       } catch (err) {
         /* nada */
       }
-      girando = true;
-      const p = aSvg(e);
-      ultimoAng = Math.atan2(p[1] - CY, p[0] - CX);
-      ultimoT = performance.now();
+      dedo = aSvg(e);
     });
     s.addEventListener("pointermove", (e) => {
-      if (!vivo || !girando) return;
-      const p = aSvg(e);
-      const ang = Math.atan2(p[1] - CY, p[0] - CX);
-      const ahora = performance.now();
-      let d = ang - ultimoAng;
-      if (d > Math.PI) d -= 2 * Math.PI;
-      if (d < -Math.PI) d += 2 * Math.PI;
-      const dt = Math.max(1, ahora - ultimoT) / 1000;
-      const inst = Math.abs(d) / dt;
-      if (Math.hypot(p[0] - CX, p[1] - CY) > 14) v = v * 0.8 + inst * 0.2;
-      ultimoAng = ang;
-      ultimoT = ahora;
-      const r = Math.max(20, Math.min(62, Math.hypot(p[0] - CX, p[1] - CY)));
-      cuchara.setAttribute("transform", `translate(${CX + r * Math.cos(ang)} ${CY + r * Math.sin(ang)})`);
+      if (!vivo || !dedo) return;
+      dedo = aSvg(e);
     });
     const soltar = () => {
-      girando = false;
+      dedo = null;
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", soltar);
-    let tPrev = 0;
+    let ang = 0;
     bucle((t) => {
       const dt = Math.min(0.05, (t - tPrev) / 1000);
       tPrev = t;
-      if (!girando || performance.now() - ultimoT > 120) v *= 0.9; // si no mueve, se frena
-      aguja.setAttribute("y", yDe(v) - 2);
-      rot += v * dt * 57;
-      remolino.setAttribute("transform", `rotate(${rot} ${CX} ${CY})`);
-      if (girando) {
-        tiempoTotal += dt;
-        const bien = v >= VMIN && v <= VMAX;
-        if (bien) {
-          tiempoBien += dt;
-          progreso = Math.min(1, progreso + dt / 3.2);
-        }
-        if (v > VMAX && Math.random() < 0.25) {
-          // salpica
-          const a = Math.random() * 6.28;
-          const g = el(gotas, "circle", { cx: CX + 80 * Math.cos(a), cy: CY + 80 * Math.sin(a), r: 4, fill: color, stroke: TINTA, "stroke-width": 1.5 });
-          setTimeout(() => g.remove(), 500);
+      // la guia solo arranca cuando ella la toca (asi no hay que correr a alcanzarla)
+      const gx = CX + R * Math.cos(ang);
+      const gy = CY + R * Math.sin(ang);
+      const cerca = dedo && Math.hypot(dedo[0] - gx, dedo[1] - gy) <= CERCA;
+      if (cerca) empezo = true;
+      if (empezo) ang += ((2 * Math.PI) / VUELTA) * dt * 1000;
+      guia.setAttribute("transform", `translate(${gx.toFixed(1)} ${gy.toFixed(1)})`);
+      // antes de empezar late en verde (invita a tocarla); luego verde = bien, naranja = te alejaste
+      if (!empezo) halo.setAttribute("r", (20 + 4 * Math.sin(t / 180)).toFixed(1));
+      else halo.setAttribute("r", 20);
+      halo.setAttribute("fill", !empezo || cerca ? "rgba(120,190,110,0.55)" : "rgba(240,180,80,0.35)");
+      if (dedo) {
+        const a = Math.atan2(dedo[1] - CY, dedo[0] - CX);
+        const r = Math.max(18, Math.min(70, Math.hypot(dedo[0] - CX, dedo[1] - CY)));
+        cuchara.setAttribute("transform", `translate(${(CX + r * Math.cos(a)).toFixed(1)} ${(CY + r * Math.sin(a)).toFixed(1)})`);
+      }
+      if (empezo) {
+        tTotal += dt;
+        if (cerca) {
+          tBien += dt;
+          progreso = Math.min(1, progreso + dt / ((VUELTA / 1000) * 2)); // dos vueltas bien hechas
+          remolino.setAttribute("transform", `rotate(${((ang * 180) / Math.PI).toFixed(1)} ${CX} ${CY})`);
         }
       }
-      prog.setAttribute("y", MY + MH - 3 - (MH - 6) * progreso);
-      prog.setAttribute("height", (MH - 6) * progreso);
+      prog.setAttribute("width", 238 * progreso);
       if (progreso >= 1) {
-        const r = tiempoBien / Math.max(0.1, tiempoTotal);
-        fin(r >= 0.7 ? 3 : r >= 0.45 ? 2 : 1);
-      } else if (tiempoTotal > 14) fin(1);
+        const r = tBien / Math.max(0.1, tTotal);
+        fin(r >= 0.8 ? 3 : r >= 0.55 ? 2 : 1);
+      } else if (tTotal > 14) fin(1);
     });
   }
 
@@ -696,7 +1001,13 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     });
     const lanzar = () => {
       const conLlama = flama(performance.now() - t0);
-      vuelo = { t0: performance.now() - t0, x0: wokX, vx: (Math.random() < 0.5 ? -1 : 1) * (22 + Math.random() * 32), conLlama };
+      // v61 pasada: hacia donde caiga siempre tiene que poder alcanzarse (antes, cerca del borde
+      // podia caer fuera de donde llega el wok)
+      const T = conLlama ? 1.6 : 1.2;
+      let vx = (Math.random() < 0.5 ? -1 : 1) * (22 + Math.random() * 32);
+      if (wokX + vx * T > 215 || wokX + vx * T < 85) vx = -vx;
+      vx = Math.max((85 - wokX) / T, Math.min((215 - wokX) / T, vx));
+      vuelo = { t0: performance.now() - t0, x0: wokX, vx, conLlama };
       sonar(conLlama ? "hito" : "tocar");
     };
     s.addEventListener("pointermove", (e) => {
@@ -877,13 +1188,37 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     el(s, "ellipse", { cx: 150, cy: 112, rx: 104, ry: 56, fill: "rgb(220,238,248)" });
     // la cosa a lavar
     if (paso.que === "camaron") {
-      for (let i = 0; i < 3; i++) {
-        const x = 100 + i * 50;
-        el(s, "path", { d: `M${x - 18} 100 Q${x} 70 ${x + 18} 100 Q${x + 10} 128 ${x - 6} 118 Z`, fill: I.color, stroke: TINTA, "stroke-width": 3 });
+      for (let i = 0; i < 3; i++) dibujarCamaron(s, 100 + i * 52, 108 + (i % 2) * 6, 1.25, i % 2 === 1);
+    } else if (paso.que === "pescado") {
+      dibujarPescado(s, 70, 230, 112, 50);
+    } else if (paso.que === "bokchoy") {
+      dibujarBokchoy(s, 150, 116);
+    } else if (paso.que === "arroz") {
+      // un monton de granitos
+      for (let i = 0; i < 90; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * 52;
+        const x = 150 + r * Math.cos(a) * 1.5;
+        const y = 112 + r * Math.sin(a) * 0.7;
+        el(s, "ellipse", { cx: x, cy: y, rx: 4, ry: 2, fill: "rgb(252,250,242)", stroke: "rgb(190,186,176)", "stroke-width": 1, transform: `rotate(${Math.random() * 180} ${x} ${y})` });
       }
+    } else if (paso.que === "hoja") {
+      // dos hojas largas de bambu / platano
+      for (const [dy, rot] of [[-12, -6], [14, 5]]) {
+        const g = el(s, "g", { transform: `rotate(${rot} 150 ${112 + dy})` });
+        el(g, "path", { d: `M50 ${112 + dy} Q150 ${84 + dy} 250 ${112 + dy} Q150 ${140 + dy} 50 ${112 + dy} Z`, fill: "rgb(100,160,80)", stroke: TINTA, "stroke-width": 3 });
+        el(g, "line", { x1: 56, y1: 112 + dy, x2: 244, y2: 112 + dy, stroke: "rgb(170,210,130)", "stroke-width": 2 });
+      }
+    } else if (paso.que === "pollo") {
+      // un pollo entero (de los de asar)
+      el(s, "ellipse", { cx: 150, cy: 114, rx: 62, ry: 36, fill: "rgb(244,220,184)", stroke: TINTA, "stroke-width": 3 });
+      for (const sx of [-1, 1]) {
+        el(s, "ellipse", { cx: 150 + sx * 58, cy: 96, rx: 16, ry: 11, fill: "rgb(244,220,184)", stroke: TINTA, "stroke-width": 3, transform: `rotate(${sx * 30} ${150 + sx * 58} 96)` });
+        el(s, "circle", { cx: 150 + sx * 70, cy: 86, r: 5, fill: "rgb(252,246,236)", stroke: TINTA, "stroke-width": 2 });
+      }
+      el(s, "path", { d: "M118 104 Q150 92 182 104", fill: "none", stroke: "rgb(250,236,214)", "stroke-width": 4 });
     } else {
-      el(s, "ellipse", { cx: 150, cy: 112, rx: 70, ry: 30, fill: I.color, stroke: TINTA, "stroke-width": 3 });
-      el(s, "path", { d: "M90 112 L210 112", stroke: I.vena || "rgb(220,240,200)", "stroke-width": 6 });
+      dibujarIngrediente(s, paso.que, 80, 220, 112);
     }
     const manchas = [];
     const rnd = (a, b) => a + Math.random() * (b - a);
@@ -958,10 +1293,13 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const capa = el(s, "g", {});
     const barras = [];
     const cant = Array(ZONAS).fill(0);
+    const BAJO = 0.75 - ancho(0.25, 0.3); // cuanto polvo esta bien (de 0 a 1 por zona)
+    const ALTO = 0.75 + ancho(0.25, 0.3);
     for (let i = 0; i < ZONAS; i++) {
       const x = ZX0 + i * ZW + 4;
       el(s, "rect", { x, y: 172, width: ZW - 8, height: 12, fill: "rgb(240,230,200)", stroke: TINTA, "stroke-width": 2 });
-      el(s, "rect", { x: x + (ZW - 8) * (0.75 - ancho(0.25, 0.3)), y: 172, width: (ZW - 8) * Math.min(0.25 + ancho(0.25, 0.3), 1 - (0.75 - ancho(0.25, 0.3))), height: 12, fill: "rgba(120,190,110,0.5)" });
+      // v61 pasada: la franja verde es exactamente la que puntua (antes llegaba al final aunque arriba de 0.925 ya no contaba)
+      el(s, "rect", { x: x + 1 + (ZW - 10) * BAJO, y: 172, width: (ZW - 10) * (Math.min(1, ALTO) - BAJO), height: 12, fill: "rgba(120,190,110,0.5)" });
       barras.push(el(s, "rect", { x: x + 1, y: 174, width: 0, height: 8, fill: polvo === "rgb(255,255,255)" ? "rgb(200,200,210)" : polvo }));
     }
     const salero = el(s, "g", { opacity: 0.9 });
@@ -991,10 +1329,15 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", soltar);
-    bucle(() => {
+    let tPrevE = 0;
+    let granos = 0;
+    bucle((t) => {
+      const dt = Math.min(50, t - tPrevE) / (1000 / 60);
+      tPrevE = t;
       salero.setAttribute("transform", `translate(${x} ${apretado ? 54 : 46}) rotate(${apretado ? 180 : 160})`);
       if (!apretado) return;
-      for (let j = 0; j < 2; j++) {
+      granos += 2 * dt; // dos granitos por cuadro de 60fps
+      for (; granos >= 1; granos--) {
         const px = x + (Math.random() - 0.5) * 28;
         const py = 70 + Math.random() * 70;
         el(capa, "rect", { x: px, y: py, width: 2, height: 2, fill: polvo, stroke: "rgba(0,0,0,0.25)", "stroke-width": 0.5 });
@@ -1002,12 +1345,12 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         if (z >= 0 && z < ZONAS) {
           cant[z] = Math.min(1.4, cant[z] + 0.008);
           barras[z].setAttribute("width", Math.min(1, cant[z]) * (ZW - 10));
-          barras[z].setAttribute("fill", cant[z] > 1 ? "rgb(222,110,100)" : polvo === "rgb(255,255,255)" ? "rgb(200,200,210)" : polvo);
+          barras[z].setAttribute("fill", cant[z] > ALTO ? "rgb(222,110,100)" : polvo === "rgb(255,255,255)" ? "rgb(200,200,210)" : polvo);
         }
       }
     });
     boton("Ready ✓", () => {
-      const bien = cant.filter((c) => c >= 0.75 - ancho(0.25, 0.3) && c <= 0.75 + ancho(0.25, 0.3)).length;
+      const bien = cant.filter((c) => c >= BAJO && c <= ALTO).length;
       fin(bien >= ZONAS ? 3 : bien >= ZONAS - 2 ? 2 : 1);
     });
   }
@@ -1134,7 +1477,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     s.addEventListener("pointerdown", (e) => {
       if (!vivo) return;
       e.preventDefault();
-      grosor = Math.max(0.12, grosor - (0.08 + Math.random() * 0.08));
+      grosor = Math.max(0.12, grosor - (0.055 + Math.random() * 0.02)); // v61 pasada: pasos chicos, se puede parar en la franja (antes era suerte)
       sonar("tocar");
       vibrar(15);
       pintar();
@@ -1226,6 +1569,527 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     });
     const destruirViejo = () => quitarMov();
     ctx._alDestruir = destruirViejo;
+  }
+
+  // ---------- ENROLLAR / ENVOLVER (v61) ----------
+  // arrastrar desde abajo hacia arriba, derechito por el carril: la masa (o la hoja) se enrolla
+  else if (paso.t === "enrollar") {
+    const N = mas(paso.n || 1, 1);
+    const hoja = paso.hoja ? { fondo: "rgb(110,160,80)", vena: "rgb(170,210,130)" } : { fondo: paso.color || MASA, vena: null };
+    const relleno = RELLENOS[paso.relleno] || null;
+    const X0 = 100;
+    const X1 = 200;
+    const Y0 = 40; // arriba
+    const Y1 = 170; // abajo
+    const CARRIL = ancho(16) + 4;
+    const g = el(s, "g", {});
+    const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
+    let k = 0;
+    let buenos = 0;
+    let dedo = null;
+    let desvio = 0;
+    let y = Y1;
+    const pintar = () => {
+      g.innerHTML = "";
+      // lo que queda sin enrollar
+      el(g, "rect", { x: X0, y: Y0, width: X1 - X0, height: Math.max(0, y - Y0), fill: hoja.fondo, stroke: TINTA, "stroke-width": 3 });
+      if (hoja.vena) for (let i = 1; i < 4; i++) el(g, "line", { x1: X0 + ((X1 - X0) * i) / 4, y1: Y0 + 4, x2: X0 + ((X1 - X0) * i) / 4, y2: Math.max(Y0 + 4, y - 4), stroke: hoja.vena, "stroke-width": 2 });
+      if (paso.cebollin) {
+        // la masa con cebollin picado (congyoubing)
+        for (let i = 0; i < 26; i++) {
+          const cx = X0 + 8 + ((i * 37) % (X1 - X0 - 16));
+          const cy = Y0 + 8 + ((i * 53) % (Y1 - Y0 - 16));
+          if (cy < y - 8) el(g, "rect", { x: cx, y: cy, width: 5, height: 3, fill: "rgb(110,180,80)" });
+        }
+      }
+      if (relleno && y > Y1 - 30) el(g, "rect", { x: X0 + 10, y: Y1 - 34, width: X1 - X0 - 20, height: 16, rx: 7, fill: relleno.color, stroke: relleno.sombra, "stroke-width": 2 });
+      // el carril y la flecha
+      el(g, "rect", { x: 150 - CARRIL, y: Y0, width: CARRIL * 2, height: Math.max(0, y - Y0), fill: "rgba(120,190,110,0.18)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" }); // solo lo que falta enrollar
+      el(g, "path", { d: `M150 ${Y0 + 6} l-8 12 h16 Z`, fill: "rgb(80,150,80)" });
+      // el rollo
+      const grosor = 14 + (Y1 - y) * 0.09;
+      el(g, "rect", { x: X0 - 6, y: y - grosor / 2, width: X1 - X0 + 12, height: grosor, rx: grosor / 2, fill: hoja.fondo === MASA ? "rgb(240,220,180)" : hoja.fondo, stroke: TINTA, "stroke-width": 3 });
+      el(g, "line", { x1: X0, y1: y - grosor / 4, x2: X1, y2: y - grosor / 4, stroke: "rgba(255,255,255,0.4)", "stroke-width": 2 });
+      cuenta.textContent = N > 1 ? `ROLL ${k} / ${N}` : "";
+    };
+    pintar();
+    ayuda("Drag the roll up, straight along the green lane");
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo) return;
+      e.preventDefault();
+      try {
+        s.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* nada */
+      }
+      const p = aSvg(e);
+      if (p[1] > y - 30) {
+        dedo = p;
+        desvio = 0;
+      }
+    });
+    s.addEventListener("pointermove", (e) => {
+      if (!vivo || !dedo) return;
+      const p = aSvg(e);
+      y = Math.max(Y0 + 6, Math.min(y, p[1] + 10));
+      if (Math.abs(p[0] - 150) > CARRIL) desvio += Math.abs(p[0] - 150) - CARRIL;
+      dedo = p;
+      pintar();
+      if (y <= Y0 + 8) terminarUno();
+    });
+    const terminarUno = () => {
+      dedo = null;
+      const ok = desvio < 40;
+      if (ok) buenos++;
+      sonar(ok ? "tocar" : "no");
+      k++;
+      if (k >= N) {
+        fin(estrellasDeAciertos(buenos, N));
+        return;
+      }
+      y = Y1;
+      pintar();
+    };
+    s.addEventListener("pointerup", () => {
+      dedo = null;
+    });
+  }
+
+  // ---------- RALLAR (v61) ----------
+  // pasar el bloque arriba y abajo por el rallador; cuidado con la zona roja de abajo (los dedos!)
+  else if (paso.t === "rallar") {
+    const I = INGREDIENTES[paso.que] || INGREDIENTES.queso;
+    const N = mas(paso.n || 6, 3);
+    const GX = 150;
+    const GY0 = 40;
+    const GY1 = 150;
+    const ROJA = GY1 - ancho(22); // de aca para abajo, peligro
+    // el rallador
+    el(s, "path", { d: `M${GX - 34} ${GY1 + 20} L${GX - 26} ${GY0} L${GX + 26} ${GY0} L${GX + 34} ${GY1 + 20} Z`, fill: "rgb(206,212,220)", stroke: TINTA, "stroke-width": 3 });
+    for (let y = GY0 + 10; y < GY1 + 10; y += 9) for (let x = -20; x <= 20; x += 10) el(s, "rect", { x: GX + x - 2, y, width: 5, height: 3, fill: "rgb(120,126,140)" });
+    el(s, "rect", { x: GX - 12, y: GY0 - 18, width: 24, height: 18, rx: 6, fill: "none", stroke: TINTA, "stroke-width": 4 });
+    el(s, "rect", { x: GX - 40, y: ROJA, width: 80, height: GY1 + 20 - ROJA, fill: "rgba(222,90,80,0.28)" });
+    const monton = el(s, "g", {});
+    const bloque = el(s, "g", {});
+    const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
+    let tam = 1;
+    let k = 0;
+    let buenos = 0;
+    let dedo = null;
+    let bajaDesde = null;
+    let toco = false;
+    const pintarBloque = (y) => {
+      bloque.innerHTML = "";
+      const h = 22 + 18 * tam;
+      const y0 = y - h / 2;
+      el(bloque, "rect", { x: GX - 22, y: y0, width: 44, height: h, rx: 4, fill: I.color, stroke: TINTA, "stroke-width": 3 });
+      if (paso.que === "chocolate") {
+        // la pastilla de chocolate, con sus cuadritos
+        for (let i = 1; i < 3; i++) el(bloque, "line", { x1: GX - 22 + (44 * i) / 3, y1: y0 + 3, x2: GX - 22 + (44 * i) / 3, y2: y0 + h - 3, stroke: "rgb(80,44,28)", "stroke-width": 2 });
+        el(bloque, "line", { x1: GX - 19, y1: y0 + h / 2, x2: GX + 19, y2: y0 + h / 2, stroke: "rgb(80,44,28)", "stroke-width": 2 });
+        el(bloque, "rect", { x: GX - 18, y: y0 + 4, width: 10, height: 3, fill: "rgb(150,96,64)" });
+      } else if (paso.que === "queso") {
+        // queso con huequitos
+        for (const [dx, fy, r] of [[-10, 0.3, 4], [8, 0.55, 3], [-4, 0.75, 2.5], [12, 0.22, 2]]) el(bloque, "circle", { cx: GX + dx, cy: y0 + h * fy, r: r * (0.6 + 0.4 * tam), fill: "rgb(226,190,90)" });
+        el(bloque, "rect", { x: GX - 19, y: y0 + 3, width: 38, height: 3, fill: "rgb(255,244,200)" });
+      } else if (I.vena) el(bloque, "rect", { x: GX - 18, y: y0 + 4, width: 36, height: 4, fill: I.vena });
+      cuenta.textContent = `GRATE ${k} / ${N}`;
+    };
+    pintarBloque(GY0 + 30);
+    ayuda("Drag the block down the grater · stop before the red part!");
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo) return;
+      e.preventDefault();
+      try {
+        s.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* nada */
+      }
+      dedo = aSvg(e);
+      yBloque = Math.max(GY0 + 16, Math.min(GY1 + 20, dedo[1]));
+      bajaDesde = yBloque;
+      fondo = yBloque;
+      toco = yBloque >= ROJA;
+      pintarBloque(yBloque);
+    });
+    // v61 pasada: cada bajada cuenta sola (se puede rallar arriba-abajo sin levantar el dedo)
+    const pasada = () => {
+      const ok = !toco;
+      if (ok) buenos++;
+      k++;
+      tam = Math.max(0.15, 1 - k / N);
+      for (let i = 0; i < 6; i++) {
+        const mx = GX - 40 + Math.random() * 80;
+        const my = 172 + Math.random() * 12;
+        el(monton, "rect", { x: mx, y: my, width: 6, height: 2, fill: I.color, stroke: "rgba(0,0,0,0.3)", "stroke-width": 0.5, transform: `rotate(${Math.random() * 60 - 30} ${mx} ${my})` });
+      }
+      sonar(ok ? "tocar" : "no");
+      toco = false;
+      if (k >= N) fin(estrellasDeAciertos(buenos, N));
+    };
+    let yBloque = GY0 + 30;
+    let fondo = yBloque; // lo mas abajo que llego esta bajada
+    s.addEventListener("pointermove", (e) => {
+      if (!vivo || !dedo) return;
+      const p = aSvg(e);
+      const y = Math.max(GY0 + 16, Math.min(GY1 + 20, p[1]));
+      if (y >= ROJA && !toco) {
+        toco = true; // se paso: los dedos!
+        sonar("no");
+        vibrar(40);
+      }
+      if (y >= fondo) fondo = y;
+      else if (fondo - y > 8) {
+        // dio la vuelta para arriba: si la bajada fue larga, cuenta
+        if (fondo - bajaDesde >= 40) pasada();
+        if (!vivo) return;
+        toco = false;
+        bajaDesde = y;
+        fondo = y;
+      }
+      if (y < bajaDesde) {
+        bajaDesde = y;
+        fondo = y;
+      }
+      yBloque = y;
+      pintarBloque(y);
+      dedo = p;
+    });
+    s.addEventListener("pointerup", () => {
+      if (!vivo || !dedo) return;
+      dedo = null;
+      if (fondo - bajaDesde >= 40) pasada();
+      if (!vivo) return;
+      toco = false;
+      yBloque = GY0 + 30;
+      pintarBloque(yBloque);
+    });
+    s.addEventListener("pointercancel", () => {
+      dedo = null;
+    });
+  }
+
+  // ---------- PELAR (v61) ----------
+  // dar la vuelta por el borde de la fruta, sin salirse del anillo: la cascara sale de un tiron
+  else if (paso.t === "pelar") {
+    const I = INGREDIENTES[paso.que] || INGREDIENTES.mango;
+    const CX = 150;
+    const CY = 104;
+    const R = 52;
+    const BANDA = ancho(14) + 4;
+    el(s, "circle", { cx: CX, cy: CY, r: R + BANDA, fill: "rgba(120,190,110,0.16)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
+    el(s, "circle", { cx: CX, cy: CY, r: R - BANDA, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
+    // lo de adentro (la pulpa), con su detalle segun la fruta
+    const PULPA = { mango: "rgb(255,200,70)", papaya: "rgb(250,150,90)", maduro: "rgb(250,214,120)", loto: "rgb(246,236,220)", lulo: "rgb(200,230,120)" };
+    el(s, "circle", { cx: CX, cy: CY, r: R - 4, fill: PULPA[paso.que] || I.pulpa || "rgb(250,220,140)", stroke: TINTA, "stroke-width": 3 });
+    if (paso.que === "papaya") {
+      el(s, "ellipse", { cx: CX, cy: CY, rx: 18, ry: 13, fill: "rgb(236,120,70)" });
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2;
+        el(s, "circle", { cx: CX + 11 * Math.cos(a) * (i % 2 ? 0.6 : 1), cy: CY + 8 * Math.sin(a) * (i % 2 ? 0.6 : 1), r: 2.6, fill: "rgb(50,36,36)" });
+      }
+    } else if (paso.que === "loto") {
+      // la raiz de loto cortada: los huecos
+      el(s, "circle", { cx: CX, cy: CY, r: 8, fill: "rgb(214,196,170)", stroke: "rgb(190,170,140)", "stroke-width": 2 });
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        el(s, "circle", { cx: CX + 27 * Math.cos(a), cy: CY + 27 * Math.sin(a), r: 7, fill: "rgb(214,196,170)", stroke: "rgb(190,170,140)", "stroke-width": 2 });
+      }
+    } else if (paso.que === "mango") {
+      el(s, "ellipse", { cx: CX, cy: CY, rx: 14, ry: 30, fill: "rgb(250,226,150)", opacity: 0.8 }); // la pepa se adivina
+      for (let i = 0; i < 6; i++) el(s, "path", { d: `M${CX - 34 + i * 12} ${CY - 26} q4 26 0 52`, fill: "none", stroke: "rgb(240,176,50)", "stroke-width": 2, opacity: 0.6 });
+    } else if (paso.que === "maduro") {
+      el(s, "circle", { cx: CX, cy: CY, r: 10, fill: "rgb(236,190,90)" });
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + 0.5;
+        el(s, "line", { x1: CX, y1: CY, x2: CX + 20 * Math.cos(a), y2: CY + 20 * Math.sin(a), stroke: "rgb(230,180,80)", "stroke-width": 3 });
+      }
+    }
+    const COLOR_CASCARA = { mango: "rgb(110,170,60)", papaya: "rgb(150,190,70)", maduro: "rgb(70,52,40)", loto: "rgb(196,150,110)" };
+    const cascaraColor = COLOR_CASCARA[paso.que] || I.color;
+    // la cascara: borde de tinta + color (el borde ayuda a que se vea "piel")
+    const cascaraBorde = el(s, "path", { d: "", fill: "none", stroke: TINTA, "stroke-width": 15, "stroke-linecap": "round" });
+    const cascara = el(s, "path", { d: "", fill: "none", stroke: cascaraColor, "stroke-width": 10, "stroke-linecap": "round" });
+    const tira = el(s, "g", {});
+    const inicio = el(s, "circle", { cx: CX + R, cy: CY, r: 8, fill: "rgb(120,190,110)", stroke: TINTA, "stroke-width": 2 });
+    ayuda("Start at the green dot and go around the edge, inside the ring");
+    let girado = 0; // radianes pelados
+    let prevAng = null;
+    let roturas = 0;
+    let dentro = true;
+    let base = 0; // donde empezo
+    let sentido = 0; // +1 horario, -1 antihorario (lo elige ella con el primer movimiento)
+    const pintar = () => {
+      if (girado >= Math.PI * 2 - 0.01) {
+        cascara.setAttribute("d", "");
+        cascaraBorde.setAttribute("d", "");
+        return;
+      }
+      // lo que falta pelar, como arco en sentido horario de a0 a a1 (en dos mitades: un arco de 360 no se dibuja)
+      const a0 = sentido >= 0 ? base + girado : base;
+      const a1 = sentido >= 0 ? base + Math.PI * 2 : base + Math.PI * 2 - girado;
+      const pt = (a) => `${(CX + R * Math.cos(a)).toFixed(2)} ${(CY + R * Math.sin(a)).toFixed(2)}`;
+      const medio = (a0 + a1) / 2;
+      const d = `M${pt(a0)} A${R} ${R} 0 0 1 ${pt(medio)} A${R} ${R} 0 0 1 ${pt(a1 - 0.001)}`;
+      cascara.setAttribute("d", d);
+      cascaraBorde.setAttribute("d", d);
+    };
+    pintar();
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo) return;
+      e.preventDefault();
+      try {
+        s.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* nada */
+      }
+      const p = aSvg(e);
+      const d = Math.hypot(p[0] - CX, p[1] - CY);
+      if (Math.abs(d - R) <= BANDA + 6) {
+        prevAng = Math.atan2(p[1] - CY, p[0] - CX);
+        if (girado === 0) {
+          base = prevAng; // empieza donde ella toco
+          inicio.setAttribute("cx", CX + R * Math.cos(base));
+          inicio.setAttribute("cy", CY + R * Math.sin(base));
+        }
+        dentro = true;
+      }
+    });
+    s.addEventListener("pointermove", (e) => {
+      if (!vivo || prevAng === null) return;
+      const p = aSvg(e);
+      const d = Math.hypot(p[0] - CX, p[1] - CY);
+      const a = Math.atan2(p[1] - CY, p[0] - CX);
+      let da = a - prevAng;
+      if (da > Math.PI) da -= 2 * Math.PI;
+      if (da < -Math.PI) da += 2 * Math.PI;
+      prevAng = a;
+      if (Math.abs(d - R) > BANDA) {
+        if (dentro) {
+          dentro = false;
+          roturas++;
+          sonar("no");
+          vibrar(30);
+          ayuda("Oops, the peel broke! Keep going around");
+        }
+        return;
+      }
+      dentro = true;
+      if (!sentido && Math.abs(da) > 0.02) sentido = da > 0 ? 1 : -1;
+      const avance = da * sentido;
+      if (sentido && avance > 0) {
+        girado = Math.min(Math.PI * 2, girado + avance);
+        // la tira de cascara que cuelga
+        if (Math.random() < 0.3) el(tira, "rect", { x: p[0] + 6, y: p[1], width: 5, height: 3, fill: cascaraColor, transform: `rotate(${(a * 180) / Math.PI} ${p[0]} ${p[1]})` });
+        inicio.setAttribute("opacity", 0.25);
+        pintar();
+        if (girado >= Math.PI * 2 - 0.01) fin(roturas === 0 ? 3 : roturas <= 2 ? 2 : 1);
+      }
+    });
+    s.addEventListener("pointerup", () => {
+      prevAng = null;
+    });
+  }
+
+  // ---------- MANGA (v61) ----------
+  // mantener apretado encima de cada circulo: el copito crece; soltar cuando llena el anillo
+  else if (paso.t === "manga") {
+    const N = mas(paso.n || 4, 2);
+    const color = paso.color || "rgb(255,214,110)";
+    const fondo = paso.fondo || null;
+    if (fondo) el(s, "ellipse", { cx: 150, cy: 108, rx: 120, ry: 70, fill: fondo, stroke: TINTA, "stroke-width": 3 });
+    const puntos = Array.from({ length: N }, (_, i) => {
+      const fila = i % 2;
+      const x = 150 + (i - (N - 1) / 2) * Math.min(52, 200 / N);
+      return { x, y: 96 + fila * 26, r: 0, hecho: false };
+    });
+    const OBJ = 14; // radio justo
+    const TOL = ancho(3.5) + 0.5;
+    for (const p of puntos) {
+      if (!fondo) el(s, "circle", { cx: p.x, cy: p.y, r: 20, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 }); // la tarteleta
+      el(s, "circle", { cx: p.x, cy: p.y, r: OBJ, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "4 3" });
+      p.el = el(s, "circle", { cx: p.x, cy: p.y, r: 0, fill: color, stroke: TINTA, "stroke-width": 2 });
+    }
+    const manga = el(s, "g", { opacity: 0.9 });
+    el(manga, "path", { d: "M-12 -46 L12 -46 L3 -8 L-3 -8 Z", fill: "rgb(246,240,226)", stroke: TINTA, "stroke-width": 3 });
+    el(manga, "rect", { x: -3, y: -10, width: 6, height: 6, fill: "rgb(190,196,206)", stroke: TINTA, "stroke-width": 2 });
+    manga.setAttribute("transform", "translate(150 40)");
+    ayuda("Hold on each circle · let go when it fills the green ring");
+    let actual = null;
+    let buenos = 0;
+    let hechos = 0;
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo) return;
+      e.preventDefault();
+      const p = aSvg(e);
+      actual = puntos.find((q) => !q.hecho && Math.hypot(q.x - p[0], q.y - p[1]) < 24) || null;
+      if (actual) manga.setAttribute("transform", `translate(${actual.x} ${actual.y})`);
+    });
+    const soltar = () => {
+      if (!vivo || !actual) return;
+      const q = actual;
+      actual = null;
+      if (q.r < 3) return;
+      q.hecho = true;
+      hechos++;
+      const ok = Math.abs(q.r - OBJ) <= TOL;
+      if (ok) buenos++;
+      sonar(ok ? "tocar" : "no");
+      if (hechos >= N) fin(estrellasDeAciertos(buenos, N));
+    };
+    s.addEventListener("pointerup", soltar);
+    s.addEventListener("pointercancel", soltar);
+    let tPrevM = 0;
+    bucle((t) => {
+      const dt = Math.min(50, t - tPrevM) / (1000 / 60);
+      tPrevM = t;
+      if (actual) {
+        actual.r = Math.min(26, actual.r + 0.32 * rapido(0.3) * dt);
+        actual.el.setAttribute("r", actual.r.toFixed(1));
+        if (actual.r >= 26) soltar();
+      }
+    });
+  }
+
+  // ---------- APILAR (v61) ----------
+  // la vaporera va y viene: tocar para soltarla justo encima de la de abajo
+  else if (paso.t === "apilar") {
+    const N = mas(paso.n || 3, 1);
+    const W = 90;
+    const H = 18;
+    const BASE = 176;
+    el(s, "rect", { x: 60, y: BASE, width: 180, height: 8, fill: "rgb(150,154,170)", stroke: TINTA, "stroke-width": 2 }); // la olla de abajo
+    const pila = el(s, "g", {});
+    const mov = el(s, "g", {});
+    const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
+    const canasta = (g, x, y) => {
+      el(g, "rect", { x: x - W / 2, y, width: W, height: H, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 });
+      el(g, "line", { x1: x - W / 2 + 3, y1: y + H / 2, x2: x + W / 2 - 3, y2: y + H / 2, stroke: "rgb(170,124,72)", "stroke-width": 2 });
+      for (let i = 1; i < 6; i++) el(g, "line", { x1: x - W / 2 + (W * i) / 6, y1: y + 2, x2: x - W / 2 + (W * i) / 6, y2: y + H - 2, stroke: "rgba(170,124,72,0.6)", "stroke-width": 1 });
+    };
+    let k = 0;
+    let suma = 0;
+    let arriba = 150; // x de la de abajo
+    let x = 60;
+    let dir = 1;
+    let cayendo = null;
+    const VEL = 110 * rapido(0.35); // px por segundo
+    let tPrev = 0;
+    cuenta.textContent = `STACK 0 / ${N}`;
+    ayuda("Tap to drop the steamer right on top of the one below");
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo || cayendo) return;
+      e.preventDefault();
+      cayendo = { x, y: 40 };
+    });
+    bucle((t) => {
+      const dt = Math.min(0.05, (t - tPrev) / 1000);
+      tPrev = t;
+      mov.innerHTML = "";
+      if (!cayendo) {
+        x += dir * VEL * dt;
+        if (x > 240) dir = -1;
+        if (x < 60) dir = 1;
+        canasta(mov, x, 40);
+      } else {
+        const destino = BASE - (k + 1) * H;
+        cayendo.y = Math.min(destino, cayendo.y + 420 * dt);
+        canasta(mov, cayendo.x, cayendo.y);
+        if (cayendo.y >= destino) {
+          const off = Math.abs(cayendo.x - arriba);
+          const e = off <= ancho(8) + 2 ? 3 : off <= ancho(22) + 4 ? 2 : 1;
+          suma += e;
+          canasta(pila, cayendo.x, destino);
+          arriba = cayendo.x;
+          k++;
+          cuenta.textContent = `STACK ${k} / ${N}`;
+          sonar(e === 3 ? "tocar" : e === 2 ? "hito" : "no");
+          vibrar(e === 3 ? 12 : 25);
+          cayendo = null;
+          x = Math.random() < 0.5 ? 60 : 240;
+          dir = x < 150 ? 1 : -1;
+          if (k >= N) fin(Math.round(suma / N));
+        }
+      }
+    });
+  }
+
+  // ---------- BOLITAS (v61) ----------
+  // hacer circulitos con el dedo sobre la masa hasta que quede bien redonda (y no pasarse)
+  else if (paso.t === "bolitas") {
+    const N = mas(paso.n || 3, 1);
+    const color = paso.color || MASA;
+    const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
+    const hechas = el(s, "g", {});
+    const masa = el(s, "path", { d: "", fill: color, stroke: TINTA, "stroke-width": 3 });
+    // el medidor de redondez
+    el(s, "rect", { x: 240, y: 40, width: 18, height: 130, fill: "rgb(240,230,200)", stroke: TINTA, "stroke-width": 2 });
+    const A = 0.82 - ancho(0.08);
+    const B = Math.min(1.02, 0.82 + ancho(0.08) + 0.06);
+    el(s, "rect", { x: 240, y: 40 + 130 * (1 - Math.min(1, B)), width: 18, height: 130 * (Math.min(1, B) - A), fill: "rgba(120,190,110,0.5)" });
+    const nivel = el(s, "rect", { x: 243, y: 168, width: 12, height: 0, fill: "rgb(232,168,30)" });
+    let k = 0;
+    let buenos = 0;
+    let redondo = 0;
+    let prevAng = null;
+    let dedo = false;
+    const forma = () => {
+      // de un bollo deforme a una bola (mas puntas = menos redonda)
+      const pts = [];
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const r = 30 + (1 - redondo) * 10 * Math.sin(a * 3 + k);
+        pts.push(`${(130 + r * Math.cos(a)).toFixed(1)},${(104 + r * Math.sin(a) * (0.75 + 0.25 * redondo)).toFixed(1)}`);
+      }
+      masa.setAttribute("d", `M${pts.join(" L")} Z`);
+      nivel.setAttribute("y", 168 - 126 * Math.min(1, redondo));
+      nivel.setAttribute("height", 126 * Math.min(1, redondo));
+      cuenta.textContent = `BALL ${k + 1} / ${N}`;
+    };
+    forma();
+    ayuda("Rub little circles on the dough · then Ready when it's round");
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo) return;
+      e.preventDefault();
+      try {
+        s.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* nada */
+      }
+      dedo = true;
+      const p = aSvg(e);
+      prevAng = Math.atan2(p[1] - 104, p[0] - 130);
+    });
+    s.addEventListener("pointermove", (e) => {
+      if (!vivo || !dedo) return;
+      const p = aSvg(e);
+      const a = Math.atan2(p[1] - 104, p[0] - 130);
+      let da = a - prevAng;
+      if (da > Math.PI) da -= 2 * Math.PI;
+      if (da < -Math.PI) da += 2 * Math.PI;
+      prevAng = a;
+      if (Math.hypot(p[0] - 130, p[1] - 104) < 60) {
+        redondo = Math.min(1.25, redondo + Math.abs(da) * 0.035 * rapido(0.3));
+        forma();
+      }
+    });
+    s.addEventListener("pointerup", () => {
+      dedo = false;
+    });
+    boton("Ready ✓", () => {
+      if (!vivo) return;
+      const ok = redondo >= A && redondo <= B;
+      if (ok) buenos++;
+      sonar(ok ? "tocar" : "no");
+      el(hechas, "circle", { cx: 40 + k * 26, cy: 176, r: 10, fill: color, stroke: TINTA, "stroke-width": 2, opacity: ok ? 1 : 0.6 });
+      k++;
+      if (k >= N) {
+        fin(estrellasDeAciertos(buenos, N));
+        return;
+      }
+      redondo = 0;
+      forma();
+    });
   }
 
   // ---------- ELEGIR ----------
