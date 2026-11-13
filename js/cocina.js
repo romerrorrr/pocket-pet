@@ -119,6 +119,12 @@ const MASA_SOMBRA = "rgb(226,214,190)";
 export function crearPaso(area, paso, ctx, alTerminar) {
   area.innerHTML = "";
   const { sonar = () => {}, vibrar = () => {}, ayuda = () => {}, boton = () => {} } = ctx;
+  // v59: la dificultad (ctx.dif: -0.5 relajado .. 0 en ★1 .. 1 en ★5) y las mejoras compradas
+  const D = Math.max(-0.5, Math.min(1, ctx.dif || 0));
+  const MJ = ctx.mejoras || {};
+  const ancho = (w, k = 0.35) => w * (1 - k * D); // las zonas buenas se achican con la fama
+  const rapido = (k = 0.25) => 1 + k * D; // y las cosas van un poco mas rapido
+  const mas = (n, k) => n + Math.round(Math.max(0, D) * k); // y hay mas pliegues / cortes / lanzamientos
   let vivo = true;
   let raf = 0;
   let terminado = false;
@@ -162,7 +168,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const cuenta = el(s, "text", { x: 150, y: 24, "text-anchor": "middle", class: "cocina-cuenta" });
     cuenta.textContent = `0 / ${TOTAL}`;
     ayuda("Tap when the red ring meets the green line");
-    const P = 1300;
+    const P = 1300 / rapido();
+    const TOL = ancho(0.13);
     let k = 1;
     bucle((t) => {
       k = 1 + 0.95 * (1 - ((t % P) / P)); // 1.95 -> 1.0
@@ -173,7 +180,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       e.preventDefault();
       if (!vivo) return;
       n++;
-      const ok = Math.abs(k - 1.09) < 0.13;
+      const ok = Math.abs(k - 1.09) < TOL;
       if (ok) buenos++;
       sonar(ok ? "tocar" : "no");
       masa.setAttribute("rx", ok ? 52 : 44);
@@ -191,8 +198,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
 
   // ---------- ESTIRAR ----------
   else if (paso.t === "estirar") {
-    const MIN = 66;
-    const MAX = 76;
+    const MIN = 71 - ancho(5, 0.4);
+    const MAX = 71 + ancho(5, 0.4);
     let r = 32;
     el(s, "circle", { cx: 150, cy: 104, r: MAX, fill: "none", stroke: "rgb(120,190,110)", "stroke-width": MAX - MIN, opacity: 0.25 });
     el(s, "circle", { cx: 150, cy: 104, r: (MIN + MAX) / 2, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "6 6" });
@@ -235,8 +242,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
 
   // ---------- RELLENAR / VERTER ----------
   else if (paso.t === "rellenar" || paso.t === "verter") {
-    const A = 0.62;
-    const B = 0.8;
+    const MEDIO_RV = ancho(0.09) + 0.015 * (MJ.ollas || 0);
+    const A = 0.71 - MEDIO_RV;
+    const B = 0.71 + MEDIO_RV;
     const esVerter = paso.t === "verter";
     let f = 0;
     let apretado = false;
@@ -302,7 +310,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
 
   // ---------- PLEGAR ----------
   else if (paso.t === "plegar") {
-    const N = paso.n || 8;
+    const N = mas(paso.n || 8, 3);
     const R = paso.relleno ? RELLENOS[paso.relleno] : RELLENOS.carne;
     const media = paso.forma === "media"; // jiaozi, guotie, empanada: se pliega el borde de abajo
     const a0 = media ? 200 : -90; // grados donde empieza
@@ -334,7 +342,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     dibujarZona();
     ayuda(`Tap when the pink mark is in the green`);
     let ang = objetivo() - 70;
-    const VEL = 0.11; // grados por ms
+    const VEL = 0.11 * rapido(0.35); // grados por ms
     let tPrev = 0;
     bucle((t) => {
       const dt = t - tPrev;
@@ -368,8 +376,10 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // ---------- COCINAR ----------
   else if (paso.t === "cocinar") {
     const C = COCCIONES[paso.como] || COCCIONES.vapor;
-    const A = 0.55;
-    const B = 0.72;
+    const MEDIO_C = ancho(0.085, 0.4) + 0.0125 * (MJ.ollas || 0);
+    const A = 0.635 - MEDIO_C;
+    const B = 0.635 + MEDIO_C;
+    const MS = C.ms / rapido(0.2);
     // la olla / vaporera / sarten, con el plato adentro
     const f = paso.como;
     if (f === "vapor") {
@@ -408,7 +418,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let suma = 0;
     ayuda(`Tap the button when the needle is in the green`);
     bucle((t) => {
-      x = Math.min(1.02, (t - desde) / C.ms);
+      x = Math.min(1.02, (t - desde) / MS);
       aguja.setAttribute("x", M.x - 2 + M.w * Math.min(1, x));
       humo.setAttribute("opacity", Math.min(1, x * 1.4));
       comida.setAttribute("opacity", x > B + 0.12 ? 0.75 : 1);
@@ -439,7 +449,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // deslizar el dedo de arriba a abajo sobre cada linea punteada
   else if (paso.t === "cortar") {
     const I = INGREDIENTES[paso.que] || INGREDIENTES.cebollin;
-    const N = paso.n || 4;
+    const N = mas(paso.n || 4, 2);
+    const TOL_C = ancho(9) + 3 * (MJ.cuchillo || 0);
+    const TORCIDO = ancho(26, 0.3) + 4 * (MJ.cuchillo || 0);
     const X0 = 60;
     const X1 = 240;
     const lineas = Array.from({ length: N }, (_, i) => X0 + ((X1 - X0) * (i + 1)) / (N + 1));
@@ -502,8 +514,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         }
       });
       if (mejor < 0) return;
-      const torcido = Math.abs(p[0] - a[0]) > 26;
-      const ok = dmin <= 9 && !torcido;
+      const torcido = Math.abs(p[0] - a[0]) > TORCIDO;
+      const ok = dmin <= TOL_C && !torcido;
       if (ok) buenos++;
       hechos.push(mejor);
       guias[mejor].setAttribute("stroke", ok ? "rgb(120,190,110)" : "rgb(222,110,100)");
@@ -537,8 +549,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     el(cuchara, "rect", { x: -3, y: -50, width: 6, height: 46, rx: 3, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 2 });
     cuchara.setAttribute("transform", `translate(${CX + 40} ${CY})`);
     // el medidor de velocidad (vertical, a la derecha) y el progreso
-    const VMIN = 4.2;
-    const VMAX = 9; // radianes por segundo
+    const VMIN = 6.6 - ancho(2.4); // radianes por segundo
+    const VMAX = 6.6 + ancho(2.4);
     const MX = 228;
     const MY = 30;
     const MH = 140;
@@ -632,7 +644,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // ---------- SALTEAR EN EL WOK (v58) ----------
   // deslizar para arriba cuando sube la llama, y mover el wok para atraparlo
   else if (paso.t === "saltear") {
-    const N = paso.n || 4;
+    const N = mas(paso.n || 4, 2);
+    const ATRAPA = ancho(40, 0.3) + 8 * (MJ.wok || 0);
+    const LLAMA = Math.min(0.6, ancho(0.33) + 0.06 * (MJ.wok || 0)); // cuanto dura la llamarada (fraccion del ciclo)
     const WOK_Y = 150;
     let wokX = 150;
     const llama = el(s, "g", {});
@@ -650,7 +664,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const P = 1500;
     const flama = (t) => {
       const f = (t % P) / P;
-      return f > 0.62 && f < 0.95; // la llamarada
+      return f > 0.95 - LLAMA && f < 0.95; // la llamarada
     };
     cuenta.textContent = `TOSS 0 / ${N}`;
     ayuda("Swipe up on the big flame · slide to catch it");
@@ -697,7 +711,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         const y = WOK_Y - 4 * h * (tv / T) * (1 - tv / T);
         comida.setAttribute("transform", `translate(${x} ${y}) rotate(${tv * 360})`);
         if (tv >= T) {
-          const atrapo = Math.abs(x - wokX) < 40;
+          const atrapo = Math.abs(x - wokX) < ATRAPA;
           const ok = atrapo && vuelo.conLlama;
           if (ok) buenos++;
           brillo.textContent = !atrapo ? "Oops! It fell" : vuelo.conLlama ? "Wok hei! ✨" : "Wait for the flame";
@@ -718,8 +732,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // arrastrar para estirar la masa y soltar en el verde: los hilos se doblan
   else if (paso.t === "lamian") {
     const N = paso.n || 4; // 2, 4, 8, 16 hilos
-    const A = 150;
-    const B = 190; // largo justo (px)
+    const A = 170 - ancho(20); // largo justo (px)
+    const B = 170 + ancho(20);
     let largo = 70;
     let hilos = 1;
     let k = 0;
@@ -826,7 +840,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     el(s, "rect", { x: 30, y: 180, width: 240, height: 10, fill: "rgb(240,230,200)", stroke: TINTA, "stroke-width": 2 });
     const tiempo = el(s, "rect", { x: 31, y: 181, width: 238, height: 8, fill: "rgb(120,170,220)" });
     ayuda("Rub back and forth to wash it clean");
-    const T = 7000;
+    const T = 7000 * (1 - 0.25 * D);
     let frotando = false;
     let prev = null;
     s.addEventListener("pointerdown", (e) => {
@@ -890,7 +904,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     for (let i = 0; i < ZONAS; i++) {
       const x = ZX0 + i * ZW + 4;
       el(s, "rect", { x, y: 172, width: ZW - 8, height: 12, fill: "rgb(240,230,200)", stroke: TINTA, "stroke-width": 2 });
-      el(s, "rect", { x: x + (ZW - 8) * 0.5, y: 172, width: (ZW - 8) * 0.5, height: 12, fill: "rgba(120,190,110,0.5)" });
+      el(s, "rect", { x: x + (ZW - 8) * (0.75 - ancho(0.25, 0.3)), y: 172, width: (ZW - 8) * Math.min(0.25 + ancho(0.25, 0.3), 1 - (0.75 - ancho(0.25, 0.3))), height: 12, fill: "rgba(120,190,110,0.5)" });
       barras.push(el(s, "rect", { x: x + 1, y: 174, width: 0, height: 8, fill: polvo === "rgb(255,255,255)" ? "rgb(200,200,210)" : polvo }));
     }
     const salero = el(s, "g", { opacity: 0.9 });
@@ -936,7 +950,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }
     });
     boton("Ready ✓", () => {
-      const bien = cant.filter((c) => c >= 0.5 && c <= 1).length;
+      const bien = cant.filter((c) => c >= 0.75 - ancho(0.25, 0.3) && c <= 0.75 + ancho(0.25, 0.3)).length;
       fin(bien >= ZONAS ? 3 : bien >= ZONAS - 2 ? 2 : 1);
     });
   }
@@ -1022,7 +1036,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         return;
       }
       const prolijo = dentro / Math.max(1, dentro + fuera);
-      fin(cubierto >= 0.85 && prolijo >= 0.75 ? 3 : cubierto >= 0.6 && prolijo >= 0.5 ? 2 : 1);
+      const exige = Math.max(0.6, Math.min(0.88, 0.75 + 0.12 * D));
+      fin(cubierto >= 0.85 && prolijo >= exige ? 3 : cubierto >= 0.6 && prolijo >= 0.5 ? 2 : 1);
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", soltar);
@@ -1033,8 +1048,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   else if (paso.t === "aplastar") {
     const I = INGREDIENTES[paso.que] || INGREDIENTES.platano;
     const PIEZAS = paso.n || 2;
-    const A = 0.28;
-    const B = 0.42;
+    const A = 0.35 - ancho(0.07);
+    const B = 0.35 + ancho(0.07);
     let grosor = 1;
     let pieza = 0;
     const notas = [];
@@ -1148,7 +1163,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       if (mezcla >= 1) {
         quitarMov();
         const seg = t / 1000;
-        fin(seg <= 4 ? 3 : seg <= 7 ? 2 : 1);
+        const k = 1 - 0.25 * D;
+        fin(seg <= 4 * k ? 3 : seg <= 7 * k ? 2 : 1);
       }
     });
     const destruirViejo = () => quitarMov();
