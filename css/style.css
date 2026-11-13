@@ -6209,3 +6209,47 @@ button.nota-polaroid {
 @keyframes rest-baila { 0% { transform: rotate(-10deg) translateY(0); } 50% { transform: rotate(10deg) translateY(-4px); } }
 .rest-fila-botones .boton { min-width: 0; }
 @media (max-width: 700px) { .rest-fila-botones .boton { font-size: 12px; padding: 6px 4px; } }
+
+/* ================================================================
+   v59 — progreso del restaurante: fama, mejoras, modo relajado, critico
+   ================================================================ */
+.rest-barra-fama { position: relative; height: 10px; margin: 3px 0 2px; background: rgb(240, 230, 200); box-shadow: 0 0 0 2px var(--tinta); }
+.rest-barra-fama i { position: absolute; left: 0; top: 0; bottom: 0; background: rgb(232, 168, 30); }
+.rest-practica { align-self: flex-start; margin-top: 3px; padding: 3px 5px; font-family: var(--fuente-display); font-size: 7px; line-height: 1.3; color: rgb(120, 90, 40); background: rgb(255, 236, 200); box-shadow: 0 0 0 1px var(--tinta); }
+.rest-cuenta { color: rgb(60, 120, 70); opacity: 1 !important; }
+.pantalla-rest .rest-fila-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rest-relajado { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; border: none; font: inherit; font-size: 12px; color: var(--tinta); background: rgba(252, 248, 236, 0.85); box-shadow: 0 0 0 2px var(--tinta); }
+.rest-sw { position: relative; width: 26px; height: 14px; flex: none; background: rgb(200, 200, 200); box-shadow: 0 0 0 2px var(--tinta); }
+.rest-sw i { position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; background: #fff; box-shadow: 0 0 0 1px var(--tinta); }
+.rest-relajado.si .rest-sw { background: rgb(120, 190, 110); }
+.rest-relajado.si .rest-sw i { left: 14px; }
+.rest-mejoras { position: absolute; left: var(--sx); right: var(--dx); top: calc(var(--arr) + 48px); bottom: var(--aba); display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px; overflow: auto; scrollbar-width: none; }
+.rest-mejora-item { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 8px; padding: 5px 8px; background: var(--papel); box-shadow: 0 0 0 2px var(--tinta); min-height: 0; }
+.rest-mejora-item b { font-size: 14px; }
+.rest-mejora-item small { display: block; font-size: 11px; line-height: 1.2; opacity: 0.75; }
+.rest-mejora-item .boton { min-height: 32px; padding: 4px 8px; font-size: 13px; gap: 4px; }
+.rest-mejora-ico { width: 40px; height: 40px; display: grid; place-items: center; background: #fff; box-shadow: 0 0 0 2px var(--tinta); }
+.rest-pips { font-size: 11px; letter-spacing: 2px; color: rgb(232, 168, 30); }
+.rest-necesita { font-family: var(--fuente-display); font-size: 7px; line-height: 1.4; text-align: center; color: var(--rosa-oscuro); }
+.rest-aviso-mejoras { position: absolute; z-index: 7; left: 50%; bottom: calc(var(--aba) + 6px); transform: translateX(-50%); white-space: nowrap; }
+.rest-carta { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(20, 16, 24, 0.6); animation: aparecer 0.3s steps(4); }
+.rest-carta-hoja.papel { flex: none; min-height: 0; width: min(440px, 86%); display: grid; gap: 8px; padding: 16px 20px; text-align: center; }
+.rest-carta-sello { font-size: 38px; letter-spacing: 4px; color: rgb(232, 168, 30); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.2); }
+.rest-carta-hoja p { margin: 0; font-size: 14px; line-height: 1.35; }
+.rest-carta-hoja small { font-size: 12px; opacity: 0.75; }
+@media (max-height: 380px) {
+  .rest-mejora-item { padding: 3px 6px; gap: 6px; grid-template-columns: 32px 1fr auto; }
+  .rest-mejora-ico { width: 32px; height: 32px; }
+  .rest-mejora-ico svg { width: 24px; height: 24px; }
+  .rest-mejora-item small { font-size: 10px; }
+  .rest-relajado { min-height: 34px; }
+}
+@media (max-width: 700px) {
+  .rest-mejora-item b { font-size: 12px; }
+  .rest-relajado { font-size: 11px; }
+}
+.rest-sub-estr { font-family: var(--fuente-cuerpo); font-size: 13px; letter-spacing: 1px; color: rgb(232, 168, 30); vertical-align: -1px; }
+.rest-fin-carta .rest-barra-fama { align-self: stretch; width: 100%; }
+.rest-col .boton-fantasma { --relleno: var(--papel); }
+.rest-cuantas { font-size: 11px; opacity: 0.7; }
+@media (max-width: 700px) { .rest-cuantas { display: none; } }
