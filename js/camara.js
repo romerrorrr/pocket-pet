@@ -336,6 +336,32 @@ export async function guardarFoto({ dataUrl, dia, lugar = null, tipo = "diario",
 }
 
 /**
+ * v60 (rom: "la opcion de borrar fotos que hayamos tomado"): borra una foto
+ * de la memoria y de IndexedDB. Devuelve true si estaba.
+ */
+export async function borrarFoto(clave) {
+  const antes = fotos.length;
+  fotos = fotos.filter((f) => f.clave !== clave);
+  if (fotos.length === antes) return false;
+  const db = await Promise.race([abrirDB(), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  if (db) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1500);
+      try {
+        const tx = db.transaction(TIENDA, "readwrite");
+        tx.objectStore(TIENDA).delete(clave);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch (e) {
+        resolve();
+      }
+    });
+  }
+  return true;
+}
+
+/**
  * v33: las fotos de un backup. Se suman a las que ya hay (nunca se borra
  * una foto de este telefono); las que ya estan (misma clave) se saltean.
  * Devuelve cuantas se agregaron.

@@ -1775,7 +1775,7 @@ export function itemsDelDia(dia) {
 
 function imagenDeItem(item, i = 0) {
   if (item.tipo === "mapa") return `<img class="imagen-polaroid mapa-polaroid" src="${item.dataUrl}" alt="" draggable="false" data-item="${i}" />`;
-  return `<img class="imagen-polaroid foto-real ${esLisa(item) ? "lisa" : ""}" src="${item.dataUrl}" alt="" draggable="false" data-item="${i}" />`;
+  return `<img class="imagen-polaroid foto-real ${esLisa(item) ? "lisa" : ""}" src="${item.dataUrl}" alt="" draggable="false" data-item="${i}" data-clave="${esc(item.clave || "")}" data-tipo="${esc(item.tipo || "")}" />`;
 }
 
 /**
@@ -1833,6 +1833,7 @@ export function htmlPolaroid(e, { puedeRepetirFinal = false, htmlSticker = null,
             : `<div class="botones-polaroid">
           ${hayMapa ? `<button class="boton-mapa-dia" data-ver-mapa="1" type="button">${glifo("pin")} Our day's map</button>` : ""}
           ${items.length ? `<button class="boton chico boton-fantasma boton-galeria" data-guardar-foto="1" type="button">Save to Photos</button>` : ""}
+          ${items.some((x) => x.tipo !== "mapa" && x.tipo !== "final") ? `<button class="boton-mapa-dia boton-borrar-foto ${items[0].tipo === "mapa" || items[0].tipo === "final" ? "oculto" : ""}" data-borrar-foto="1" type="button" aria-label="Delete this photo">🗑 Delete</button>` : ""}
           <button class="boton-mapa-dia boton-decorar" data-decorar="1" type="button">✎ Decorate</button>
         </div>`
         }
@@ -1902,6 +1903,9 @@ export function siguienteFotoPolaroid(figura) {
   if (img) img.outerHTML = imagenDeItem(items[i], i);
   const c = figura.querySelector(".contador-fotos");
   if (c) c.textContent = `${i + 1}/${items.length}`;
+  // v60: el boton de borrar solo con una foto de verdad a la vista (no el mapa, no la del final)
+  const b = figura.querySelector("[data-borrar-foto]");
+  if (b) b.classList.toggle("oculto", items[i].tipo === "mapa" || items[i].tipo === "final");
 }
 
 /**

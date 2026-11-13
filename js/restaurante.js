@@ -202,6 +202,7 @@ export class Restaurante {
     this.niveles = {}; // v59: mejora -> nivel comprado
     this.relajado = false; // v59: modo relajado (facil, sin fama)
     this.carta = 0; // v59: la carta del critico pendiente (la estrella nueva), 0 = ninguna
+    this.guardados = new Set(); // v60: adornos comprados que saco del frente
   }
 
   nivel(id) {
@@ -326,7 +327,7 @@ export class Restaurante {
   }
 
   aObjeto() {
-    return { version: 2, turnos: this.turnos, mejoras: [...this.mejoras], mejorTurno: this.mejorTurno, hoy: { ...this.hoy }, fama: this.fama, compradas: [...this.compradas], libro: this.libro, decor: [...this.decor], ultimo: this.ultimo, niveles: this.niveles, relajado: this.relajado, carta: this.carta };
+    return { version: 2, turnos: this.turnos, mejoras: [...this.mejoras], mejorTurno: this.mejorTurno, hoy: { ...this.hoy }, fama: this.fama, compradas: [...this.compradas], libro: this.libro, decor: [...this.decor], ultimo: this.ultimo, niveles: this.niveles, relajado: this.relajado, carta: this.carta, guardados: [...this.guardados] };
   }
 
   static desdeObjeto(d) {
@@ -351,6 +352,7 @@ export class Restaurante {
     // v59
     for (const m of MEJORAS_COCINA) if (d.niveles && Number.isFinite(d.niveles[m.id])) r.niveles[m.id] = Math.max(0, Math.min(m.costos.length, Math.floor(d.niveles[m.id])));
     r.relajado = d.relajado === true;
+    r.guardados = new Set((Array.isArray(d.guardados) ? d.guardados : []).filter((id) => r.decor.has(id)));
     r.carta = Number.isInteger(d.carta) && d.carta >= 2 && d.carta <= 5 ? d.carta : 0;
     if (d.version !== 2) {
       // v58 -> v59 (rom: "empezar la fama de cero"): fama y dias de cero; las recetas que ya
@@ -455,7 +457,7 @@ export function abrirRestaurante(contenedor, opts) {
    * adornos van encima, en % de la imagen (ver tools/v56_arte.py: VENTANA, LETRERO).
    */
   function frente(cliente = "") {
-    const d = (id) => (reg.decor.has(id) ? `<img class="rest-deco rest-deco-${id}" src="${arte(DECOR.find((x) => x.id === id).arte)}" alt="" draggable="false" />` : "");
+    const d = (id) => (reg.decor.has(id) && !reg.guardados.has(id) ? `<img class="rest-deco rest-deco-${id}" src="${arte(DECOR.find((x) => x.id === id).arte)}" alt="" draggable="false" />` : "");
     return `
       <div class="rest-frente">
         <div class="rest-escena">
@@ -643,7 +645,9 @@ export function abrirRestaurante(contenedor, opts) {
           <div class="papel rest-card rest-decor-lista">
             ${DECOR.map(
               (d) => `<div class="rest-mejora"><img src="${arte(d.arte)}" alt="" draggable="false" /><b>${esc(d.nombre)}</b>${
-                reg.decor.has(d.id) ? `<span class="rest-tuya">✓ YOURS</span>` : `<button class="boton boton-fantasma" type="button" data-decor="${d.id}" ${tienda.monedas < d.precio ? "disabled" : ""}>${moneda()}${d.precio}</button>`
+                reg.decor.has(d.id)
+                  ? `<button class="rest-relajado ${reg.guardados.has(d.id) ? "" : "si"}" type="button" data-poner="${d.id}" aria-pressed="${!reg.guardados.has(d.id)}"><span class="rest-sw"><i></i></span>${reg.guardados.has(d.id) ? "Off" : "On"}</button>`
+                  : `<button class="boton boton-fantasma" type="button" data-decor="${d.id}" ${tienda.monedas < d.precio ? "disabled" : ""}>${moneda()}${d.precio}</button>`
               }</div>`,
             ).join("")}
           </div>
@@ -660,6 +664,16 @@ export function abrirRestaurante(contenedor, opts) {
           guardar();
           decorar(`${DECOR.find((x) => x.id === b.dataset.decor).nombre}: up!`);
         } else sonar("no");
+      });
+    // v60 (rom: "quitar decoracion del restaurante"): lo comprado se puede sacar y volver a poner
+    for (const b of contenedor.querySelectorAll("[data-poner]"))
+      b.addEventListener("click", () => {
+        const id = b.dataset.poner;
+        if (reg.guardados.has(id)) reg.guardados.delete(id);
+        else reg.guardados.add(id);
+        sonar("tocar");
+        guardar();
+        decorar(`${DECOR.find((x) => x.id === id).nombre}: ${reg.guardados.has(id) ? "put away" : "back up!"}`);
       });
   }
 

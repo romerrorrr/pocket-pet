@@ -649,8 +649,24 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const LLAMA = Math.min(0.6, ancho(0.33) + 0.06 * (MJ.wok || 0)); // cuanto dura la llamarada (fraccion del ciclo)
     const WOK_Y = 150;
     let wokX = 150;
+    // v60 (rom: "el fuego se ve demasiado falso"): fuego pixelado en capas (rojo, naranja, amarillo,
+    // y un corazon claro en la llamarada), con el brillo del fogon y chispitas que suben
+    const brilloFuego = el(s, "ellipse", { cx: 150, cy: WOK_Y + 18, rx: 80, ry: 26, fill: "rgb(255,150,60)", opacity: 0.15 });
+    const fogon = el(s, "g", {});
+    el(fogon, "rect", { x: -60, y: 26, width: 120, height: 8, fill: "rgb(50,46,54)", stroke: TINTA, "stroke-width": 2 });
     const llama = el(s, "g", {});
-    const llamas = [0, 1, 2, 3, 4].map((i) => el(llama, "path", { d: "", fill: i % 2 ? "rgb(255,200,80)" : "rgb(240,110,50)", stroke: TINTA, "stroke-width": 2 }));
+    const PX = 4; // el "pixel" del fuego
+    const COLS = 35; // mas ancho que el wok: en la llamarada lo abraza por los costados
+    const capasFuego = Array.from({ length: COLS }, () => [
+      el(llama, "rect", { width: PX, fill: "rgb(214,64,40)" }),
+      el(llama, "rect", { width: PX, fill: "rgb(250,140,50)" }),
+      el(llama, "rect", { width: PX, fill: "rgb(255,214,90)" }),
+      el(llama, "rect", { width: PX, fill: "rgb(255,248,210)" }),
+      el(llama, "rect", { width: PX / 2, height: PX, fill: "rgb(214,64,40)" }), // la puntita (se afina)
+    ]);
+    const azul = Array.from({ length: COLS }, () => el(llama, "rect", { width: PX, height: PX, fill: "rgb(110,150,240)" }));
+    const chispas = el(s, "g", {});
+    const ruidoFuego = Array.from({ length: COLS }, () => Math.random());
     const wok = el(s, "g", {});
     el(wok, "path", { d: "M-62 -10 Q0 40 62 -10 Z", fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
     el(wok, "rect", { x: 60, y: -14, width: 46, height: 8, rx: 4, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 3 });
@@ -697,11 +713,52 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     });
     bucle((t) => {
       const alto = flama(t);
-      llamas.forEach((l, i) => {
-        const x = wokX - 40 + i * 20;
-        const h = alto ? 26 + ((i * 7 + Math.floor(t / 90)) % 10) : 8 + ((i * 5 + Math.floor(t / 120)) % 5);
-        l.setAttribute("d", `M${x - 8} ${WOK_Y + 22} Q${x} ${WOK_Y + 22 - h * 1.4} ${x + 8} ${WOK_Y + 22} Z`);
-      });
+      s.dataset.llama = alto ? "1" : "0";
+      // el ruido de cada columna cambia de a poco (parpadeo, no temblor)
+      if (Math.floor(t / 70) !== s._paso) {
+        s._paso = Math.floor(t / 70);
+        for (let i = 0; i < COLS; i++) ruidoFuego[i] = ruidoFuego[i] * 0.5 + Math.random() * 0.5;
+      }
+      const base = WOK_Y + 24; // donde nace el fuego (abajo del wok)
+      for (let i = 0; i < COLS; i++) {
+        const x = wokX - (COLS * PX) / 2 + i * PX;
+        const centro = 1 - Math.abs(i - (COLS - 1) / 2) / ((COLS - 1) / 2); // mas alto en el medio
+        const lado = 1 - centro; // 0 en el medio, 1 en las puntas
+        const enRango = Math.abs(i - (COLS - 1) / 2) <= 13; // el fuego chico solo debajo del wok
+        const hBase = alto ? (lado > 0.93 ? 0 : 22 + 54 * Math.sin(Math.min(1, lado * 1.15) * Math.PI * 0.85)) : enRango ? 4 + 10 * centro : 0;
+        const h = Math.round((hBase * (0.35 + 0.95 * ruidoFuego[i] * ruidoFuego[(i + 1) % COLS] + 0.2 * ruidoFuego[i])) / PX) * PX;
+        const [rojo, naranja, amarillo, blanco, punta] = capasFuego[i];
+        const capa = (r, f) => {
+          const hh = Math.max(0, Math.round((h * f) / PX) * PX);
+          r.setAttribute("x", x);
+          r.setAttribute("y", base - hh);
+          r.setAttribute("height", hh);
+        };
+        capa(rojo, 1);
+        capa(naranja, 0.72);
+        capa(amarillo, alto ? 0.45 : 0.3);
+        capa(blanco, alto && Math.abs(i - (COLS - 1) / 2) <= 6 ? 0.25 : 0);
+        punta.setAttribute("x", x + (i % 2 ? 0 : PX / 2));
+        punta.setAttribute("y", base - h - PX);
+        punta.setAttribute("opacity", h >= PX * 3 ? 1 : 0);
+        azul[i].setAttribute("x", x);
+        azul[i].setAttribute("y", base);
+        azul[i].setAttribute("opacity", Math.abs(i - (COLS - 1) / 2) <= 14 ? (i % 2 ? 0.9 : 0.6) : 0);
+      }
+      fogon.setAttribute("transform", `translate(${wokX} ${WOK_Y})`);
+      brilloFuego.setAttribute("cx", wokX);
+      brilloFuego.setAttribute("opacity", alto ? 0.32 : 0.12);
+      if (alto && Math.random() < 0.35) {
+        const c = el(chispas, "rect", { x: wokX - 40 + Math.random() * 80, y: base - 30, width: 3, height: 3, fill: "rgb(255,220,120)" });
+        c._vy = 30 + Math.random() * 40;
+        c._t = t;
+      }
+      for (const c of [...chispas.children]) {
+        const dt = (t - c._t) / 1000;
+        c.setAttribute("y", base - 30 - c._vy * dt);
+        c.setAttribute("opacity", Math.max(0, 1 - dt * 1.6));
+        if (dt > 0.7) c.remove();
+      }
       wok.setAttribute("transform", `translate(${wokX} ${WOK_Y})`);
       if (vuelo) {
         const tv = (t - vuelo.t0) / 1000;

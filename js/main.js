@@ -3497,6 +3497,38 @@ function wireDiario() {
   MapaDia.hacerPendientes(dias, refrescarPolaroid);
 }
 
+/** v60: borrar una foto, siempre preguntando antes (no se puede deshacer). */
+function confirmarBorrarFoto(clave, src) {
+  Sonido.sonar("tocar");
+  const capa = document.createElement("div");
+  capa.className = "capa-borrar-foto";
+  capa.innerHTML = `
+    <div class="papel hoja-borrar-foto" role="dialog" aria-label="Delete photo">
+      <img src="${src}" alt="" draggable="false" />
+      <div class="hoja-borrar-texto"><b>Delete this photo?</b><small>It can't be undone.</small></div>
+      <div class="fila-botones">
+        <button class="boton boton-fantasma" id="btn-borrar-no" type="button">Keep it</button>
+        <button class="boton boton-peligro" id="btn-borrar-si" type="button">Delete</button>
+      </div>
+    </div>`;
+  document.getElementById("app").appendChild(capa);
+  const cerrar = () => capa.remove();
+  capa.querySelector("#btn-borrar-no").addEventListener("click", () => {
+    Sonido.sonar("tocar");
+    cerrar();
+  });
+  capa.addEventListener("click", (e) => {
+    if (e.target === capa) cerrar();
+  });
+  capa.querySelector("#btn-borrar-si").addEventListener("click", async () => {
+    capa.querySelector("#btn-borrar-si").disabled = true;
+    await Camara.borrarFoto(clave);
+    Sonido.sonar("mimo");
+    cerrar();
+    renderVistaActual();
+  });
+}
+
 function wirePolaroid(fig) {
   fig.addEventListener("click", (e) => {
     if (e.target.closest("[data-decorar]")) {
@@ -3525,6 +3557,11 @@ function wirePolaroid(fig) {
     }
     if (e.target.closest("[data-repetir-final]")) {
       conTransicion(() => Final.repetir());
+      return;
+    }
+    if (e.target.closest("[data-borrar-foto]")) {
+      const img = fig.querySelector("img.imagen-polaroid.foto-real");
+      if (img && img.dataset.clave && img.dataset.tipo !== "final") confirmarBorrarFoto(img.dataset.clave, img.src);
       return;
     }
     if (Number(fig.dataset.total) > 1) {
