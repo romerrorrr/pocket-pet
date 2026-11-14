@@ -6072,13 +6072,18 @@ button.nota-polaroid {
 .rest-tabla::before { content: ""; position: absolute; inset: 8px; background: radial-gradient(ellipse 18px 5px at 22% 30%, rgba(170, 120, 74, 0.35) 0 60%, transparent 62%), radial-gradient(ellipse 14px 4px at 78% 72%, rgba(170, 120, 74, 0.3) 0 60%, transparent 62%); pointer-events: none; }
 .rest-lado { position: absolute; z-index: 4; right: var(--dx); top: calc(var(--arr) + 76px); bottom: var(--aba); width: min(150px, 19vw); display: flex; flex-direction: column; gap: 8px; }
 .rest-lado .rest-card small { font-size: 11px; line-height: 1.3; }
-.rest-baozi { margin-top: auto; align-self: center; width: min(110px, 100%); aspect-ratio: 1; }
+.rest-baozi { position: relative; margin-top: auto; align-self: center; width: min(110px, 100%); aspect-ratio: 1; }
+/* v65: en la cocina Baozi esta parado en el piso (mas grande, con su sombra), no flotando */
+.pantalla-rest.cocina .rest-baozi { width: min(150px, 120%); margin-bottom: calc(-1 * var(--aba) - 6px); align-self: flex-end; }
+.pantalla-rest.cocina .rest-baozi::before { content: ""; position: absolute; left: 24%; right: 24%; bottom: 15%; height: 7%; border-radius: 50%; background: rgba(30, 18, 14, 0.35); }
 .rest-baozi .sprite-cara { width: 100%; height: 100%; }
 .rest-ayuda { position: absolute; z-index: 5; left: calc(var(--sx) + min(170px, 22vw) + 24px); right: calc(var(--dx) + min(150px, 19vw) + 24px); bottom: calc(var(--aba) + 10px); width: auto; margin: 0 auto; padding: 4px 9px; font-size: 13px; line-height: 1.2; text-align: center; background: var(--papel); box-shadow: 0 0 0 2px var(--tinta); pointer-events: none; }
 .rest-ayuda:empty { display: none; }
 .rest-accion { min-height: 44px; padding: 6px 10px; font-size: 15px; animation: rest-llega 0.25s steps(3); }
 .rest-lado > .papel, .rest-col > .papel { flex: 0 0 auto; }
-.rest-baozi-ventana { height: 130%; aspect-ratio: 1; flex: none; transform: translateY(26%); }
+/* v65: Baozi atiende detras del mostrador: mas grande, y el mostrador le tapa las piernas */
+.rest-baozi-ventana { height: 165%; aspect-ratio: 1; flex: none; transform: translateY(47%); }
+.rest-baozi-ventana.entrega { margin-left: 34%; }
 .rest-baozi-ventana .sprite-cara { width: 100%; height: 100%; }
 .rest-extra-pago { font-family: var(--fuente-display); font-size: 8px; color: rgb(170, 110, 20); }
 
@@ -6124,9 +6129,11 @@ button.nota-polaroid {
 .rest-comprar-receta { align-self: flex-start; gap: 6px; min-height: 36px; padding: 5px 12px; }
 
 /* servir */
-.rest-cliente-servido { height: 130%; width: auto; aspect-ratio: 1; flex: none; transform: translateY(26%); animation: rest-llega-v 0.35s steps(4); }
-@keyframes rest-llega-v { from { transform: translateY(70%); opacity: 0; } }
-.rest-plato-servido { position: absolute; bottom: 0; right: 10%; width: 22%; height: auto; aspect-ratio: 1; }
+/* v65: el cliente esta afuera, parado en la vereda delante del mostrador, y el plato sobre el mostrador */
+.rest-cliente-servido { position: absolute; z-index: 4; left: 31%; bottom: 4%; height: 38%; width: auto; aspect-ratio: 1; image-rendering: pixelated; animation: rest-llega-v 0.35s steps(4); }
+@keyframes rest-llega-v { from { transform: translateX(-40%); opacity: 0; } }
+.rest-sombra-cliente { position: absolute; z-index: 3; left: 33.5%; bottom: 5%; width: 13%; height: 3.5%; border-radius: 50%; background: rgba(40, 30, 30, 0.28); }
+.rest-plato-servido { position: absolute; z-index: 3; left: 46%; bottom: 21.5%; width: 8.5%; height: auto; aspect-ratio: 1; image-rendering: pixelated; animation: rest-llega 0.3s steps(3); }
 @keyframes rest-llega { from { transform: translateY(30%); opacity: 0; } }
 .rest-resena.papel { position: absolute; z-index: 6; right: var(--dx); top: calc(var(--arr) + 48px); width: min(230px, 32vw); flex: 0 0 auto; min-height: 0; gap: 8px; padding: 12px 14px; }
 .rest-resena-texto { font-size: 15px; line-height: 1.3; }
