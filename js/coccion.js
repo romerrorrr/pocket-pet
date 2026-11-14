@@ -30,7 +30,7 @@ const mezcla = (a, b, t) => {
 export const EN_LA_OLLA = {
   bao_cerdo: { pieza: "bao", n: 3 },
   bao_verdura: { pieza: "bao", n: 3, punto: "rgb(110,170,80)" },
-  bao_frijol: { pieza: "bao", n: 3, punto: "rgb(214,60,60)" },
+  bao_frijol: { pieza: "bao", n: 3 }, // el puntito rojo se pone despues (PIPE)
   liusha: { pieza: "bao", n: 3, punto: "rgb(250,190,60)" },
   xiaolongbao: { pieza: "xlb", n: 4 },
   hargow: { pieza: "hargow", n: 4 },

@@ -51,6 +51,8 @@ export const LIQUIDOS = {
   masa: { nombre: "batter", color: "rgb(250,230,180)" },
   huevo: { nombre: "beaten egg", color: "rgb(255,220,90)" },
   caldo: { nombre: "broth", color: "rgb(214,170,110)" },
+  // v64
+  vinagre_dulce: { nombre: "sweet vinegar sauce", color: "rgb(150,70,40)" },
 };
 /** v58: lo que se corta, se lava o se aplasta */
 export const INGREDIENTES = {
@@ -78,6 +80,11 @@ export const INGREDIENTES = {
   hoja: { nombre: "leaves", color: "rgb(110,160,80)", vena: "rgb(170,210,130)", alto: 40 },
   pollo: { nombre: "chicken", color: "rgb(240,214,170)", vena: "rgb(250,232,200)", alto: 44, redondo: true },
   arroz: { nombre: "rice", color: "rgb(250,248,240)", alto: 30 },
+  // v64
+  panela: { nombre: "panela", color: "rgb(176,110,50)", vena: "rgb(210,150,80)", alto: 40 },
+  barro: { nombre: "clay", color: "rgb(170,120,80)", alto: 40 },
+  hojas_te: { nombre: "tea leaves", color: "rgb(110,160,80)", alto: 30 },
+  oblea: { nombre: "wafer", color: "rgb(246,222,170)", alto: 10 },
 };
 export const COCCIONES = {
   vapor: { verbo: "STEAM", boton: "Take it out!", ms: 3600 },
@@ -189,6 +196,7 @@ export function dibujarIngrediente(g, que, x0, x1, cy) {
   const L = x1 - x0;
   const borde = { stroke: TINTA, "stroke-width": 3 };
   if (que === "pescado") return dibujarPescado(g, x0, x1, cy, h);
+  if (que === "bokchoy") return dibujarBokchoy(g, (x0 + x1) / 2, cy);
   if (que === "cebollin") {
     // un manojito de tres cebollines (parte blanca con raicitas, parte verde)
     for (let j = 0; j < 3; j++) {
@@ -508,24 +516,34 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       });
     } else if (esVerter) {
       const L = LIQUIDOS[paso.liquido] || LIQUIDOS.agua;
-      // la taza (vidrio): se llena de abajo para arriba
-      el(s, "rect", { x: 110, y: 40, width: 80, height: 130, fill: "rgba(255,255,255,0.55)", stroke: TINTA, "stroke-width": 3 });
-      barra = el(s, "rect", { x: 113, y: 167, width: 74, height: 0, fill: L.color });
-      el(s, "rect", { x: 110, y: 40 + 130 * (1 - B), width: 80, height: 130 * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
-      el(s, "rect", { x: 110, y: 40, width: 80, height: 130, fill: "none", stroke: TINTA, "stroke-width": 3 });
+      // v64: el tinto y el chocolate van en pocillo (taza baja con oreja); lo demas en vaso alto
+      const taza = paso.liquido === "cafe" || paso.liquido === "chocolate";
+      const G = taza ? { x: 96, y: 74, w: 104, h: 92 } : { x: 110, y: 40, w: 80, h: 130 };
+      const FONDO = G.y + G.h - 3;
+      const ALT = G.h - 3;
+      if (taza) {
+        el(s, "path", { d: `M${G.x + G.w - 2} ${G.y + 18} q30 4 26 30 q-4 22 -26 22`, fill: "none", stroke: TINTA, "stroke-width": 11 }); // la oreja
+        el(s, "path", { d: `M${G.x + G.w - 2} ${G.y + 18} q30 4 26 30 q-4 22 -26 22`, fill: "none", stroke: "rgb(250,248,240)", "stroke-width": 6 });
+        el(s, "ellipse", { cx: G.x + G.w / 2, cy: G.y + G.h + 8, rx: G.w / 2 + 22, ry: 9, fill: "rgb(250,248,240)", stroke: TINTA, "stroke-width": 3 }); // el platico
+      }
+      el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: taza ? "rgb(250,248,240)" : "rgba(255,255,255,0.55)", stroke: TINTA, "stroke-width": 3 });
+      barra = el(s, "rect", { x: G.x + 3, y: FONDO, width: G.w - 6, height: 0, rx: taza ? 6 : 0, fill: L.color });
+      el(s, "rect", { x: G.x, y: G.y + G.h * (1 - B), width: G.w, height: G.h * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
+      el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: "none", stroke: TINTA, "stroke-width": 3 });
+      if (taza) for (let i = 0; i < 4; i++) el(s, "rect", { x: G.x + 10 + i * 24, y: G.y + 8, width: 12, height: 4, fill: "rgb(110,170,214)" }); // la cenefa del pocillo
       const jarra = el(s, "g", { transform: "translate(212 20)" });
       el(jarra, "rect", { x: 0, y: 0, width: 46, height: 40, rx: 6, fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
       el(jarra, "path", { d: "M0 8 L-16 2 L-14 10 L0 14 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
-      const chorro = el(s, "rect", { x: 186, y: 30, width: 6, height: 0, fill: L.color, stroke: TINTA, "stroke-width": 1 });
+      const chorro = el(s, "rect", { x: taza ? 180 : 186, y: 30, width: 6, height: 0, fill: L.color, stroke: TINTA, "stroke-width": 1 });
       ayuda(`Hold to pour · let go on the green line`);
       let tPrevV = 0;
       bucle((t) => {
         const dt = Math.min(50, t - tPrevV) / (1000 / 60); // en "cuadros de 60fps" (asi da igual 30, 60 o 120 Hz)
         tPrevV = t;
         if (apretado) f = Math.min(1, f + 0.0085 * dt);
-        barra.setAttribute("y", 167 - 127 * f);
-        barra.setAttribute("height", 127 * f);
-        chorro.setAttribute("height", apretado ? 137 - 127 * f : 0);
+        barra.setAttribute("y", FONDO - ALT * f);
+        barra.setAttribute("height", ALT * f);
+        chorro.setAttribute("height", apretado ? Math.max(0, FONDO - ALT * f - 30) : 0);
         if (f >= 1 && apretado) {
           apretado = false;
           fin(1);
@@ -556,6 +574,11 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       barra = el(s, "ellipse", { cx: 130, cy: 108, rx: 0, ry: 0, fill: R.color, stroke: R.sombra, "stroke-width": 3 });
       // los camarones se ven como camarones (rom: "los shrimps … se ven como figuras random")
       let camarones = null;
+      if (paso.relleno === "caldo") {
+        // v64: la gelatina de caldo (la sopa de adentro del xiaolongbao), en cubitos sobre la carne
+        camarones = el(s, "g", { transform: "translate(130 108) scale(0)" });
+        for (const [x, y] of [[-16, -8], [6, -14], [14, 6], [-6, 10], [-18, 10], [20, -6]]) el(camarones, "rect", { x, y, width: 9, height: 9, rx: 2, fill: "rgba(250,220,150,0.85)", stroke: "rgb(214,170,100)", "stroke-width": 1.5 });
+      }
       if (paso.relleno === "camaron") {
         camarones = el(s, "g", { transform: "translate(130 108) scale(0)" });
         dibujarCamaron(camarones, -16, -4, 0.75);
@@ -1348,7 +1371,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       for (; granos >= 1; granos--) {
         const px = x + (Math.random() - 0.5) * 28;
         const py = 70 + Math.random() * 70;
-        el(capa, "rect", { x: px, y: py, width: 2, height: 2, fill: polvo, stroke: "rgba(0,0,0,0.25)", "stroke-width": 0.5 });
+        if (paso.hojas) el(capa, "ellipse", { cx: px, cy: py, rx: 3, ry: 1.6, fill: polvo, stroke: "rgba(0,0,0,0.35)", "stroke-width": 0.6, transform: `rotate(${Math.round(Math.random() * 180)} ${px.toFixed(1)} ${py.toFixed(1)})` });
+        else el(capa, "rect", { x: px, y: py, width: 2, height: 2, fill: polvo, stroke: "rgba(0,0,0,0.25)", "stroke-width": 0.5 });
         const z = Math.floor((px - ZX0) / ZW);
         if (z >= 0 && z < ZONAS) {
           cant[z] = Math.min(1.4, cant[z] + 0.008);
@@ -1369,7 +1393,15 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const forma = paso.forma || "corazon";
     const fondoColor = paso.fondo || "rgb(214,170,104)";
     const tinta = paso.tinta || "rgb(252,248,236)";
-    el(s, "circle", { cx: 150, cy: 104, r: 84, fill: fondoColor, stroke: TINTA, "stroke-width": 3 });
+    // v64: la base segun la forma (media luna = empanada; lazo = un paquete que se amarra)
+    if (forma === "media_luna") {
+      el(s, "path", { d: "M62 62 L238 62 A88 88 0 0 1 62 62 Z", fill: fondoColor, stroke: TINTA, "stroke-width": 3 });
+      el(s, "path", { d: "M80 62 A70 70 0 0 0 220 62", fill: "none", stroke: "rgba(255,255,255,0.35)", "stroke-width": 4 });
+    } else if (forma === "lazo") {
+      el(s, "rect", { x: 86, y: 52, width: 128, height: 104, rx: 14, fill: fondoColor, stroke: TINTA, "stroke-width": 3 });
+      if (paso.vetas) for (let i = 1; i < 5; i++) el(s, "line", { x1: 86 + (128 * i) / 5, y1: 56, x2: 86 + (128 * i) / 5, y2: 152, stroke: paso.vetas, "stroke-width": 2 });
+      if (paso.capas) for (const [y, h] of [[78, 10], [104, 8], [126, 8]]) el(s, "rect", { x: 89, y, width: 122, height: h, fill: paso.capas });
+    } else el(s, "circle", { cx: 150, cy: 104, r: 84, fill: fondoColor, stroke: TINTA, "stroke-width": 3 });
     // los puntos del camino
     const pts = [];
     const N = 40;
@@ -1386,6 +1418,19 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         const r = 40 + 16 * Math.cos(5 * t);
         x = 150 + r * Math.cos(t);
         y = 104 + r * Math.sin(t);
+      } else if (forma === "media_luna") {
+        // el borde curvo de la empanada, de una punta a la otra
+        const a = (i / N) * Math.PI;
+        x = 150 + 74 * Math.cos(a);
+        y = 62 + 74 * Math.sin(a);
+      } else if (forma === "lazo") {
+        // la cuerda dando vueltas al paquete, en zigzag (como se amarra un tamal o el dongpo)
+        const per = [[96, 62], [204, 82], [96, 104], [204, 126], [96, 148]];
+        const f = (i / N) * (per.length - 1);
+        const k = Math.min(per.length - 2, Math.floor(f));
+        const u = f - k;
+        x = per[k][0] + (per[k + 1][0] - per[k][0]) * u;
+        y = per[k][1] + (per[k + 1][1] - per[k][1]) * u;
       } else {
         // espiral (arequipe en la oblea)
         const r = 8 + (i / N) * 62;
@@ -1396,13 +1441,13 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     }
     el(s, "polyline", { points: pts.map((p) => p.join(",")).join(" "), fill: "none", stroke: "rgba(22,20,22,0.35)", "stroke-width": 4, "stroke-dasharray": "3 6", "stroke-linecap": "round" });
     const inicio = el(s, "circle", { cx: pts[0][0], cy: pts[0][1], r: 8, fill: "rgb(120,190,110)", stroke: TINTA, "stroke-width": 2 });
-    const trazo = el(s, "polyline", { points: "", fill: "none", stroke: tinta, "stroke-width": 7, "stroke-linecap": "round", "stroke-linejoin": "round" });
+    const trazo = el(s, "polyline", { points: "", fill: "none", stroke: tinta, "stroke-width": forma === "lazo" ? 5 : 7, "stroke-linecap": "round", "stroke-linejoin": "round", ...(forma === "media_luna" ? { "stroke-dasharray": "3 5", "stroke-width": 10 } : {}) });
     const tocados = new Set();
     let dibujados = [];
     let fuera = 0;
     let dentro = 0;
     let dibujando = false;
-    ayuda("Start at the green dot and trace the shape in one go");
+    ayuda(forma === "media_luna" ? "Run the fork along the edge, from the green dot, in one go" : forma === "lazo" ? "Wrap the string: follow the line from the green dot" : "Start at the green dot and trace the shape in one go");
     s.addEventListener("pointerdown", (e) => {
       if (!vivo) return;
       e.preventDefault();
@@ -1905,16 +1950,21 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const N = mas(paso.n || 4, 2);
     const color = paso.color || "rgb(255,214,110)";
     const fondo = paso.fondo || null;
-    if (fondo) el(s, "ellipse", { cx: 150, cy: 108, rx: 120, ry: 70, fill: fondo, stroke: TINTA, "stroke-width": 3 });
+    if (fondo && !paso.punto) el(s, "ellipse", { cx: 150, cy: 108, rx: 120, ry: 70, fill: fondo, stroke: TINTA, "stroke-width": 3 });
     const puntos = Array.from({ length: N }, (_, i) => {
       const fila = i % 2;
       const x = 150 + (i - (N - 1) / 2) * Math.min(52, 200 / N);
       return { x, y: 96 + fila * 26, r: 0, hecho: false };
     });
-    const OBJ = 14; // radio justo
-    const TOL = ancho(3.5) + 0.5;
+    // v64: punto = el puntito rojo arriba de cada bao (mas chico y mas fino)
+    const ESC = paso.punto ? 0.5 : 1;
+    const OBJ = 14 * ESC; // radio justo
+    const TOL = (ancho(3.5) + 0.5) * ESC;
     for (const p of puntos) {
-      if (!fondo) el(s, "circle", { cx: p.x, cy: p.y, r: 20, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 }); // la tarteleta
+      if (paso.punto) {
+        el(s, "circle", { cx: p.x, cy: p.y + 2, r: 22, fill: "rgb(252,250,244)", stroke: TINTA, "stroke-width": 3 }); // el bao visto desde arriba
+        for (const a of [0.4, 1.6, 2.8, 4, 5.2]) el(s, "path", { d: `M${p.x} ${p.y + 2} L${(p.x + 16 * Math.cos(a)).toFixed(1)} ${(p.y + 2 + 16 * Math.sin(a)).toFixed(1)}`, stroke: "rgba(170,150,130,0.5)", "stroke-width": 1.5 });
+      } else if (!fondo) el(s, "circle", { cx: p.x, cy: p.y, r: 20, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 }); // la tarteleta
       el(s, "circle", { cx: p.x, cy: p.y, r: OBJ, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "4 3" });
       p.el = el(s, "circle", { cx: p.x, cy: p.y, r: 0, fill: color, stroke: TINTA, "stroke-width": 2 });
     }
@@ -1922,7 +1972,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     el(manga, "path", { d: "M-12 -46 L12 -46 L3 -8 L-3 -8 Z", fill: "rgb(246,240,226)", stroke: TINTA, "stroke-width": 3 });
     el(manga, "rect", { x: -3, y: -10, width: 6, height: 6, fill: "rgb(190,196,206)", stroke: TINTA, "stroke-width": 2 });
     manga.setAttribute("transform", "translate(150 40)");
-    ayuda("Hold on each circle · let go when it fills the green ring");
+    ayuda(paso.punto ? "Hold on each bun · let go when the red dot fills the ring" : "Hold on each circle · let go when it fills the green ring");
     let actual = null;
     let buenos = 0;
     let hechos = 0;
@@ -1937,7 +1987,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       if (!vivo || !actual) return;
       const q = actual;
       actual = null;
-      if (q.r < 3) return;
+      if (q.r < 3 * ESC) return;
       q.hecho = true;
       hechos++;
       const ok = Math.abs(q.r - OBJ) <= TOL;
@@ -1952,9 +2002,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       const dt = Math.min(50, t - tPrevM) / (1000 / 60);
       tPrevM = t;
       if (actual) {
-        actual.r = Math.min(26, actual.r + 0.32 * rapido(0.3) * dt);
+        actual.r = Math.min(26 * ESC, actual.r + 0.32 * ESC * rapido(0.3) * dt);
         actual.el.setAttribute("r", actual.r.toFixed(1));
-        if (actual.r >= 26) soltar();
+        if (actual.r >= 26 * ESC) soltar();
       }
     });
   }
@@ -1962,15 +2012,25 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // ---------- APILAR (v61) ----------
   // la vaporera va y viene: tocar para soltarla justo encima de la de abajo
   else if (paso.t === "apilar") {
-    const N = mas(paso.n || 3, 1);
+    const oblea = paso.que === "oblea";
+    const N = oblea ? paso.n || 1 : mas(paso.n || 3, 1);
     const W = 90;
-    const H = 18;
+    const H = oblea ? 10 : 18;
     const BASE = 176;
-    el(s, "rect", { x: 60, y: BASE, width: 180, height: 8, fill: "rgb(150,154,170)", stroke: TINTA, "stroke-width": 2 }); // la olla de abajo
+    if (oblea) {
+      // la oblea de abajo, con su arequipe
+      el(s, "rect", { x: 105, y: BASE, width: 90, height: 8, rx: 4, fill: "rgb(246,222,170)", stroke: TINTA, "stroke-width": 2 });
+      el(s, "rect", { x: 108, y: BASE - 4, width: 84, height: 5, rx: 2, fill: "rgb(170,96,46)", stroke: TINTA, "stroke-width": 1.5 });
+    } else el(s, "rect", { x: 60, y: BASE, width: 180, height: 8, fill: "rgb(150,154,170)", stroke: TINTA, "stroke-width": 2 }); // la olla de abajo
     const pila = el(s, "g", {});
     const mov = el(s, "g", {});
     const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
     const canasta = (g, x, y) => {
+      if (oblea) {
+        el(g, "rect", { x: x - W / 2, y, width: W, height: H, rx: 5, fill: "rgb(246,222,170)", stroke: TINTA, "stroke-width": 3 });
+        for (let i = 1; i < 6; i++) el(g, "line", { x1: x - W / 2 + (W * i) / 6, y1: y + 2, x2: x - W / 2 + (W * i) / 6, y2: y + H - 2, stroke: "rgba(214,180,120,0.8)", "stroke-width": 1 });
+        return;
+      }
       el(g, "rect", { x: x - W / 2, y, width: W, height: H, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 });
       el(g, "line", { x1: x - W / 2 + 3, y1: y + H / 2, x2: x + W / 2 - 3, y2: y + H / 2, stroke: "rgb(170,124,72)", "stroke-width": 2 });
       for (let i = 1; i < 6; i++) el(g, "line", { x1: x - W / 2 + (W * i) / 6, y1: y + 2, x2: x - W / 2 + (W * i) / 6, y2: y + H - 2, stroke: "rgba(170,124,72,0.6)", "stroke-width": 1 });
@@ -1984,7 +2044,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const VEL = 110 * rapido(0.35); // px por segundo
     let tPrev = 0;
     cuenta.textContent = `STACK 0 / ${N}`;
-    ayuda("Tap to drop the steamer right on top of the one below");
+    ayuda(oblea ? "Tap to drop the top wafer right on the bottom one" : "Tap to drop the steamer right on top of the one below");
     s.addEventListener("pointerdown", (e) => {
       if (!vivo || cayendo) return;
       e.preventDefault();
@@ -2115,9 +2175,15 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const puestos = caja.querySelector("[data-puestos]");
     // v63 (rom: "literalmente es un cuadrado de color"): lo que se agrega aparece en el plato,
     // dibujado, alrededor del borde de abajo (como platitos de salsa y cosas encima)
+    if (paso.pincho) caja.querySelector(".cocina-elegir-plato").classList.add("con-pincho");
     const pintar = () => {
       const ids = [...elegido];
       const n = ids.length;
+      if (paso.pincho) {
+        // v64: el tanghulu: las frutas se ensartan en el palito, una encima de otra
+        puestos.innerHTML = `<i class="cocina-palito"></i>` + ids.map((id, k) => { const o = opciones.find((x) => x.id === id) || {}; return `<img src="${esc(o.icono || "")}" alt="" draggable="false" style="left:50%;top:${(74 - k * 21).toFixed(1)}%" />`; }).join("");
+        return;
+      }
       puestos.innerHTML = ids
         .map((id, k) => {
           const o = opciones.find((x) => x.id === id) || {};
@@ -2131,6 +2197,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     for (const b of caja.querySelectorAll("[data-op]")) {
       b.addEventListener("click", () => {
         if (!vivo) return;
+        if (performance.now() - t0 < 350) return; // v64: un toque que venia del paso anterior no elige nada
         const id = b.dataset.op;
         if (elegido.has(id)) elegido.delete(id);
         else elegido.add(id);
@@ -2140,7 +2207,10 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       });
     }
     ayuda(paso.ayuda || (pedido.length ? "Add what the ticket says, then Ready" : "Plain order: nothing extra. Tap Ready"));
-    boton("Ready ✓", () => fin(estrellasDeEleccion([...elegido], pedido)));
+    boton("Ready ✓", () => {
+      if (ctx.alElegir) ctx.alElegir([...elegido]);
+      fin(estrellasDeEleccion([...elegido], pedido));
+    });
   }
 
   return {
