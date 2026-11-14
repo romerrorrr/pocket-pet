@@ -573,13 +573,19 @@ export function abrirRestaurante(contenedor, opts) {
    * 240x112). El cliente se asoma por la ventana del mostrador; el letrero y los
    * adornos van encima, en % de la imagen (ver tools/v56_arte.py: VENTANA, LETRERO).
    */
-  function frente(cliente = "") {
+  /**
+   * El frente del local. ventana: lo que va detras del mostrador (Baozi). calle: lo que va en la
+   * vereda, delante del mostrador (v65, rom: "que se vea como que realmente esta en la tienda y
+   * los clientes tambien": el cliente afuera, Baozi atendiendo detras del mostrador).
+   */
+  function frente(cliente = "", calle = "") {
     const d = (id) => (reg.decor.has(id) && !reg.guardados.has(id) ? `<img class="rest-deco rest-deco-${id}" src="${arte(DECOR.find((x) => x.id === id).arte)}" alt="" draggable="false" />` : "");
     return `
       <div class="rest-frente">
         <div class="rest-escena">
           <img class="rest-fachada-img" src="${arte("restaurante/fachada.png")}" alt="" draggable="false" />
           <div class="rest-ventana">${cliente}</div>
+          ${calle}
           ${d("banderin")}${d("farolitos")}${d("luces")}${d("bonsai")}${d("orquidea")}${d("saco")}
           <div class="rest-letrero"><span lang="zh-CN">包子</span> ${esc(nombre).toUpperCase()}'S</div>
         </div>
@@ -993,7 +999,7 @@ export function abrirRestaurante(contenedor, opts) {
     const src = arte(p.quien.amigo ? `npcs/npc_${p.quien.id}_saludo.png` : `restaurante/cliente_${p.quien.id}_saludo.png`);
     contenedor.innerHTML = `
       <div class="pantalla-rest local servir">
-        ${frente(`<img class="rest-cliente-servido" src="${src}" alt="" draggable="false" />${imgPlato(r.id, "rest-plato-servido")}`)}
+        ${frente(`<div class="rest-baozi-ventana entrega">${sprite(e === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", e === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png")}</div>`, `${imgPlato(r.id, "rest-plato-servido")}<div class="rest-sombra-cliente"></div><img class="rest-cliente-servido" src="${src}" alt="" draggable="false" />`)}
         ${HTML_VOLVER}
         ${hud(`DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
         <div class="papel rest-resena">

@@ -312,6 +312,103 @@ function dibujarBokchoy(g, cx, cy) {
 }
 
 /**
+ * v65 (rom: "la taza desde donde se pour la leche … se ve bastante fake"): con que se sirve.
+ * Una tetera (te), una olleta de metal (agua, cafe) o una jarra de ceramica (leche, jugos,
+ * masa…). Se inclina de verdad al apretar y el chorro sale del pico, curvo, hasta donde cae.
+ * actualizar(apretado, [x, y] destino, t)
+ */
+function crearVertedor(padre, liquido, px = 228, py = 40) {
+  const L = LIQUIDOS[liquido] || LIQUIDOS.agua;
+  const tipo = liquido === "te" ? "tetera" : liquido === "agua" || liquido === "cafe" ? "olleta" : "jarra";
+  const chorroBorde = el(padre, "path", { d: "", fill: "none", stroke: TINTA, "stroke-width": 7.5, "stroke-linecap": "round", opacity: 0.85 });
+  const chorro = el(padre, "path", { d: "", fill: "none", stroke: L.color, "stroke-width": 4.5, "stroke-linecap": "round" });
+  const brillo = el(padre, "path", { d: "", fill: "none", stroke: "rgba(255,255,255,0.55)", "stroke-width": 1.4, "stroke-linecap": "round" });
+  const gotas = el(padre, "g", {});
+  const g = el(padre, "g", {});
+  let pico;
+  let inclinado;
+  if (tipo === "tetera") {
+    // la tetera de porcelana, blanca con florcitas azules
+    el(g, "path", { d: "M18 -6 q20 0 18 16 q-2 14 -18 12", fill: "none", stroke: TINTA, "stroke-width": 7 });
+    el(g, "path", { d: "M18 -6 q20 0 18 16 q-2 14 -18 12", fill: "none", stroke: "rgb(250,250,246)", "stroke-width": 3.5 }); // el asa
+    el(g, "path", { d: "M-18 10 Q-32 10 -40 -10", fill: "none", stroke: TINTA, "stroke-width": 9, "stroke-linecap": "round" });
+    el(g, "path", { d: "M-18 10 Q-32 10 -40 -10", fill: "none", stroke: "rgb(250,250,246)", "stroke-width": 5, "stroke-linecap": "round" }); // el pico
+    el(g, "ellipse", { cx: 0, cy: 6, rx: 26, ry: 20, fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+    el(g, "path", { d: "M-24 8 Q0 18 24 8", fill: "none", stroke: "rgb(110,150,214)", "stroke-width": 3 });
+    for (const [x, y] of [[-12, -2], [2, 2], [14, -4], [-4, 14]]) {
+      el(g, "circle", { cx: x, cy: y, r: 2.6, fill: "rgb(110,150,214)" });
+      el(g, "circle", { cx: x, cy: y, r: 0.9, fill: "rgb(250,250,246)" });
+    }
+    el(g, "ellipse", { cx: 0, cy: -13, rx: 14, ry: 4.5, fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 2.5 }); // la tapa
+    el(g, "circle", { cx: 0, cy: -19, r: 3.5, fill: "rgb(110,150,214)", stroke: TINTA, "stroke-width": 2 });
+    el(g, "ellipse", { cx: -10, cy: -2, rx: 6, ry: 3, fill: "rgba(255,255,255,0.9)" });
+    pico = [-41, -12];
+    inclinado = -32;
+  } else if (tipo === "olleta") {
+    // la olleta de peltre (la de calentar el agua o el tinto), con su mango largo
+    el(g, "rect", { x: 22, y: -6, width: 30, height: 7, rx: 3, fill: "rgb(90,60,40)", stroke: TINTA, "stroke-width": 2.5 }); // el mango
+    el(g, "path", { d: "M-24 -16 L22 -16 L18 22 Q0 28 -18 22 Z", fill: "rgb(196,204,214)", stroke: TINTA, "stroke-width": 3, "stroke-linejoin": "round" });
+    el(g, "path", { d: "M-24 -16 L-32 -22 L-22 -10 Z", fill: "rgb(196,204,214)", stroke: TINTA, "stroke-width": 2.5, "stroke-linejoin": "round" }); // el piquito
+    el(g, "ellipse", { cx: -1, cy: -16, rx: 23, ry: 4, fill: L.color, stroke: TINTA, "stroke-width": 2 }); // lo de adentro
+    el(g, "path", { d: "M-16 -8 L-13 16", stroke: "rgba(255,255,255,0.8)", "stroke-width": 3, "stroke-linecap": "round" });
+    el(g, "path", { d: "M-20 4 L20 4", stroke: "rgb(70,110,170)", "stroke-width": 3 }); // el filito azul del peltre
+    pico = [-33, -22];
+    inclinado = -42;
+  } else {
+    // la jarra de ceramica, color crema con una franja, y lo de adentro asomando por la boca
+    el(g, "path", { d: "M18 -16 q22 2 18 18 q-4 14 -20 14", fill: "none", stroke: TINTA, "stroke-width": 7.5 });
+    el(g, "path", { d: "M18 -16 q22 2 18 18 q-4 14 -20 14", fill: "none", stroke: "rgb(246,236,214)", "stroke-width": 3.5 }); // el asa
+    el(g, "path", { d: "M-20 -26 L18 -26 Q28 -2 18 26 L-16 26 Q-28 -2 -20 -26 Z", fill: "rgb(246,236,214)", stroke: TINTA, "stroke-width": 3, "stroke-linejoin": "round" });
+    el(g, "path", { d: "M-20 -26 L-34 -31 L-21 -17 Z", fill: "rgb(246,236,214)", stroke: TINTA, "stroke-width": 2.5, "stroke-linejoin": "round" }); // el pico
+    el(g, "path", { d: "M-24 -4 Q0 2 25 -4", fill: "none", stroke: "rgb(214,120,90)", "stroke-width": 4 });
+    el(g, "path", { d: "M-23 4 Q0 10 24 4", fill: "none", stroke: "rgb(214,120,90)", "stroke-width": 1.5 });
+    el(g, "ellipse", { cx: -1, cy: -26, rx: 19, ry: 4, fill: L.color, stroke: TINTA, "stroke-width": 2 }); // lo de adentro
+    el(g, "path", { d: "M-13 -18 Q-17 0 -11 18", fill: "none", stroke: "rgba(255,255,255,0.75)", "stroke-width": 3, "stroke-linecap": "round" });
+    pico = [-35, -31];
+    inclinado = -40;
+  }
+  let ang = 0;
+  let ultima = 0;
+  const actualizar = (apretado, [dx, dy], t) => {
+    const meta = apretado ? inclinado : 0;
+    ang += (meta - ang) * 0.22;
+    g.setAttribute("transform", `translate(${px} ${py}) rotate(${ang.toFixed(1)})`);
+    const a = (ang * Math.PI) / 180;
+    const tx = px + Math.cos(a) * pico[0] - Math.sin(a) * pico[1];
+    const ty = py + Math.sin(a) * pico[0] + Math.cos(a) * pico[1];
+    const sale = apretado && ang < inclinado * 0.7;
+    if (sale) {
+      // el chorro: sale del pico hacia afuera y cae (un poquito de temblor, como de verdad)
+      const temb = Math.sin(t / 45) * 1.2;
+      const d = `M${tx.toFixed(1)} ${ty.toFixed(1)} C${(tx - 10).toFixed(1)} ${(ty + 2).toFixed(1)} ${(dx + 6 + temb).toFixed(1)} ${(dy - 40).toFixed(1)} ${(dx + temb).toFixed(1)} ${dy.toFixed(1)}`;
+      chorroBorde.setAttribute("d", d);
+      chorro.setAttribute("d", d);
+      brillo.setAttribute("d", d);
+      brillo.setAttribute("transform", "translate(-1 0)");
+      if (t - ultima > 70) {
+        ultima = t;
+        const gt = el(gotas, "circle", { cx: dx + (Math.random() - 0.5) * 14, cy: dy - 2, r: 1.6 + Math.random() * 1.4, fill: L.color, stroke: "rgba(0,0,0,0.3)", "stroke-width": 0.6 });
+        gt._t = t;
+        gt._vx = (Math.random() - 0.5) * 40;
+      }
+    } else {
+      chorroBorde.setAttribute("d", "");
+      chorro.setAttribute("d", "");
+      brillo.setAttribute("d", "");
+    }
+    for (const gt of [...gotas.children]) {
+      const e = (t - gt._t) / 1000;
+      if (e > 0.35) gt.remove();
+      else {
+        gt.setAttribute("transform", `translate(${(gt._vx * e).toFixed(1)} ${(-60 * e + 220 * e * e).toFixed(1)})`);
+        gt.setAttribute("opacity", (1 - e / 0.35).toFixed(2));
+      }
+    }
+  };
+  return { actualizar };
+}
+
+/**
  * Arma un paso dentro de area (un div vacio). paso: { t, ...datos }.
  * ctx: { ayuda(texto), boton(texto, fn) | null, sonar, vibrar, plato (src del plato), pedido (extras pedidos) }
  * Devuelve { destruir(), resolver(estrellas) } — resolver es para las pruebas.
@@ -465,11 +562,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(s, "circle", { cx: 130, cy: 108, r: 60 * B, fill: "rgba(120,190,110,0.22)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "circle", { cx: 130, cy: 108, r: 60 * A, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       barra = el(s, "circle", { cx: 130, cy: 108, r: 0, fill: L.color, stroke: "rgba(0,0,0,0.25)", "stroke-width": 2, opacity: paso.en === "plato" ? 0.85 : 1 });
-      // la jarrita (o el cucharon) arriba a la derecha
-      const jarra = el(s, "g", { transform: "translate(232 26)" });
-      el(jarra, "rect", { x: 0, y: 0, width: 40, height: 34, rx: 6, fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
-      el(jarra, "path", { d: "M0 8 L-14 2 L-12 10 L0 14 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
-      const chorro = el(s, "path", { d: "", fill: "none", stroke: L.color, "stroke-width": 5, "stroke-linecap": "round" });
+      const vertedor = crearVertedor(s, paso.liquido, 236, 44);
       ayuda("Hold to pour · let go in the green ring");
       let tPrevV = 0;
       bucle((t) => {
@@ -477,7 +570,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         tPrevV = t;
         if (apretado) f = Math.min(1, f + 0.0085 * dt);
         barra.setAttribute("r", (60 * f).toFixed(1));
-        chorro.setAttribute("d", apretado ? "M220 32 Q160 30 132 104" : "");
+        vertedor.actualizar(apretado, [134, 106], t);
         if (f >= 1 && apretado) {
           apretado = false;
           fin(1);
@@ -496,10 +589,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       barra = el(s, "rect", { x: 68, y: Y_ABA - 6, width: 164, height: 0, fill: L.color });
       el(s, "rect", { x: 64, y: Y_ABA - 6 - ALTO * B, width: 172, height: ALTO * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "rect", { x: 60, y: Y_ARR, width: 180, height: Y_ABA - Y_ARR, rx: 10, fill: "none", stroke: TINTA, "stroke-width": 3 });
-      const jarra = el(s, "g", { transform: "translate(212 14)" });
-      el(jarra, "rect", { x: 0, y: 0, width: 46, height: 40, rx: 6, fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
-      el(jarra, "path", { d: "M0 8 L-16 2 L-14 10 L0 14 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
-      const chorro = el(s, "rect", { x: 192, y: 24, width: 6, height: 0, fill: L.color, stroke: TINTA, "stroke-width": 1 });
+      const vertedor = crearVertedor(s, paso.liquido, 240, 34);
       ayuda("Hold to pour · let go on the green line");
       let tPrevV = 0;
       bucle((t) => {
@@ -508,7 +598,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         if (apretado) f = Math.min(1, f + 0.0085 * dt);
         barra.setAttribute("y", Y_ABA - 6 - ALTO * f);
         barra.setAttribute("height", ALTO * f);
-        chorro.setAttribute("height", apretado ? Math.max(0, Y_ABA - 6 - ALTO * f - 24) : 0);
+        vertedor.actualizar(apretado, [170, Y_ABA - 6 - ALTO * f], t);
         if (f >= 1 && apretado) {
           apretado = false;
           fin(1);
@@ -531,10 +621,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(s, "rect", { x: G.x, y: G.y + G.h * (1 - B), width: G.w, height: G.h * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: "none", stroke: TINTA, "stroke-width": 3 });
       if (taza) for (let i = 0; i < 4; i++) el(s, "rect", { x: G.x + 10 + i * 24, y: G.y + 8, width: 12, height: 4, fill: "rgb(110,170,214)" }); // la cenefa del pocillo
-      const jarra = el(s, "g", { transform: "translate(212 20)" });
-      el(jarra, "rect", { x: 0, y: 0, width: 46, height: 40, rx: 6, fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
-      el(jarra, "path", { d: "M0 8 L-16 2 L-14 10 L0 14 Z", fill: "rgb(236,232,224)", stroke: TINTA, "stroke-width": 3 });
-      const chorro = el(s, "rect", { x: taza ? 180 : 186, y: 30, width: 6, height: 0, fill: L.color, stroke: TINTA, "stroke-width": 1 });
+      const vertedor = crearVertedor(s, paso.liquido, 244, taza ? 40 : 36);
       ayuda(`Hold to pour · let go on the green line`);
       let tPrevV = 0;
       bucle((t) => {
@@ -543,7 +630,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         if (apretado) f = Math.min(1, f + 0.0085 * dt);
         barra.setAttribute("y", FONDO - ALT * f);
         barra.setAttribute("height", ALT * f);
-        chorro.setAttribute("height", apretado ? Math.max(0, FONDO - ALT * f - 30) : 0);
+        vertedor.actualizar(apretado, [G.x + G.w / 2 + 8, FONDO - ALT * f], t);
         if (f >= 1 && apretado) {
           apretado = false;
           fin(1);
