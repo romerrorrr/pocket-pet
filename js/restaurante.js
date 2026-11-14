@@ -823,7 +823,7 @@ export function abrirRestaurante(contenedor, opts) {
         <div class="rest-ticket">
           <div class="rest-ticket-quien"><img src="${arte(p.quien.amigo ? `npcs/npc_${p.quien.id}.png` : `restaurante/cliente_${p.quien.id}.png`)}" alt="" draggable="false" /><span>${esc(p.quien.nombre)}<small>“${esc(p.frase)}”</small></span></div>
           <div class="rest-ticket-plato">${imgPlato(r.id)}<b>${esc(r.nombre)}</b>${p.receta === dia.especial ? `<span class="rest-tag">SPECIAL ×2</span>` : ""}</div>
-          <div class="rest-ticket-extras" id="rest-ticket-extras">${[...(p.toppings || []), ...(p.frutas || []), ...p.extras].map((x) => `<span>+ ${esc(EXTRAS[x].nombre)}</span>`).join("") || `<span class="sin">plain, please</span>`}</div>
+          <div class="rest-ticket-extras" id="rest-ticket-extras">${[...(p.toppings || []), ...(p.frutas || []), ...p.extras].map((x) => `<span><img src="${arte(`restaurante/extra_${x}.png`)}" alt="" draggable="false" />${esc(EXTRAS[x].nombre)}</span>`).join("") || `<span class="sin">plain, please</span>`}</div>
           ${p.recordar ? `<div class="rest-recordar" id="rest-recordar">Remember this order! ♥</div>` : ""}
         </div>
         ${dia.combo ? `<div class="rest-combo">PERFECT ×${dia.combo}</div>` : ""}
@@ -866,11 +866,11 @@ export function abrirRestaurante(contenedor, opts) {
       return;
     }
     let def = r.pasos[p.k];
-    if (def.t === "emplatar") def = { t: "elegir", opciones: r.extras.map((x) => ({ id: x, ...EXTRAS[x] })), pedido: p.extras };
+    if (def.t === "emplatar") def = { t: "elegir", opciones: r.extras.map((x) => ({ id: x, ...EXTRAS[x], icono: arte(`restaurante/extra_${x}.png`) })), pedido: p.extras };
     else if (def.t === "elegir") {
       const lista = def.topping ? r.toppings : def.frutas ? r.frutas : def.flores ? ["osmanto"] : [];
       const pedido = def.topping ? p.toppings : def.frutas ? p.frutas : def.flores ? p.flores : [];
-      def = { t: "elegir", opciones: lista.map((x) => ({ id: x, ...EXTRAS[x] })), pedido, ayuda: def.frutas ? "Skewer the fruit on the ticket, then tap Ready" : def.flores ? "Sprinkle the osmanthus flowers, then tap Ready" : "Add the toppings on the ticket, then tap Ready" };
+      def = { t: "elegir", opciones: lista.map((x) => ({ id: x, ...EXTRAS[x], icono: arte(`restaurante/extra_${x}.png`) })), pedido, ayuda: def.frutas ? "Skewer the fruit on the ticket, then tap Ready" : def.flores ? "Sprinkle the osmanthus flowers, then tap Ready" : "Add the toppings on the ticket, then tap Ready" };
     }
     const accion = $("rest-accion");
     paso = crearPaso(
@@ -880,6 +880,7 @@ export function abrirRestaurante(contenedor, opts) {
         sonar,
         vibrar,
         plato: arte(`restaurante/plato_${r.id}.png`),
+        receta: r.id,
         dif: dia.dif,
         mejoras: { cuchillo: reg.nivel("cuchillo"), ollas: reg.nivel("ollas"), wok: reg.nivel("wok") },
         ayuda: (t) => {

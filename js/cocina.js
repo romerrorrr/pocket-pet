@@ -18,6 +18,8 @@
  * La puntuacion de cada gesto (estrellasDe*) no toca el DOM: test/unit_v55.mjs.
  */
 
+import { dibujarCoccion } from "./coccion.js";
+
 const SVG = "http://www.w3.org/2000/svg";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -676,9 +678,13 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const A = 0.635 - MEDIO_C;
     const B = 0.635 + MEDIO_C;
     const MS = C.ms / rapido(0.2);
-    // la olla / vaporera / sarten, con el plato adentro
+    // la olla / vaporera / sarten
     const f = paso.como;
-    if (f === "vapor") {
+    // v63: lo que se cocina, dibujado y crudo (se va cocinando); si la receta no tiene piezas, como antes
+    const cc = ctx.receta ? dibujarCoccion(s, f, ctx.receta) : null;
+    if (cc) {
+      /* el recipiente ya lo dibujo coccion.js */
+    } else if (f === "vapor") {
       el(s, "rect", { x: 70, y: 70, width: 160, height: 80, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 });
       el(s, "rect", { x: 70, y: 136, width: 160, height: 14, fill: "rgb(170,124,72)" });
       el(s, "rect", { x: 70, y: 70, width: 160, height: 80, fill: "none", stroke: TINTA, "stroke-width": 3 });
@@ -708,8 +714,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(s, "ellipse", { cx: 150, cy: 112, rx: 84, ry: 26, fill: f === "freir" ? "rgb(250,200,90)" : "rgb(90,90,100)" });
       el(s, "rect", { x: 240, y: 108, width: 54, height: 10, rx: 4, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 3 });
     }
-    const comida = el(s, "image", { href: f === "calentar" ? "" : ctx.plato || "", x: 110, y: f === "horno" ? 66 : 62, width: 80, height: 80, style: "image-rendering:pixelated" });
-    if (f === "hervir" || f === "caramelo") {
+    const comida = el(s, "image", { href: f === "calentar" || cc ? "" : ctx.plato || "", x: 110, y: f === "horno" ? 66 : 62, width: 80, height: 80, style: "image-rendering:pixelated" });
+    if (!cc && (f === "hervir" || f === "caramelo")) {
       // que se vea adentro del agua (o del caramelo), no flotando delante de la olla
       el(s, "rect", { x: 63, y: 112, width: 174, height: 37, rx: 4, fill: f === "caramelo" ? "rgba(214,120,60,0.55)" : "rgba(170,206,230,0.6)" });
       el(s, "rect", { x: 60, y: 76, width: 180, height: 76, rx: 8, fill: "none", stroke: TINTA, "stroke-width": 3 });
@@ -733,6 +739,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       aguja.setAttribute("x", M.x - 2 + M.w * Math.min(1, x));
       humo.setAttribute("opacity", Math.min(1, x * 1.4));
       comida.setAttribute("opacity", x > B + 0.12 ? 0.75 : 1);
+      if (cc) cc.actualizar(x, A, B, t);
       if (x >= 1.02) {
         boton(null);
         fin(1); // se quemo
@@ -747,6 +754,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         desde = performance.now() - t0;
         comida.setAttribute("opacity", 0.3);
         setTimeout(() => comida.setAttribute("opacity", 1), 160);
+        if (cc) cc.voltear();
         sonar("tocar");
         boton("Take it out!", sacar);
         return;
@@ -2102,11 +2110,23 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     caja.className = "cocina-elegir";
     caja.innerHTML = `
       <div class="cocina-elegir-plato"><img src="${esc(ctx.plato || "")}" alt="" draggable="false" /><div class="cocina-elegir-puestos" data-puestos></div></div>
-      <div class="cocina-elegir-opciones">${opciones.map((o) => `<button type="button" class="cocina-opcion" data-op="${esc(o.id)}" style="--c:${esc(o.color || "#fff")}"><i></i>${esc(o.nombre)}</button>`).join("")}</div>`;
+      <div class="cocina-elegir-opciones">${opciones.map((o) => `<button type="button" class="cocina-opcion" data-op="${esc(o.id)}" style="--c:${esc(o.color || "#fff")}">${o.icono ? `<img src="${esc(o.icono)}" alt="" draggable="false" />` : "<i></i>"}${esc(o.nombre)}</button>`).join("")}</div>`;
     area.appendChild(caja);
     const puestos = caja.querySelector("[data-puestos]");
+    // v63 (rom: "literalmente es un cuadrado de color"): lo que se agrega aparece en el plato,
+    // dibujado, alrededor del borde de abajo (como platitos de salsa y cosas encima)
     const pintar = () => {
-      puestos.innerHTML = [...elegido].map((id) => `<span style="--c:${esc((opciones.find((o) => o.id === id) || {}).color || "#fff")}"></span>`).join("");
+      const ids = [...elegido];
+      const n = ids.length;
+      puestos.innerHTML = ids
+        .map((id, k) => {
+          const o = opciones.find((x) => x.id === id) || {};
+          const ang = ((n === 1 ? 60 : 150 - (k * 120) / Math.max(1, n - 1)) * Math.PI) / 180; // de abajo-izq a abajo-der
+          const x = 50 + 44 * Math.cos(ang);
+          const y = 50 + 40 * Math.sin(ang);
+          return o.icono ? `<img src="${esc(o.icono)}" alt="" draggable="false" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%" />` : `<span style="--c:${esc(o.color || "#fff")};left:${x.toFixed(1)}%;top:${y.toFixed(1)}%"></span>`;
+        })
+        .join("");
     };
     for (const b of caja.querySelectorAll("[data-op]")) {
       b.addEventListener("click", () => {
