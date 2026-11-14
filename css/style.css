@@ -6065,7 +6065,8 @@ button.nota-polaroid {
 .rest-ticket-plato .rest-comida { width: 44px; height: 44px; }
 .rest-tag { font-family: var(--fuente-display); font-size: 7px; padding: 3px 5px; background: rgb(250, 214, 130); box-shadow: 0 0 0 1px var(--tinta); }
 .rest-ticket-extras { display: flex; flex-wrap: wrap; gap: 4px; }
-.rest-ticket-extras span { font-family: var(--fuente-display); font-size: 7px; padding: 3px 5px; background: rgb(255, 226, 200); box-shadow: 0 0 0 1px var(--tinta); }
+.rest-ticket-extras span { display: inline-flex; align-items: center; gap: 2px; font-family: var(--fuente-display); font-size: 7px; padding: 2px 5px 2px 2px; background: rgb(255, 226, 200); box-shadow: 0 0 0 1px var(--tinta); }
+.rest-ticket-extras span img { width: 14px; height: 14px; image-rendering: pixelated; }
 .rest-ticket-extras span.sin { background: none; box-shadow: none; opacity: 0.6; }
 .rest-tabla { position: absolute; z-index: 3; left: calc(var(--sx) + min(170px, 22vw) + 14px); right: calc(var(--dx) + min(150px, 19vw) + 14px); top: calc(var(--arr) + 76px); bottom: var(--aba); background: rgb(222, 186, 140); box-shadow: 0 0 0 2px var(--tinta), inset 0 -8px 0 rgb(190, 150, 104), 3px 4px 0 1px rgba(0, 0, 0, 0.3); }
 .rest-tabla::before { content: ""; position: absolute; inset: 8px; background: radial-gradient(ellipse 18px 5px at 22% 30%, rgba(170, 120, 74, 0.35) 0 60%, transparent 62%), radial-gradient(ellipse 14px 4px at 78% 72%, rgba(170, 120, 74, 0.3) 0 60%, transparent 62%); pointer-events: none; }
@@ -6088,11 +6089,15 @@ button.nota-polaroid {
 .cocina-elegir { position: absolute; inset: 8px 8px 44px; display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
 .cocina-elegir-plato { position: relative; width: min(130px, 22vh + 40px); aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--tinta), inset 0 -8px 0 rgb(214, 214, 222), inset 0 0 0 9px rgb(250, 250, 252); }
 .cocina-elegir-plato img { width: 70%; height: 70%; }
-.cocina-elegir-puestos { position: absolute; left: 0; right: 0; bottom: 10%; display: flex; justify-content: center; gap: 4px; }
-.cocina-elegir-puestos span { width: 12px; height: 12px; background: var(--c); box-shadow: 0 0 0 2px var(--tinta); }
+.cocina-elegir-puestos { position: absolute; inset: 0; pointer-events: none; }
+.cocina-elegir-puestos span { position: absolute; width: 12px; height: 12px; transform: translate(-50%, -50%); background: var(--c); box-shadow: 0 0 0 2px var(--tinta); }
+/* v63: las adiciones dibujadas, puestas en el plato */
+.cocina-elegir-puestos img { position: absolute; width: 34%; height: 34%; transform: translate(-50%, -50%); image-rendering: pixelated; animation: cocina-puesto 0.22s ease-out; }
+@keyframes cocina-puesto { from { transform: translate(-50%, -80%) scale(0.4); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
 .cocina-elegir-opciones { display: flex; flex-wrap: wrap; gap: 6px; align-content: center; }
 .cocina-opcion { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 4px 9px; border: none; font: inherit; font-size: 13px; color: var(--tinta); background: var(--papel); box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.25); }
 .cocina-opcion i { width: 12px; height: 12px; background: var(--c); box-shadow: 0 0 0 1px var(--tinta); }
+.cocina-opcion img { width: 26px; height: 26px; margin: -4px 0; image-rendering: pixelated; }
 .cocina-opcion.elegida { background: rgb(150, 200, 130); transform: translateY(2px); box-shadow: 0 0 0 2px var(--tinta); }
 
 /* el libro */
