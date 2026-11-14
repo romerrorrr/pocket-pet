@@ -6098,6 +6098,10 @@ button.nota-polaroid {
 .cocina-opcion { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 4px 9px; border: none; font: inherit; font-size: 13px; color: var(--tinta); background: var(--papel); box-shadow: 0 0 0 2px var(--tinta), 2px 3px 0 1px rgba(0, 0, 0, 0.25); }
 .cocina-opcion i { width: 12px; height: 12px; background: var(--c); box-shadow: 0 0 0 1px var(--tinta); }
 .cocina-opcion img { width: 26px; height: 26px; margin: -4px 0; image-rendering: pixelated; }
+/* v64: el tanghulu — las frutas se ensartan en el palito */
+.cocina-elegir-plato.con-pincho > img { opacity: 0.18; }
+.cocina-palito { position: absolute; left: 50%; top: 12%; width: 4px; height: 80%; transform: translateX(-50%); background: rgb(200, 160, 110); box-shadow: 0 0 0 1px var(--tinta); }
+.cocina-elegir-plato.con-pincho .cocina-elegir-puestos img { width: 30%; height: 30%; }
 .cocina-opcion.elegida { background: rgb(150, 200, 130); transform: translateY(2px); box-shadow: 0 0 0 2px var(--tinta); }
 
 /* el libro */
@@ -6274,3 +6278,16 @@ button.nota-polaroid {
 .hoja-borrar-texto small { font-size: 13px; opacity: 0.7; }
 .hoja-borrar-foto .fila-botones { grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; }
 .boton.boton-peligro { --relleno: rgb(214, 84, 76); --texto: #fff; }
+
+/* v64: el momento de servir — el plato terminado, grande, con lo que se le puso */
+.rest-presenta { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; overflow: hidden; }
+.rest-presenta-luz { position: absolute; left: 50%; top: 44%; width: 160%; aspect-ratio: 1; transform: translate(-50%, -50%); background: repeating-conic-gradient(rgba(255, 244, 200, 0.55) 0deg 10deg, rgba(255, 244, 200, 0) 10deg 22deg); animation: rest-presenta-gira 6s linear infinite; opacity: 0.8; }
+.rest-presenta.e1 .rest-presenta-luz { opacity: 0.25; }
+.rest-presenta-plato { position: relative; width: min(42%, 24vh + 40px); aspect-ratio: 1; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--tinta), inset 0 -8px 0 rgb(214, 214, 222), inset 0 0 0 9px rgb(250, 250, 252); display: grid; place-items: center; animation: rest-presenta-entra 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.rest-presenta-img { width: 74%; height: 74%; image-rendering: pixelated; }
+.rest-presenta-extra { position: absolute; width: 30%; height: 30%; transform: translate(-50%, -50%) scale(0); image-rendering: pixelated; animation: rest-presenta-extra 0.25s ease-out forwards; }
+.rest-presenta-nombre { position: relative; font-family: var(--fuente-display); font-size: 11px; color: var(--tinta); background: var(--papel); padding: 4px 9px; box-shadow: 0 0 0 2px var(--tinta); }
+.rest-presenta .rest-estr { position: relative; }
+@keyframes rest-presenta-gira { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes rest-presenta-entra { from { transform: scale(0.3); } to { transform: scale(1); } }
+@keyframes rest-presenta-extra { to { transform: translate(-50%, -50%) scale(1); } }
