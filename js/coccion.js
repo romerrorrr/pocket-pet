@@ -66,11 +66,11 @@ export const EN_LA_OLLA = {
  * Dibuja el recipiente con las piezas adentro. Devuelve null si la receta no tiene piezas
  * (entonces cocina.js usa el dibujo de antes).
  */
-export function dibujarCoccion(s, como, recetaId) {
+export function dibujarCoccion(s, como, recetaId, opts = {}) {
   const R = EN_LA_OLLA[recetaId];
   if (!R || como === "calentar") return null;
   const pintables = []; // [elemento, atributo, crudo, cocido, quemado]
-  const humedo = como === "vapor" || como === "hervir" || como === "enfriar";
+  const humedo = como === "vapor" || como === "hervir" || como === "enfriar" || como === "rebozar";
   const pc = (e, attr, crudo, cocido, quemado) => {
     // pasado: frito/horno/plancha/caramelo se quema (marron oscuro); al vapor o hervido queda aguado y gris
     const pasado = como === "enfriar" ? mezcla(cocido, "rgb(214,236,250)", 0.6) : humedo ? mezcla(cocido, "rgb(170,164,150)", 0.6) : mezcla(cocido, "rgb(70,46,30)", 0.75);
@@ -112,6 +112,15 @@ export function dibujarCoccion(s, como, recetaId) {
     const burb = el(fondo, "g", {});
     const bs = Array.from({ length: 8 }, (_, i) => el(burb, "circle", { cx: 84 + i * 19, cy: 94, r: 0, fill: "none", stroke: "rgba(255,255,255,0.85)", "stroke-width": 1.5 }));
     animados.push((t) => bs.forEach((b, i) => b.setAttribute("r", (Math.max(0, Math.sin(t / 220 + i * 1.7)) * 3.5 * Math.min(1, t / 900)).toFixed(1))));
+  } else if (como === "rebozar") {
+    // v68 (aborrajados): el bol de ceramica con el rebozo (harina, huevo y leche)
+    el(fondo, "ellipse", { cx: 150, cy: 90, rx: 92, ry: 20, fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+    el(fondo, "ellipse", { cx: 150, cy: 95, rx: 84, ry: 14, fill: "rgb(250,234,186)" });
+    el(fondo, "path", { d: "M104 94 q12 -4 24 0 M170 98 q10 -3 20 0", fill: "none", stroke: "rgba(255,255,255,0.6)", "stroke-width": 2 });
+    el(frente, "path", { d: "M58 90 Q66 150 150 156 Q234 150 242 90 Q150 130 58 90 Z", fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+    el(frente, "path", { d: "M70 112 Q150 146 230 112", fill: "none", stroke: "rgb(110,150,214)", "stroke-width": 3 });
+    el(frente, "path", { d: "M76 122 Q150 154 224 122", fill: "none", stroke: "rgb(110,150,214)", "stroke-width": 1.5 });
+    lugares = fila(102, n <= 3 ? 100 : 92, n <= 3 ? 200 : 208, n <= 3 ? 1.25 : 1.05);
   } else if (como === "freir") {
     // la olla honda con aceite
     el(fondo, "ellipse", { cx: 150, cy: 90, rx: 90, ry: 20, fill: "rgb(50,50,60)", stroke: TINTA, "stroke-width": 3 });
@@ -185,8 +194,14 @@ export function dibujarCoccion(s, como, recetaId) {
       el(g, "ellipse", { cx: -5, cy: -18, rx: 4, ry: 2.5, fill: "rgba(255,255,255,0.6)" });
       if (R.brillo) g._inflar = true;
     } else if (p === "patacon") {
-      pc(el(g, "ellipse", { cx: 0, cy: -8, rx: 16, ry: 9, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(220,226,140)", DORADO);
-      pc(el(g, "ellipse", { cx: 0, cy: -9, rx: 10, ry: 5 }), "fill", "rgb(236,240,170)", "rgb(250,206,110)");
+      if (opts.segunda) {
+        // v68: la segunda fritura, ya aplastados: planitos, de amarillo a dorado crocante
+        pc(el(g, "ellipse", { cx: 0, cy: -6, rx: 20, ry: 7, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(240,212,120)", "rgb(214,140,50)");
+        pc(el(g, "ellipse", { cx: 0, cy: -7, rx: 13, ry: 3.5 }), "fill", "rgb(250,226,150)", "rgb(240,180,80)");
+      } else {
+        pc(el(g, "ellipse", { cx: 0, cy: -8, rx: 16, ry: 9, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(220,226,140)", DORADO);
+        pc(el(g, "ellipse", { cx: 0, cy: -9, rx: 10, ry: 5 }), "fill", "rgb(236,240,170)", "rgb(250,206,110)");
+      }
     } else if (p === "arepa") {
       pc(el(g, "ellipse", { cx: 0, cy: -10, rx: 40, ry: 14, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(250,236,180)", "rgb(240,214,140)");
       for (const [x, y] of [[-20, -12], [6, -8], [22, -13], [-6, -15]]) pc(el(g, "ellipse", { cx: x, cy: y, rx: 5, ry: 2.5 }), "fill", "rgb(250,236,180)", "rgb(196,130,60)", "rgb(40,30,24)");
@@ -197,7 +212,9 @@ export function dibujarCoccion(s, como, recetaId) {
       pc(el(g, "rect", { x: -26, y: -14, width: 52, height: 13, rx: 6.5, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(250,240,214)", DORADO);
       pc(el(g, "rect", { x: -22, y: -12, width: 44, height: 3, rx: 1.5 }), "fill", "rgb(255,250,236)", "rgb(250,210,120)");
     } else if (p === "aborrajado") {
-      pc(el(g, "ellipse", { cx: 0, cy: -10, rx: 20, ry: 10, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(250,236,190)", "rgb(226,150,60)");
+      // v68: en el rebozo pasan de maduro (amarillo) a cubiertos de masa; en el aceite, de masa a dorados
+      if (como === "rebozar") pc(el(g, "ellipse", { cx: 0, cy: -10, rx: 20, ry: 10, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(246,200,90)", "rgb(250,238,206)", "rgb(236,232,222)");
+      else pc(el(g, "ellipse", { cx: 0, cy: -10, rx: 20, ry: 10, stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(250,236,190)", "rgb(226,150,60)");
       el(g, "path", { d: "M-12 -14 q6 -3 12 0 q6 3 12 0", fill: "none", stroke: "rgba(255,255,255,0.5)", "stroke-width": 2 });
     } else if (p === "tarta") {
       pc(el(g, "path", { d: "M-16 0 L-19 -12 L19 -12 L16 0 Z", stroke: TINTA, "stroke-width": 3 }), "fill", "rgb(240,214,160)", "rgb(220,160,80)");

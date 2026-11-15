@@ -54,6 +54,11 @@ export const LIQUIDOS = {
   // v64
   vinagre_dulce: { nombre: "sweet vinegar sauce", color: "rgb(150,70,40)" },
   te_negro: { nombre: "black tea", color: "rgb(150,90,50)" },
+  // v68
+  agua_fria: { nombre: "cold water", color: "rgb(206,230,244)" },
+  pulpa: { nombre: "passion fruit pulp", color: "rgb(250,190,40)" },
+  jugo_sandia: { nombre: "watermelon juice", color: "rgb(246,112,112)" },
+  pulpa_lulo: { nombre: "lulo pulp", color: "rgb(204,222,110)" },
 };
 /** v58: lo que se corta, se lava o se aplasta */
 export const INGREDIENTES = {
@@ -86,6 +91,11 @@ export const INGREDIENTES = {
   barro: { nombre: "clay", color: "rgb(170,120,80)", alto: 40 },
   hojas_te: { nombre: "tea leaves", color: "rgb(110,160,80)", alto: 30 },
   oblea: { nombre: "wafer", color: "rgb(246,222,170)", alto: 10 },
+  // v68
+  masa: { nombre: "dough", color: "rgb(250,244,228)", alto: 44 },
+  mazorca: { nombre: "corn", color: "rgb(250,210,80)", alto: 36 },
+  molde: { nombre: "mooncake", color: "rgb(236,190,120)", alto: 40 },
+  perlas: { nombre: "tapioca pearls", color: "rgb(60,38,34)", alto: 20 },
 };
 export const COCCIONES = {
   vapor: { verbo: "STEAM", boton: "Take it out!", ms: 3600 },
@@ -96,6 +106,7 @@ export const COCCIONES = {
   caramelo: { verbo: "DIP", boton: "Lift it!", ms: 2600 },
   calentar: { verbo: "HEAT", boton: "Pour it!", ms: 3000 },
   enfriar: { verbo: "CHILL", boton: "Unmold!", ms: 3200 },
+  rebozar: { verbo: "DIP", boton: "Lift it!", ms: 2600 }, // v68: pasar por el rebozo (aborrajados)
 };
 
 // --------- la puntuacion (sin DOM) ---------
@@ -146,6 +157,9 @@ function el(padre, tag, attrs = {}) {
 const TINTA = "rgb(22,20,22)";
 const MASA = "rgb(250,244,228)";
 const MASA_SOMBRA = "rgb(226,214,190)";
+// v68 (rom: "la misma masa blanca para todo"): la masa de cada receta con su color
+const MASA_DE = { arepa: "rgb(250,226,140)", empanada: "rgb(250,222,130)", pandebono: "rgb(250,226,160)", bunuelos: "rgb(250,230,170)", luna: "rgb(236,196,130)", dan_ta: "rgb(250,228,170)", tangyuan: "rgb(255,255,253)", liusha: "rgb(253,250,244)", hargow: "rgb(238,242,238)", siumai: "rgb(250,226,140)", congyoubing: "rgb(246,236,210)" };
+const oscurecer = (col, k) => `rgb(${col.match(/\d+/g).map((v) => Math.round(v * k)).join(",")})`;
 
 
 // ---------- v61: los ingredientes dibujados de verdad (no rectangulos) ----------
@@ -311,6 +325,20 @@ export function dibujarIngrediente(g, que, x0, x1, cy) {
     el(g, "path", { d: `M${x0 + 4} ${cy - 2} Q${x0 + L / 2} ${cy + 44} ${x1 - 4} ${cy - 4} Q${x1 + 4} ${cy - 22} ${x1 - 16} ${cy - 20} Q${x0 + L / 2} ${cy + 4} ${x0 + 16} ${cy - 22} Q${x0 - 2} ${cy - 20} ${x0 + 4} ${cy - 2} Z`, fill: "rgb(246,204,96)", ...borde });
     el(g, "path", { d: `M${x0 + 18} ${cy - 8} Q${x0 + L / 2} ${cy + 26} ${x1 - 18} ${cy - 10}`, fill: "none", stroke: "rgb(252,232,160)", "stroke-width": 4 });
     for (const fx of [0.22, 0.38, 0.55, 0.7, 0.82]) el(g, "circle", { cx: x0 + L * fx, cy: cy + 10 - 22 * Math.abs(fx - 0.5), r: 2, fill: "rgb(200,140,60)" });
+    return;
+  }
+  if (que === "masa") {
+    // v68: la masa estirada, doblada en capas (para cortar los fideos)
+    el(g, "rect", { x: x0 + 6, y: cy - 24, width: L - 12, height: 48, rx: 8, fill: "rgb(250,244,228)", ...borde });
+    for (const fy of [-10, 2, 14]) el(g, "line", { x1: x0 + 10, y1: cy + fy, x2: x1 - 10, y2: cy + fy, stroke: "rgb(226,214,190)", "stroke-width": 2 });
+    for (let i = 0; i < 14; i++) el(g, "rect", { x: x0 + 14 + ((i * 37) % (L - 28)), y: cy - 20 + ((i * 13) % 38), width: 2, height: 2, fill: "rgb(255,255,255)" }); // la harina
+    return;
+  }
+  if (que === "mazorca") {
+    // v68: una mazorca, con sus granitos y las hojas en la punta
+    el(g, "path", { d: `M${x1 - 30} ${cy - 6} L${x1 + 2} ${cy - 26} L${x1 - 6} ${cy} L${x1 + 2} ${cy + 24} L${x1 - 30} ${cy + 6} Z`, fill: "rgb(140,190,90)", ...borde });
+    el(g, "rect", { x: x0 + 6, y: cy - 20, width: L - 40, height: 40, rx: 20, fill: "rgb(250,210,80)", ...borde });
+    for (let fx = x0 + 18; fx < x1 - 40; fx += 9) for (let fy = -14; fy <= 12; fy += 8) el(g, "rect", { x: fx, y: cy + fy, width: 6, height: 5, rx: 2, fill: "rgb(255,232,130)", stroke: "rgba(200,150,40,0.7)", "stroke-width": 1 });
     return;
   }
   // los demas: una pieza con su veta
@@ -500,6 +528,152 @@ function crearVertedor(padre, liquido, px = 228, py = 40) {
 }
 
 /**
+ * v68 (rom: "espolvorear sobre un plato gigante… el polvo cae por toda la mesa"): lo que se
+ * espolvorea, visto desde arriba en su recipiente (el vaso, el tazon, el plato, la plancha).
+ * Devuelve la elipse de la comida: lo que cae, cae ahi.
+ */
+function baseEspolvorear(s, receta, plato) {
+  const Z = { cx: 150, cy: 104, rx: 104, ry: 48 };
+  const r = azarDe("polvo" + receta);
+  const { cx, cy, rx, ry } = Z;
+  const dentro = (k = 0.85) => {
+    // un punto al azar dentro de la comida
+    const a = r() * Math.PI * 2;
+    const d = Math.sqrt(r()) * k;
+    return [cx + rx * d * Math.cos(a), cy + ry * d * Math.sin(a)];
+  };
+  const VASOS = { jugo: "rgb(255,196,60)", longjing: "rgb(228,240,232)", mango_biche: "papel" };
+  const TAZONES = { ajiaco: "rgb(250,214,110)", arroz_con_leche: "rgb(250,244,226)", mapo: "rgb(200,60,40)" };
+  if (VASOS[receta]) {
+    const papel = VASOS[receta] === "papel";
+    el(s, "ellipse", { cx, cy: cy + 4, rx: rx + 10, ry: ry + 12, fill: "rgba(60,40,30,0.15)" });
+    el(s, "ellipse", { cx, cy, rx: rx + 8, ry: ry + 8, fill: papel ? "rgb(252,252,248)" : "rgba(236,246,250,0.9)", stroke: TINTA, "stroke-width": 3 });
+    if (papel) el(s, "ellipse", { cx, cy, rx: rx + 4, ry: ry + 4, fill: "none", stroke: "rgb(220,70,70)", "stroke-width": 3 });
+    el(s, "ellipse", { cx, cy, rx, ry, fill: papel ? "rgb(214,226,150)" : VASOS[receta], stroke: papel ? "rgb(170,180,110)" : "rgb(180,206,220)", "stroke-width": 3 });
+    if (papel) {
+      // los palitos de mango biche, de punta
+      for (let i = 0; i < 26; i++) {
+        const [x, y] = dentro(0.88);
+        el(s, "rect", { x: x - 6, y: y - 5, width: 12, height: 10, rx: 2, fill: i % 3 ? "rgb(222,232,150)" : "rgb(236,240,180)", stroke: "rgb(120,140,60)", "stroke-width": 1.5 });
+      }
+    } else if (receta === "jugo") {
+      for (let i = 0; i < 22; i++) {
+        const [x, y] = dentro(0.9);
+        el(s, "ellipse", { cx: x, cy: y, rx: 3.4, ry: 2.6, fill: "rgb(255,226,120)" });
+        el(s, "ellipse", { cx: x, cy: y, rx: 1.8, ry: 1.4, fill: "rgb(40,30,24)" }); // las semillitas del maracuya
+      }
+    }
+    el(s, "path", { d: `M${cx - rx * 0.7} ${cy - ry * 0.75} Q${cx - rx * 0.2} ${cy - ry * 1.05} ${cx + rx * 0.3} ${cy - ry * 0.95}`, fill: "none", stroke: "rgba(255,255,255,0.8)", "stroke-width": 4, "stroke-linecap": "round" });
+  } else if (TAZONES[receta]) {
+    el(s, "ellipse", { cx, cy: cy + 6, rx: rx + 14, ry: ry + 14, fill: "rgba(60,40,30,0.15)" });
+    el(s, "ellipse", { cx, cy, rx: rx + 12, ry: ry + 12, fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+    el(s, "ellipse", { cx, cy, rx: rx + 7, ry: ry + 7, fill: "none", stroke: "rgb(110,150,214)", "stroke-width": 2.5 });
+    el(s, "ellipse", { cx, cy, rx, ry, fill: TAZONES[receta], stroke: "rgba(0,0,0,0.25)", "stroke-width": 2 });
+    if (receta === "ajiaco") {
+      for (let i = 0; i < 16; i++) {
+        const [x, y] = dentro();
+        const tipo = i % 4;
+        if (tipo === 0) el(s, "ellipse", { cx: x, cy: y, rx: 8, ry: 5, fill: "rgb(250,226,110)", stroke: "rgb(200,160,60)", "stroke-width": 1.5 }); // la mazorca en rueditas
+        else if (tipo === 1) el(s, "path", { d: `M${x - 8} ${y} q8 -5 16 0`, fill: "none", stroke: "rgb(250,236,214)", "stroke-width": 3.5, "stroke-linecap": "round" }); // el pollo desmechado
+        else el(s, "rect", { x: x - 5, y: y - 4, width: 10, height: 8, rx: 2, fill: tipo === 2 ? "rgb(250,232,150)" : "rgb(240,200,90)", stroke: "rgba(150,110,40,0.7)", "stroke-width": 1.2 }); // las papas
+      }
+    } else if (receta === "arroz_con_leche") {
+      for (let i = 0; i < 44; i++) {
+        const [x, y] = dentro(0.9);
+        el(s, "ellipse", { cx: x, cy: y, rx: 2.6, ry: 1.3, fill: "rgb(255,255,250)", stroke: "rgba(190,170,140,0.8)", "stroke-width": 0.7, transform: `rotate(${Math.round(r() * 180)} ${x.toFixed(1)} ${y.toFixed(1)})` });
+      }
+    } else {
+      for (let i = 0; i < 12; i++) {
+        const [x, y] = dentro(0.8);
+        el(s, "rect", { x: x - 7, y: y - 6, width: 14, height: 12, rx: 2, fill: "rgb(252,248,236)", stroke: TINTA, "stroke-width": 1.5 });
+        el(s, "rect", { x: x - 6, y: y + 1, width: 12, height: 4, fill: "rgba(214,70,40,0.6)" });
+      }
+    }
+  } else {
+    const plancha = receta === "jianbing";
+    el(s, "ellipse", { cx, cy: cy + 6, rx: rx + 14, ry: ry + 14, fill: "rgba(60,40,30,0.15)" });
+    el(s, "ellipse", { cx, cy, rx: rx + 12, ry: ry + 12, fill: plancha ? "rgb(70,70,80)" : "rgb(252,252,250)", stroke: TINTA, "stroke-width": 3 });
+    if (!plancha) el(s, "ellipse", { cx, cy, rx: rx - 4, ry: ry - 4, fill: "none", stroke: "rgb(220,220,226)", "stroke-width": 2.5 });
+    if (receta === "patacones") {
+      for (const [x, y] of [[-52, -12], [-6, -20], [40, -8], [-28, 18], [18, 18]]) {
+        el(s, "ellipse", { cx: cx + x, cy: cy + y, rx: 26, ry: 15, fill: "rgb(236,176,70)", stroke: TINTA, "stroke-width": 2.5 });
+        el(s, "ellipse", { cx: cx + x, cy: cy + y - 1, rx: 17, ry: 9, fill: "rgb(250,210,110)" });
+        for (const [a, b] of [[-8, -3], [6, 2], [-2, 5]]) el(s, "circle", { cx: cx + x + a, cy: cy + y + b, r: 1.6, fill: "rgb(200,130,40)" });
+      }
+    } else if (receta === "camarones_longjing") {
+      for (const [x, y, gi] of [[-58, -10, false], [-24, -22, true], [12, -14, false], [48, -20, true], [-40, 16, true], [0, 14, false], [44, 14, false]]) dibujarCamaron(s, cx + x, cy + y, 0.8, gi);
+    } else if (receta === "obleas") {
+      el(s, "ellipse", { cx, cy, rx: rx - 8, ry: ry - 4, fill: "rgb(246,222,170)", stroke: TINTA, "stroke-width": 2.5 });
+      el(s, "ellipse", { cx, cy, rx: rx - 16, ry: ry - 10, fill: "rgb(170,96,46)" }); // el arequipe
+      el(s, "path", { d: `M${cx - 50} ${cy - 18} q20 -8 40 -4`, fill: "none", stroke: "rgba(255,220,180,0.5)", "stroke-width": 4, "stroke-linecap": "round" });
+    } else if (plancha) {
+      el(s, "ellipse", { cx, cy, rx, ry, fill: "rgb(250,226,150)", stroke: TINTA, "stroke-width": 2.5 });
+      for (let i = 0; i < 7; i++) {
+        const [x, y] = dentro(0.7);
+        el(s, "ellipse", { cx: x, cy: y, rx: 14 + r() * 10, ry: 7 + r() * 5, fill: "rgba(255,206,70,0.75)" }); // el huevo
+      }
+      for (let i = 0; i < 18; i++) {
+        const [x, y] = dentro(0.9);
+        el(s, "circle", { cx: x, cy: y, r: 1.2, fill: "rgb(40,30,30)" }); // el ajonjoli negro
+      }
+    } else {
+      el(s, "ellipse", { cx, cy, rx: rx - 8, ry: ry - 6, fill: "rgb(244,240,232)" });
+      if (plato) el(s, "image", { href: plato, x: cx - 50, y: cy - 50, width: 100, height: 100, style: "image-rendering:pixelated" });
+    }
+  }
+  return Z;
+}
+
+/**
+ * v68 (rom vio el wok vacio, con un trocito volando): lo que se saltea, dibujado adentro del
+ * wok. Devuelve el grupo y sus piezas (cada una con su _dx/_dy, para que se abran al volar).
+ */
+function comidaDelWok(padre, receta) {
+  const g = el(padre, "g", { class: "wok-comida" });
+  const piezas = [];
+  const r = azarDe("wok" + receta);
+  const pieza = (dx, dy) => {
+    const p = el(g, "g", { transform: `translate(${dx} ${dy})` });
+    p._dx = dx;
+    p._dy = dy;
+    p._giro = (r() - 0.5) * 720;
+    piezas.push(p);
+    return p;
+  };
+  if (receta === "camarones_longjing") {
+    // los camarones pelados y las hojitas del Longjing
+    const base = pieza(0, -6);
+    el(base, "ellipse", { cx: 0, cy: 0, rx: 44, ry: 7, fill: "rgb(200,214,150)", stroke: TINTA, "stroke-width": 2 });
+    for (const [x, y, gi] of [[-26, -14, false], [-2, -18, true], [22, -13, false], [8, -8, true]]) dibujarCamaron(pieza(x, y), 0, 0, 0.5, gi);
+    for (let i = 0; i < 8; i++) {
+      const p = pieza(-38 + i * 11, -8 - r() * 12);
+      el(p, "ellipse", { cx: 0, cy: 0, rx: 4.5, ry: 2, fill: "rgb(100,156,74)", stroke: "rgba(0,0,0,0.45)", "stroke-width": 0.8, transform: `rotate(${Math.round(r() * 180)})` });
+    }
+  } else if (receta === "mapo") {
+    // el tofu en cubitos en su salsa roja, con pedacitos de carne y pimienta
+    const base = pieza(0, -6);
+    el(base, "ellipse", { cx: 0, cy: 0, rx: 46, ry: 8, fill: "rgb(196,56,36)", stroke: TINTA, "stroke-width": 2 });
+    for (let i = 0; i < 8; i++) {
+      const p = pieza(-36 + i * 10 + (r() - 0.5) * 4, -12 - (i % 3) * 5);
+      el(p, "rect", { x: -5, y: -5, width: 10, height: 10, rx: 1.5, fill: "rgb(252,248,236)", stroke: TINTA, "stroke-width": 1.6 });
+      el(p, "rect", { x: -4, y: 1, width: 8, height: 3, fill: "rgba(214,70,40,0.75)" });
+    }
+    for (let i = 0; i < 10; i++) el(pieza(-40 + r() * 80, -6 - r() * 16), "rect", { x: -1.5, y: -1.5, width: 3, height: 3, fill: i % 2 ? "rgb(120,50,30)" : "rgb(60,30,24)" });
+  } else {
+    // arroz frito: el arroz con el huevo revuelto y el cebollin
+    const base = pieza(0, -7);
+    el(base, "path", { d: "M-46 2 Q-40 -14 0 -16 Q40 -14 46 2 Z", fill: "rgb(250,244,226)", stroke: TINTA, "stroke-width": 2 });
+    for (let i = 0; i < 26; i++) {
+      const p = pieza(-40 + r() * 80, -8 - r() * 14);
+      el(p, "ellipse", { cx: 0, cy: 0, rx: 2.6, ry: 1.4, fill: "rgb(255,252,240)", stroke: "rgba(150,130,100,0.7)", "stroke-width": 0.7, transform: `rotate(${Math.round(r() * 180)})` });
+    }
+    for (let i = 0; i < 7; i++) el(pieza(-34 + i * 11, -10 - r() * 10), "rect", { x: -3, y: -2.5, width: 6, height: 5, rx: 2, fill: "rgb(255,214,80)", stroke: "rgba(180,130,30,0.8)", "stroke-width": 0.8 });
+    for (let i = 0; i < 9; i++) el(pieza(-38 + r() * 76, -8 - r() * 14), "rect", { x: -1.5, y: -1.5, width: 3.5, height: 3, fill: "rgb(100,176,70)" });
+  }
+  return { g, piezas };
+}
+
+/**
  * Arma un paso dentro de area (un div vacio). paso: { t, ...datos }.
  * ctx: { ayuda(texto), boton(texto, fn) | null, sonar, vibrar, plato (src del plato), pedido (extras pedidos) }
  * Devuelve { destruir(), resolver(estrellas) } — resolver es para las pruebas.
@@ -510,6 +684,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // v59: la dificultad (ctx.dif: -0.5 relajado .. 0 en ★1 .. 1 en ★5) y las mejoras compradas
   const D = Math.max(-0.5, Math.min(1, ctx.dif || 0));
   const MJ = ctx.mejoras || {};
+  const MASA_R = MASA_DE[ctx.receta] || MASA;
   const ancho = (w, k = 0.35) => w * (1 - k * D); // las zonas buenas se achican con la fama
   const rapido = (k = 0.25) => 1 + k * D; // y las cosas van un poco mas rapido
   const mas = (n, k) => n + Math.round(Math.max(0, D) * k); // y hay mas pliegues / cortes / lanzamientos
@@ -549,8 +724,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const TOTAL = 6;
     let n = 0;
     let buenos = 0;
-    const masa = el(s, "ellipse", { cx: 150, cy: 104, rx: 46, ry: 38, fill: MASA, stroke: TINTA, "stroke-width": 3 });
-    el(s, "ellipse", { cx: 150, cy: 128, rx: 36, ry: 6, fill: MASA_SOMBRA, opacity: 0.8 });
+    const masa = el(s, "ellipse", { cx: 150, cy: 104, rx: 46, ry: 38, fill: MASA_R, stroke: TINTA, "stroke-width": 3 });
+    el(s, "ellipse", { cx: 150, cy: 128, rx: 36, ry: 6, fill: MASA_R === MASA ? MASA_SOMBRA : oscurecer(MASA_R, 0.88), opacity: 0.8 });
     const anillo = el(s, "ellipse", { cx: 150, cy: 104, rx: 90, ry: 74, fill: "none", stroke: "rgb(214,70,64)", "stroke-width": 4, "stroke-dasharray": "8 6" });
     const zona = el(s, "ellipse", { cx: 150, cy: 104, rx: 50, ry: 42, fill: "none", stroke: "rgb(120,190,110)", "stroke-width": 9, opacity: 0.45 });
     const cuenta = el(s, "text", { x: 150, y: 24, "text-anchor": "middle", class: "cocina-cuenta" });
@@ -591,7 +766,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let r = 32;
     el(s, "circle", { cx: 150, cy: 104, r: MAX, fill: "none", stroke: "rgb(120,190,110)", "stroke-width": MAX - MIN, opacity: 0.25 });
     el(s, "circle", { cx: 150, cy: 104, r: (MIN + MAX) / 2, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "6 6" });
-    const masa = el(s, "circle", { cx: 150, cy: 104, r, fill: MASA, stroke: TINTA, "stroke-width": 3 });
+    const masa = el(s, "circle", { cx: 150, cy: 104, r, fill: MASA_R, stroke: TINTA, "stroke-width": 3 });
     const palote = el(s, "g", {});
     el(palote, "rect", { x: -70, y: -8, width: 140, height: 16, rx: 7, fill: "rgb(214,170,104)", stroke: TINTA, "stroke-width": 3 });
     el(palote, "rect", { x: -92, y: -5, width: 24, height: 10, rx: 4, fill: "rgb(150,100,60)", stroke: TINTA, "stroke-width": 3 });
@@ -615,7 +790,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       const d = Math.hypot(p[0] - prev[0], p[1] - prev[1]);
       r = Math.min(110, r + d * 0.07);
       masa.setAttribute("r", r.toFixed(1));
-      masa.setAttribute("fill", r > MAX ? "rgb(250,232,220)" : MASA);
+      masa.setAttribute("fill", r > MAX ? "rgb(250,232,220)" : MASA_R);
       palote.setAttribute("transform", `translate(${Math.max(60, Math.min(240, p[0]))} ${Math.max(40, Math.min(170, p[1]))}) rotate(${(p[1] - 104) * 0.2})`);
       prev = p;
     });
@@ -642,13 +817,15 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     s.dataset.desde = F0;
     let apretado = false;
     let barra;
-    if (esVerter && (paso.en === "plancha" || paso.en === "plato")) {
+    if (esVerter && (paso.en === "plancha" || paso.en === "plato" || paso.en === "wok")) {
       // v61 pasada: verter sobre la plancha (la masa del jianbing) o sobre el plato (el almibar):
       // visto desde arriba, el charquito crece hasta el anillo verde
       const L = LIQUIDOS[paso.liquido] || LIQUIDOS.agua;
-      if (paso.en === "plancha") {
-        el(s, "circle", { cx: 130, cy: 108, r: 82, fill: "rgb(70,70,80)", stroke: TINTA, "stroke-width": 3 });
-        el(s, "circle", { cx: 130, cy: 108, r: 74, fill: "rgb(96,96,108)" });
+      if (paso.en === "plancha" || paso.en === "wok") {
+        // v68: el wok (camarones Longjing): el te va sobre los camarones, no en una olla vacia
+        el(s, "circle", { cx: 130, cy: 108, r: 82, fill: paso.en === "wok" ? "rgb(56,56,64)" : "rgb(70,70,80)", stroke: TINTA, "stroke-width": 3 });
+        el(s, "circle", { cx: 130, cy: 108, r: 74, fill: paso.en === "wok" ? "rgb(84,84,96)" : "rgb(96,96,108)" });
+        if (paso.en === "wok") el(s, "circle", { cx: 130, cy: 108, r: 50, fill: "rgb(104,104,116)" });
         el(s, "rect", { x: 208, y: 102, width: 40, height: 12, rx: 5, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 3 });
       } else {
         el(s, "circle", { cx: 130, cy: 108, r: 80, fill: "rgb(252,252,250)", stroke: TINTA, "stroke-width": 3 });
@@ -657,7 +834,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }
       el(s, "circle", { cx: 130, cy: 108, r: 60 * B, fill: "rgba(120,190,110,0.22)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "circle", { cx: 130, cy: 108, r: 60 * A, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
-      barra = el(s, "circle", { cx: 130, cy: 108, r: 0, fill: L.color, stroke: "rgba(0,0,0,0.25)", "stroke-width": 2, opacity: paso.en === "plato" ? 0.85 : 1 });
+      barra = el(s, "circle", { cx: 130, cy: 108, r: 0, fill: L.color, stroke: "rgba(0,0,0,0.25)", "stroke-width": 2, opacity: paso.en === "plato" ? 0.85 : paso.en === "wok" ? 0.8 : 1 });
+      if (paso.en === "wok") for (const [x, y, gi] of [[-30, -12, false], [4, -26, true], [30, -4, false], [-8, 16, true], [22, 24, false]]) dibujarCamaron(s, 130 + x, 108 + y, 0.75, gi);
       const vertedor = crearVertedor(s, paso.liquido, 236, 44);
       ayuda("Hold to pour · let go in the green ring");
       let tPrevV = 0;
@@ -714,7 +892,31 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }
       el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: taza ? "rgb(250,248,240)" : "rgba(255,255,255,0.55)", stroke: TINTA, "stroke-width": 3 });
       if (paso.previo) el(s, "rect", { x: G.x + 3, y: FONDO - ALT * F0, width: G.w - 6, height: ALT * F0, fill: (LIQUIDOS[paso.previo.liquido] || LIQUIDOS.agua).color }); // lo que ya estaba
+      if (paso.previo && paso.previo.liquido.startsWith("pulpa")) {
+        // v68: la pulpa del maracuya con sus semillas, al fondo del vaso (antes se vertia en un vaso vacio)
+        const rp = azarDe("pulpa");
+        for (let i = 0; i < 16; i++) el(s, "circle", { cx: G.x + 8 + rp() * (G.w - 16), cy: FONDO - 3 - rp() * (ALT * F0 - 6), r: 1.8, fill: "rgb(40,30,24)" });
+      }
       barra = el(s, "rect", { x: G.x + 3, y: FONDO - ALT * F0, width: G.w - 6, height: 0, rx: taza ? 6 : 0, fill: L.color });
+      if (Array.isArray(paso.trozos) && paso.trozos.length) {
+        // v68: el salpicon: la fruta picada en el vaso, y el jugo sube entre los trozos
+        const rt = azarDe("trozos" + paso.trozos.join());
+        for (let i = 0; i < 18; i++) {
+          const c = paso.trozos[i % paso.trozos.length];
+          const x = G.x + 6 + rt() * (G.w - 22);
+          const y = FONDO - 14 - (i / 18) * ALT * 0.5 - rt() * 6;
+          el(s, "rect", { x, y, width: 13, height: 12, rx: 2, fill: c, stroke: TINTA, "stroke-width": 1.5, transform: `rotate(${Math.round((rt() - 0.5) * 40)} ${(x + 6).toFixed(1)} ${(y + 6).toFixed(1)})` });
+        }
+      }
+      if (paso.hojas) {
+        // v68: el te Longjing: las hojas que se echaron, al fondo del vaso
+        const rh = azarDe("hojas");
+        for (let i = 0; i < 14; i++) {
+          const x = G.x + 10 + rh() * (G.w - 20);
+          const y = FONDO - 6 - rh() * 22;
+          el(s, "ellipse", { cx: x, cy: y, rx: 6, ry: 2.5, fill: "rgb(100,156,74)", stroke: "rgba(0,0,0,0.4)", "stroke-width": 0.8, transform: `rotate(${Math.round(rh() * 180)} ${x.toFixed(1)} ${y.toFixed(1)})` });
+        }
+      }
       el(s, "rect", { x: G.x, y: G.y + G.h * (1 - B), width: G.w, height: G.h * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: "none", stroke: TINTA, "stroke-width": 3 });
       if (taza) for (let i = 0; i < 4; i++) el(s, "rect", { x: G.x + 10 + i * 24, y: G.y + 8, width: 12, height: 4, fill: "rgb(110,170,214)" }); // la cenefa del pocillo
@@ -752,7 +954,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       } else if (paso.base === "maduro") {
         el(s, "ellipse", { cx: 130, cy: 108, rx: 84, ry: 64, fill: "rgb(246,204,96)", stroke: TINTA, "stroke-width": 3 });
         el(s, "ellipse", { cx: 130, cy: 108, rx: 70, ry: 52, fill: "none", stroke: "rgb(252,228,150)", "stroke-width": 4 });
-      } else el(s, "circle", { cx: 130, cy: 108, r: 74, fill: MASA, stroke: TINTA, "stroke-width": 3 });
+      } else el(s, "circle", { cx: 130, cy: 108, r: 74, fill: MASA_R, stroke: TINTA, "stroke-width": 3 });
       el(s, "circle", { cx: 130, cy: 108, r: 50 * B, fill: "rgba(120,190,110,0.25)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "circle", { cx: 130, cy: 108, r: 50 * A, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       barra = el(s, "ellipse", { cx: 130, cy: 108, rx: 0, ry: 0, fill: R.color, stroke: R.sombra, "stroke-width": 3 });
@@ -815,7 +1017,10 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const media = paso.forma === "media"; // jiaozi, guotie, empanada: se pliega el borde de abajo
     const a0 = media ? 200 : -90; // grados donde empieza
     const barrido = media ? 140 : 360;
-    el(s, "circle", { cx: 150, cy: 104, r: 74, fill: MASA, stroke: TINTA, "stroke-width": 3 });
+    // v68: el siu mai no se cierra: se aprieta la masa alrededor como una canastita abierta
+    const canasta = paso.forma === "canasta";
+    const angCanasta = [];
+    const disco = el(s, "circle", { cx: 150, cy: 104, r: 74, fill: MASA_R, stroke: TINTA, "stroke-width": 3 });
     el(s, "ellipse", { cx: 150, cy: 104, rx: 34, ry: 30, fill: R.color, stroke: R.sombra, "stroke-width": 3 });
     if (paso.relleno === "camaron") {
       dibujarCamaron(s, 136, 100, 0.8);
@@ -863,9 +1068,22 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       if (ok) buenos++;
       sonar(ok ? "tocar" : "no");
       const a = objetivo();
-      const x = 150 + 70 * Math.cos((a * Math.PI) / 180);
-      const y = 104 + 70 * Math.sin((a * Math.PI) / 180);
-      el(pliegues, "rect", { x: x - 4, y: y - 12, width: 8, height: 24, rx: 3, fill: ok ? "rgb(240,232,210)" : "rgb(226,200,190)", stroke: "rgba(0,0,0,0.4)", "stroke-width": 2, transform: `rotate(${a + 90} ${x} ${y})` });
+      if (canasta) {
+        // cada pliegue aprieta la masa: el borde se cierra hacia el relleno (que queda a la vista)
+        angCanasta.push([a, ok]);
+        const rr = 74 - 32 * ((k + 1) / N);
+        disco.setAttribute("r", rr.toFixed(1));
+        pliegues.innerHTML = "";
+        for (const [b, bien] of angCanasta) {
+          const c = Math.cos((b * Math.PI) / 180);
+          const sn = Math.sin((b * Math.PI) / 180);
+          el(pliegues, "path", { d: `M${(150 + (rr - 13) * c).toFixed(1)} ${(104 + (rr - 13) * sn).toFixed(1)} L${(150 + (rr + 1) * c).toFixed(1)} ${(104 + (rr + 1) * sn).toFixed(1)}`, stroke: bien ? "rgba(150,110,40,0.75)" : "rgba(200,90,80,0.8)", "stroke-width": 3, "stroke-linecap": "round" });
+        }
+      } else {
+        const x = 150 + 70 * Math.cos((a * Math.PI) / 180);
+        const y = 104 + 70 * Math.sin((a * Math.PI) / 180);
+        el(pliegues, "rect", { x: x - 4, y: y - 12, width: 8, height: 24, rx: 3, fill: ok ? "rgb(240,232,210)" : "rgb(226,200,190)", stroke: "rgba(0,0,0,0.4)", "stroke-width": 2, transform: `rotate(${a + 90} ${x} ${y})` });
+      }
       k++;
       if (k >= N) {
         zona.setAttribute("d", "");
@@ -888,7 +1106,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     // la olla / vaporera / sarten
     const f = paso.como;
     // v63: lo que se cocina, dibujado y crudo (se va cocinando); si la receta no tiene piezas, como antes
-    const cc = ctx.receta ? dibujarCoccion(s, f, ctx.receta) : null;
+    const cc = ctx.receta ? dibujarCoccion(s, f, ctx.receta, { segunda: !!paso.segunda }) : null;
     if (cc) {
       /* el recipiente ya lo dibujo coccion.js */
     } else if (f === "vapor") {
@@ -1190,7 +1408,11 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const wok = el(s, "g", {});
     el(wok, "path", { d: "M-62 -10 Q0 40 62 -10 Z", fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
     el(wok, "rect", { x: 60, y: -14, width: 46, height: 8, rx: 4, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 3 });
-    const comida = el(s, "image", { href: ctx.plato || "", x: -26, y: -40, width: 52, height: 52, style: "image-rendering:pixelated" });
+    const { g: comida, piezas: piezasWok } = comidaDelWok(s, ctx.receta);
+    // al volar, las piezas se abren un poco (y giran); al caer vuelven a juntarse en el wok
+    const abrir = (f) => {
+      for (const p of piezasWok) p.setAttribute("transform", `translate(${(p._dx * (1 + 0.5 * f)).toFixed(1)} ${(p._dy * (1 + 0.8 * f) - 10 * f).toFixed(1)}) rotate(${(p._giro * f).toFixed(0)})`);
+    };
     const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
     const brillo = el(s, "text", { x: 150, y: 40, "text-anchor": "middle", class: "cocina-cuenta", opacity: 0 });
     let k = 0;
@@ -1292,7 +1514,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         const h = vuelo.conLlama ? 120 : 70;
         const x = vuelo.x0 + vuelo.vx * tv;
         const y = WOK_Y - 4 * h * (tv / T) * (1 - tv / T);
-        comida.setAttribute("transform", `translate(${x} ${y}) rotate(${tv * 360})`);
+        comida.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+        abrir(Math.sin(Math.PI * Math.min(1, tv / T)));
         if (tv >= T) {
           const atrapo = Math.abs(x - wokX) < ATRAPA;
           const ok = atrapo && vuelo.conLlama;
@@ -1307,7 +1530,10 @@ export function crearPaso(area, paso, ctx, alTerminar) {
           cuenta.textContent = `TOSS ${k} / ${N}`;
           if (k >= N) fin(estrellasDeAciertos(buenos, N));
         }
-      } else comida.setAttribute("transform", `translate(${wokX} ${WOK_Y - 6})`);
+      } else {
+        comida.setAttribute("transform", `translate(${wokX} ${WOK_Y - 6})`);
+        abrir(0);
+      }
     });
   }
 
@@ -1503,8 +1729,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const ZONAS = 5;
     const ZX0 = 50;
     const ZW = 40;
-    el(s, "ellipse", { cx: 150, cy: 134, rx: 120, ry: 30, fill: "rgb(252,252,250)", stroke: TINTA, "stroke-width": 3 });
-    el(s, "image", { href: ctx.plato || "", x: 90, y: 42, width: 120, height: 110, style: "image-rendering:pixelated" });
+    const Z = baseEspolvorear(s, ctx.receta, ctx.plato);
     const capa = el(s, "g", {});
     const barras = [];
     const cant = Array(ZONAS).fill(0);
@@ -1554,8 +1779,13 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       granos += 2 * dt; // dos granitos por cuadro de 60fps
       for (; granos >= 1; granos--) {
         const px = x + (Math.random() - 0.5) * 28;
-        const py = 70 + Math.random() * 70;
-        if (paso.hojas) el(capa, "ellipse", { cx: px, cy: py, rx: 3, ry: 1.6, fill: polvo, stroke: "rgba(0,0,0,0.35)", "stroke-width": 0.6, transform: `rotate(${Math.round(Math.random() * 180)} ${px.toFixed(1)} ${py.toFixed(1)})` });
+        // lo que cae, cae sobre la comida (no por toda la mesa)
+        const dxn = (px - Z.cx) / Z.rx;
+        const hh = Math.abs(dxn) < 1 ? Z.ry * Math.sqrt(1 - dxn * dxn) * 0.94 : 0;
+        const py = Z.cy + (Math.random() * 2 - 1) * hh;
+        if (!hh) {
+          /* fuera del borde: no se dibuja */
+        } else if (paso.hojas) el(capa, "ellipse", { cx: px, cy: py, rx: 3, ry: 1.6, fill: polvo, stroke: "rgba(0,0,0,0.35)", "stroke-width": 0.6, transform: `rotate(${Math.round(Math.random() * 180)} ${px.toFixed(1)} ${py.toFixed(1)})` });
         else el(capa, "rect", { x: px, y: py, width: 2, height: 2, fill: polvo, stroke: "rgba(0,0,0,0.25)", "stroke-width": 0.5 });
         const z = Math.floor((px - ZX0) / ZW);
         if (z >= 0 && z < ZONAS) {
@@ -1690,10 +1920,19 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let grosor = 1;
     let pieza = 0;
     const notas = [];
+    const molde = paso.que === "molde"; // v68: el mooncake se prensa en su molde de madera (antes se trazaba una flor)
     const g = el(s, "g", {});
     const prensa = el(s, "g", {});
-    el(prensa, "rect", { x: -60, y: -14, width: 120, height: 14, rx: 4, fill: "rgb(170,124,72)", stroke: TINTA, "stroke-width": 3 });
-    el(prensa, "rect", { x: -8, y: -50, width: 16, height: 38, rx: 4, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 3 });
+    if (molde) {
+      el(prensa, "rect", { x: -44, y: -26, width: 88, height: 26, rx: 4, fill: "rgb(150,96,56)", stroke: TINTA, "stroke-width": 3 });
+      el(prensa, "rect", { x: -38, y: -6, width: 76, height: 6, fill: "rgb(110,66,36)" }); // la flor tallada abajo
+      for (let i = -3; i <= 3; i++) el(prensa, "rect", { x: i * 10 - 2, y: -5, width: 4, height: 4, fill: "rgb(196,140,90)" });
+      el(prensa, "rect", { x: -9, y: -70, width: 18, height: 46, rx: 5, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 3 });
+      el(prensa, "circle", { cx: 0, cy: -72, r: 9, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 3 });
+    } else {
+      el(prensa, "rect", { x: -60, y: -14, width: 120, height: 14, rx: 4, fill: "rgb(170,124,72)", stroke: TINTA, "stroke-width": 3 });
+      el(prensa, "rect", { x: -8, y: -50, width: 16, height: 38, rx: 4, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 3 });
+    }
     // la guia del grosor
     const BASE = 150;
     const ALTO = 60;
@@ -1705,12 +1944,19 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       const h = ALTO * grosor;
       const w = 60 + (1 - grosor) * 70;
       el(g, "ellipse", { cx: 150, cy: BASE - h / 2, rx: w / 2, ry: h / 2, fill: I.color, stroke: TINTA, "stroke-width": 3 });
+      if (molde && grosor < 0.75) {
+        // el dibujo del molde se va marcando arriba (la flor y el borde de petalos)
+        const k2 = Math.min(1, (0.75 - grosor) / 0.4);
+        const yy = BASE - h + Math.min(10, h * 0.25);
+        el(g, "ellipse", { cx: 150, cy: yy, rx: w * 0.36, ry: Math.max(2, h * 0.12), fill: "none", stroke: "rgba(150,80,30,0.8)", "stroke-width": 2, opacity: k2 });
+        for (let i = -2; i <= 2; i++) el(g, "circle", { cx: 150 + i * w * 0.12, cy: yy, r: 2.5, fill: "rgba(150,80,30,0.8)", opacity: k2 });
+      }
       if (grosor < 0.22) for (let i = 0; i < 3; i++) el(g, "path", { d: `M${140 + i * 10} ${BASE - h} l4 ${h * 0.8}`, stroke: TINTA, "stroke-width": 2 }); // se rajo
       prensa.setAttribute("transform", `translate(150 ${BASE - h - 2})`);
       cuenta.textContent = `PIECE ${pieza + 1} / ${PIEZAS}`;
     };
     pintar();
-    ayuda("Tap to smash · stop in the green band, then Ready");
+    ayuda(molde ? "Tap to press the mold · stop in the green band, then Ready" : "Tap to smash · stop in the green band, then Ready");
     s.addEventListener("pointerdown", (e) => {
       if (!vivo) return;
       e.preventDefault();
@@ -2195,6 +2441,91 @@ export function crearPaso(area, paso, ctx, alTerminar) {
 
   // ---------- APILAR (v61) ----------
   // la vaporera va y viene: tocar para soltarla justo encima de la de abajo
+  else if (paso.t === "apilar" && paso.que === "perlas") {
+    // v68 (rom: "el corazon no pega con un milk tea"): las perlas de tapioca. La cuchara va y
+    // viene arriba del vaso: tocar para soltarlas justo en el centro.
+    const N = paso.n || 3;
+    const VX0 = 112;
+    const VX1 = 188;
+    const VY0 = 64;
+    const VY1 = 178;
+    el(s, "rect", { x: VX0, y: VY0, width: VX1 - VX0, height: VY1 - VY0, fill: "rgba(255,255,255,0.55)", stroke: TINTA, "stroke-width": 3 });
+    el(s, "rect", { x: VX0 + 3, y: VY0 + 22, width: VX1 - VX0 - 6, height: VY1 - VY0 - 25, fill: paso.color || "rgb(214,170,120)" });
+    const fondo = el(s, "g", {});
+    el(s, "rect", { x: VX0, y: VY0, width: VX1 - VX0, height: VY1 - VY0, fill: "none", stroke: TINTA, "stroke-width": 3 });
+    el(s, "path", { d: `M${VX0 + 8} ${VY0 + 8} L${VX0 + 8} ${VY1 - 10}`, stroke: "rgba(255,255,255,0.6)", "stroke-width": 4, "stroke-linecap": "round" });
+    el(s, "line", { x1: 150, y1: VY0 - 6, x2: 150, y2: VY0 + 14, stroke: "rgb(80,150,80)", "stroke-width": 3, "stroke-dasharray": "4 3" }); // el centro
+    const mesa = el(s, "g", {});
+    const cuchara = el(s, "g", {});
+    el(cuchara, "rect", { x: 14, y: -4, width: 60, height: 7, rx: 3, fill: "rgb(196,170,140)", stroke: TINTA, "stroke-width": 2.5 });
+    el(cuchara, "path", { d: "M-18 -6 Q0 18 18 -6 Z", fill: "rgb(226,232,238)", stroke: TINTA, "stroke-width": 2.5 });
+    const enCuchara = el(cuchara, "g", {});
+    const perla = (g, x, y) => {
+      el(g, "circle", { cx: x, cy: y, r: 4.2, fill: "rgb(60,38,34)", stroke: TINTA, "stroke-width": 1 });
+      el(g, "circle", { cx: x - 1.4, cy: y - 1.4, r: 1.2, fill: "rgba(255,255,255,0.5)" });
+    };
+    const llenarCuchara = () => {
+      enCuchara.innerHTML = "";
+      for (const [x, y] of [[-8, -6], [0, -8], [8, -6], [-4, -11], [4, -11]]) perla(enCuchara, x, y);
+    };
+    llenarCuchara();
+    const cayendo = el(s, "g", {});
+    const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
+    let k = 0;
+    let suma = 0;
+    let x = 60;
+    let dir = 1;
+    let caida = null;
+    const VEL = 110 * rapido(0.35);
+    let tPrev = 0;
+    cuenta.textContent = `PEARLS 0 / ${N}`;
+    ayuda("Tap to drop the pearls right in the middle of the cup");
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo || caida) return;
+      e.preventDefault();
+      caida = { x, y: 34 };
+      enCuchara.innerHTML = "";
+    });
+    bucle((t) => {
+      const dt = Math.min(0.05, (t - tPrev) / 1000);
+      tPrev = t;
+      if (!caida) {
+        x += dir * VEL * dt;
+        if (x > 240) dir = -1;
+        if (x < 60) dir = 1;
+        s.dataset.apilar = `${x.toFixed(1)},150`;
+      }
+      cuchara.setAttribute("transform", `translate(${x.toFixed(1)} 34)`);
+      s.dataset.cae = caida ? "1" : "0";
+      cayendo.innerHTML = "";
+      if (caida) {
+        const dentroVaso = caida.x > VX0 + 6 && caida.x < VX1 - 6;
+        const destino = dentroVaso ? VY1 - 8 - k * 5 : VY1;
+        caida.y = Math.min(destino, caida.y + 300 * dt);
+        for (const [dx, dy] of [[-6, 0], [0, -3], [6, 0], [-3, 5], [3, 5]]) perla(cayendo, caida.x + dx, caida.y + dy);
+        if (caida.y >= destino) {
+          const off = Math.abs(caida.x - 150);
+          const e = !dentroVaso ? 1 : off <= ancho(8) + 2 ? 3 : off <= ancho(22) + 4 ? 2 : 1;
+          suma += e;
+          // quedan al fondo del vaso (o en la mesa, si cayeron afuera)
+          for (const [dx, dy] of [[-6, 0], [0, -3], [6, 0], [-3, 4], [3, 4]]) {
+            if (dentroVaso) perla(fondo, Math.max(VX0 + 7, Math.min(VX1 - 7, caida.x + dx)), destino + dy);
+            else perla(mesa, caida.x + dx, destino + dy - 4);
+          }
+          k++;
+          cuenta.textContent = `PEARLS ${k} / ${N}`;
+          sonar(e === 3 ? "tocar" : e === 2 ? "hito" : "no");
+          vibrar(e === 3 ? 12 : 25);
+          caida = null;
+          x = Math.random() < 0.5 ? 60 : 240;
+          dir = x < 150 ? 1 : -1;
+          if (k >= N) fin(Math.round(suma / N));
+          else llenarCuchara();
+        }
+      }
+    });
+  }
+
   else if (paso.t === "apilar") {
     const oblea = paso.que === "oblea";
     const N = oblea ? paso.n || 1 : mas(paso.n || 3, 1);
@@ -2238,10 +2569,12 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       const dt = Math.min(0.05, (t - tPrev) / 1000);
       tPrev = t;
       mov.innerHTML = "";
+      s.dataset.cae = cayendo ? "1" : "0";
       if (!cayendo) {
         x += dir * VEL * dt;
         if (x > 240) dir = -1;
         if (x < 60) dir = 1;
+        s.dataset.apilar = `${x.toFixed(1)},${arriba.toFixed(1)}`;
         canasta(mov, x, 40);
       } else {
         const destino = BASE - (k + 1) * H;
@@ -2270,7 +2603,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // hacer circulitos con el dedo sobre la masa hasta que quede bien redonda (y no pasarse)
   else if (paso.t === "bolitas") {
     const N = mas(paso.n || 3, 1);
-    const color = paso.color || MASA;
+    const color = paso.color || MASA_R;
     const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
     const hechas = el(s, "g", {});
     const masa = el(s, "path", { d: "", fill: color, stroke: TINTA, "stroke-width": 3 });
@@ -2348,16 +2681,43 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // rom: "la mantequilla en vez de verterla, deberiamos esparcirla": pasar el cuchillo con
   // mantequilla por toda la arepa, sin salirse. Se cubre por cuadritos; salirse ensucia.
   else if (paso.t === "untar") {
+    // v68: tambien el barro sobre el pollo en su hoja, el arequipe en la oblea y el huevo en el jianbing
+    const sobre = paso.sobre || "arepa";
     const color = paso.color || "rgb(255,226,120)";
     const CX = 150;
     const CY = 104;
-    const RX = 88;
-    const RY = 60;
+    const RX = sobre === "oblea" || sobre === "crepe" ? 76 : sobre === "hoja" ? 92 : 88;
+    const RY = sobre === "oblea" || sobre === "crepe" ? 64 : sobre === "hoja" ? 58 : 60;
     const dentro = (x, y) => ((x - CX) / RX) ** 2 + ((y - CY) / RY) ** 2 <= 1;
-    // la arepa asada, vista desde arriba (con sus marquitas de la plancha)
     el(s, "ellipse", { cx: CX, cy: CY + 6, rx: RX + 6, ry: RY + 6, fill: "rgba(60,40,30,0.2)" });
-    el(s, "ellipse", { cx: CX, cy: CY, rx: RX, ry: RY, fill: paso.fondo || "rgb(244,214,140)", stroke: TINTA, "stroke-width": 3 });
-    for (const [x, y, rx] of [[-40, -20, 12], [10, -32, 9], [44, 6, 13], [-14, 22, 11], [-58, 18, 7], [30, 34, 8]]) el(s, "ellipse", { cx: CX + x, cy: CY + y, rx, ry: rx * 0.55, fill: "rgb(206,150,80)", opacity: 0.8 });
+    if (sobre === "hoja") {
+      // el pollo envuelto en hoja de loto: las nervaduras salen del centro
+      el(s, "ellipse", { cx: CX, cy: CY, rx: RX, ry: RY, fill: "rgb(96,150,70)", stroke: TINTA, "stroke-width": 3 });
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        el(s, "line", { x1: CX, y1: CY, x2: CX + (RX - 6) * Math.cos(a), y2: CY + (RY - 6) * Math.sin(a), stroke: "rgb(150,196,110)", "stroke-width": 2 });
+      }
+      el(s, "path", { d: `M${CX - 60} ${CY - 14} Q${CX} ${CY - 34} ${CX + 58} ${CY - 10}`, fill: "none", stroke: "rgb(70,120,50)", "stroke-width": 3 }); // el doblez
+      el(s, "circle", { cx: CX, cy: CY, r: 5, fill: "rgb(150,196,110)", stroke: "rgb(70,120,50)", "stroke-width": 2 });
+    } else if (sobre === "oblea") {
+      el(s, "ellipse", { cx: CX, cy: CY, rx: RX, ry: RY, fill: "rgb(246,222,170)", stroke: TINTA, "stroke-width": 3 });
+      for (let i = -4; i <= 4; i++) {
+        el(s, "line", { x1: CX + i * 16, y1: CY - RY * Math.sqrt(Math.max(0, 1 - ((i * 16) / RX) ** 2)) + 3, x2: CX + i * 16, y2: CY + RY * Math.sqrt(Math.max(0, 1 - ((i * 16) / RX) ** 2)) - 3, stroke: "rgba(214,180,120,0.8)", "stroke-width": 1.5 });
+        el(s, "line", { x1: CX - RX * Math.sqrt(Math.max(0, 1 - ((i * 13) / RY) ** 2)) + 3, y1: CY + i * 13, x2: CX + RX * Math.sqrt(Math.max(0, 1 - ((i * 13) / RY) ** 2)) - 3, y2: CY + i * 13, stroke: "rgba(214,180,120,0.8)", "stroke-width": 1.5 });
+      }
+    } else if (sobre === "crepe") {
+      // el jianbing en la plancha: la masa ya cuajada
+      el(s, "ellipse", { cx: CX, cy: CY, rx: RX + 14, ry: RY + 12, fill: "rgb(70,70,80)", stroke: TINTA, "stroke-width": 3 });
+      el(s, "ellipse", { cx: CX, cy: CY, rx: RX, ry: RY, fill: "rgb(250,228,160)", stroke: "rgb(200,160,90)", "stroke-width": 2 });
+      for (const [x, y, rr] of [[-30, -18, 9], [24, -26, 7], [36, 14, 10], [-20, 26, 8]]) el(s, "ellipse", { cx: CX + x, cy: CY + y, rx: rr, ry: rr * 0.6, fill: "rgb(236,196,120)", opacity: 0.7 });
+      // el huevo recien roto, en el medio
+      el(s, "ellipse", { cx: CX + 4, cy: CY - 2, rx: 18, ry: 13, fill: "rgba(255,255,250,0.85)" });
+      el(s, "circle", { cx: CX + 4, cy: CY - 2, r: 7, fill: "rgb(255,196,40)", stroke: "rgb(220,150,20)", "stroke-width": 1.5 });
+    } else {
+      // la arepa asada, vista desde arriba (con sus marquitas de la plancha)
+      el(s, "ellipse", { cx: CX, cy: CY, rx: RX, ry: RY, fill: paso.fondo || "rgb(244,214,140)", stroke: TINTA, "stroke-width": 3 });
+      for (const [x, y, rx] of [[-40, -20, 12], [10, -32, 9], [44, 6, 13], [-14, 22, 11], [-58, 18, 7], [30, 34, 8]]) el(s, "ellipse", { cx: CX + x, cy: CY + y, rx, ry: rx * 0.55, fill: "rgb(206,150,80)", opacity: 0.8 });
+    }
     // la mantequilla queda solo sobre la arepa (recortada a su forma); lo que se sale mancha la mesa aparte
     const idU = `untar${++idClip}`;
     const cp = el(el(s, "defs", {}), "clipPath", { id: idU });
@@ -2379,7 +2739,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let fuera = 0;
     let total = 0;
     s.dataset.untar = `${CX},${CY},${RX},${RY}`;
-    ayuda("Drag the knife all over the arepa · don't spread off the edge");
+    ayuda({ hoja: "Cover the whole package in clay · don't spill off", oblea: "Spread the arequipe all over the wafer · stay on it", crepe: "Spread the egg all over the crepe · stay on it" }[sobre] || "Drag the knife all over the arepa · don't spread off the edge");
     const untarEn = (x, y) => {
       total++;
       if (!dentro(x, y)) {
@@ -2387,7 +2747,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         if (fuera % 4 === 1) el(capaFuera, "circle", { cx: x, cy: y, r: 5, fill: color, opacity: 0.6, stroke: "rgba(0,0,0,0.2)", "stroke-width": 1 }); // se ensucia la mesa
         return;
       }
-      el(capa, "circle", { cx: x, cy: y, r: R_UNTAR, fill: color, opacity: 0.32 });
+      el(capa, "circle", { cx: x, cy: y, r: R_UNTAR, fill: color, opacity: sobre === "hoja" ? 0.5 : 0.32 });
       for (const c of celdas) if (!c.ok && Math.abs(c.x - x) <= R_UNTAR * 0.8 && Math.abs(c.y - y) <= R_UNTAR * 0.8) c.ok = true;
     };
     s.addEventListener("pointerdown", (e) => {
@@ -2422,6 +2782,91 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", soltar);
+  }
+
+  // ---------- ROMPER (v68, el pollo del mendigo) ----------
+  // al servirlo, se rompe el barro a martillazos: tocar en cada marquita verde
+  else if (paso.t === "romper") {
+    const N = mas(paso.n || 4, 1);
+    const CX = 150;
+    const CY = 104;
+    const RX = 92;
+    const RY = 56;
+    const R = ancho(17, 0.3) + 3;
+    el(s, "ellipse", { cx: CX, cy: CY + 8, rx: RX + 6, ry: RY + 6, fill: "rgba(60,40,30,0.25)" });
+    // adentro (se ve al final): el pollo dorado sobre la hoja abierta
+    const adentro = el(s, "g", { opacity: 0 });
+    el(adentro, "ellipse", { cx: CX, cy: CY, rx: RX + 4, ry: RY + 4, fill: "rgb(96,150,70)", stroke: TINTA, "stroke-width": 3 });
+    el(adentro, "ellipse", { cx: CX, cy: CY + 2, rx: RX - 26, ry: RY - 14, fill: "rgb(222,150,70)", stroke: TINTA, "stroke-width": 3 });
+    el(adentro, "path", { d: `M${CX - 40} ${CY - 10} Q${CX} ${CY - 30} ${CX + 40} ${CY - 8}`, fill: "none", stroke: "rgb(246,200,120)", "stroke-width": 5, "stroke-linecap": "round" });
+    const barro = el(s, "g", {});
+    el(barro, "ellipse", { cx: CX, cy: CY, rx: RX, ry: RY, fill: "rgb(150,100,64)", stroke: TINTA, "stroke-width": 3 });
+    for (const [x, y, rr] of [[-50, -20, 8], [-10, -34, 6], [34, -18, 9], [54, 16, 7], [-30, 22, 9], [8, 30, 6]]) el(barro, "ellipse", { cx: CX + x, cy: CY + y, rx: rr, ry: rr * 0.6, fill: "rgb(176,124,82)" });
+    el(barro, "path", { d: `M${CX - 60} ${CY - 28} Q${CX - 20} ${CY - 46} ${CX + 30} ${CY - 40}`, fill: "none", stroke: "rgba(255,230,200,0.35)", "stroke-width": 6, "stroke-linecap": "round" });
+    const grietas = el(barro, "g", {});
+    const meta = el(s, "circle", { r: R, fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 3, "stroke-dasharray": "5 4" });
+    const mazo = el(s, "g", { opacity: 0 });
+    el(mazo, "rect", { x: -4, y: -46, width: 8, height: 40, rx: 3, fill: "rgb(196,150,100)", stroke: TINTA, "stroke-width": 2.5 });
+    el(mazo, "rect", { x: -18, y: -58, width: 36, height: 16, rx: 4, fill: "rgb(120,120,130)", stroke: TINTA, "stroke-width": 2.5 });
+    const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
+    const rr = azarDe("romper");
+    const lugares = Array.from({ length: N }, (_, i) => {
+      const a = (i / N) * Math.PI * 2 + rr() * 0.8;
+      const d = 0.35 + rr() * 0.4;
+      return [CX + (RX - R) * d * Math.cos(a), CY + (RY - R) * d * Math.sin(a)];
+    });
+    let k = 0;
+    let buenos = 0;
+    const ponerMeta = () => {
+      const [x, y] = lugares[k];
+      meta.setAttribute("cx", x.toFixed(1));
+      meta.setAttribute("cy", y.toFixed(1));
+      s.dataset.romper = `${x.toFixed(1)},${y.toFixed(1)}`;
+      cuenta.textContent = `CRACK ${k} / ${N}`;
+    };
+    ponerMeta();
+    ayuda("Tap the green marks to crack the clay open");
+    bucle((t) => meta.setAttribute("r", (R * (0.92 + 0.08 * Math.sin(t / 160))).toFixed(1)));
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo || k >= N) return;
+      e.preventDefault();
+      const [x, y] = aSvg(e);
+      const [mx, my] = lugares[k];
+      const ok = Math.hypot(x - mx, y - my) <= R + 2;
+      if (ok) buenos++;
+      sonar(ok ? "tocar" : "no");
+      vibrar(ok ? 18 : 30);
+      mazo.setAttribute("opacity", 1);
+      mazo.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(-20)`);
+      setTimeout(() => mazo.setAttribute("opacity", 0), 160);
+      // la grieta, donde pego
+      for (let j = 0; j < 4; j++) {
+        const a = (j / 4) * Math.PI * 2 + rr();
+        let px = x;
+        let py = y;
+        let d = `M${px.toFixed(1)} ${py.toFixed(1)}`;
+        for (let q = 0; q < 3; q++) {
+          px += Math.cos(a + (rr() - 0.5)) * (6 + rr() * 6);
+          py += Math.sin(a + (rr() - 0.5)) * (5 + rr() * 5);
+          d += ` L${px.toFixed(1)} ${py.toFixed(1)}`;
+        }
+        el(grietas, "path", { d, fill: "none", stroke: TINTA, "stroke-width": ok ? 2.5 : 1.5, "stroke-linejoin": "round" });
+      }
+      k++;
+      if (k >= N) {
+        meta.setAttribute("opacity", 0);
+        cuenta.textContent = `CRACK ${N} / ${N}`;
+        // el barro se abre y se ve el pollo
+        adentro.setAttribute("opacity", 1);
+        barro.style.transition = "transform 0.35s ease-in, opacity 0.35s ease-in";
+        barro.style.transformOrigin = "150px 104px";
+        barro.style.transform = "scale(1.12) translateY(14px)";
+        barro.style.opacity = "0";
+        fin(estrellasDeAciertos(buenos, N));
+        return;
+      }
+      ponerMeta();
+    });
   }
 
   // ---------- ELEGIR ----------
