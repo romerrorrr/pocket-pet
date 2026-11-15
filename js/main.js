@@ -254,6 +254,11 @@ let cartaReleida = false; // v48: la carta abierta es una que ya habia llegado (
 let verCartas = false; // v48: en la pestana del diario, la lista de cartas en vez de las paginas
 let verAlbum = false; // v50: el album de stickers
 let verMeses = false; // v50: la lista de "Our months"
+// v67: el calendario del diario y la ventana de paginas de la tira
+let verCalendario = false;
+let cal = { mes: null, filtro: "todo", marcado: null };
+let anclaDiario = null; // la primera pagina (la mas nueva) de la ventana; null = las ultimas
+let recienElegida = null; // la pagina que se eligio en el calendario (se marca un momento)
 const controller = new ControladorVistas();
 let guardadoAuto;
 
@@ -2919,7 +2924,8 @@ function renderConsulta() {
     if (verCartas) R.renderCartas(tmp, cartasQueLlegaron());
     else if (verAlbum) R.renderAlbum(tmp, { tengo: lugaresReg.desbloqueados, nombre: nombreDeLugar });
     else if (verMeses) R.renderMeses(tmp, mesesDisponibles().map((m) => ({ mes: m, nombre: nombreDelMes(m), anio: m.slice(0, 4) })));
-    else R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi(), cartas: cartasQueLlegaron().length, meses: mesesDisponibles().length, album: cuantosTiene(lugaresReg.desbloqueados), ...opcionesPagina() });
+    else if (verCalendario) R.renderCalendario(tmp, diario, { ...cal, hoy: claveDelDia(), primera: diario.primeraFecha(), saltos: saltosCalendario() });
+    else R.renderDiario(tmp, diario, { puedeRepetirFinal: Final.dijoQueSi(), cartas: cartasQueLlegaron().length, meses: mesesDisponibles().length, album: cuantosTiene(lugaresReg.desbloqueados), ventana: ventanaDiario(), ...opcionesPagina() });
   }
   else if (tipo === "stats") {
     elegirDeseo();
@@ -2941,7 +2947,10 @@ function renderConsulta() {
   if (cabecera) cabecera.remove();
   R.renderCuaderno(screenEl, tipo === "backup" ? "ajustes" : tipo, tmp.innerHTML, estiloCuaderno);
   if (tipo !== "shop") estadoTiendaUI = {};
-  if (tipo !== "diary") verCartas = verAlbum = verMeses = false;
+  if (tipo !== "diary") {
+    verCartas = verAlbum = verMeses = verCalendario = false;
+    anclaDiario = null;
+  }
   if (tipo === "shop") wireTienda();
   const pestanaTienda = screenEl.querySelector('.cuaderno-pestanas [data-pestana="shop"]');
   if (pestanaTienda && tienda.nuevas().length) pestanaTienda.classList.add("con-novedad");
@@ -2976,16 +2985,35 @@ function renderConsulta() {
     sub("btn-ver-meses", () => (verMeses = true));
     sub("btn-meses-volver", () => (verMeses = false));
     for (const b of screenEl.querySelectorAll("[data-abrir-mes]")) b.addEventListener("click", () => abrirMes(b.dataset.abrirMes, "diario"));
+    // v67: el calendario
+    const abrirCal = () => {
+      verCalendario = true;
+      const dia = anclaDiario ? centroDeVentana() : claveDelDia();
+      cal = { mes: dia.slice(0, 7), filtro: cal.filtro || "todo", marcado: dia };
+    };
+    sub("btn-ver-calendario", abrirCal);
+    sub("btn-semana-calendario", abrirCal);
+    for (const b of screenEl.querySelectorAll("[data-cal-volver]")) b.addEventListener("click", () => {
+      Sonido.sonar("tocar");
+      verCalendario = false;
+      renderConsulta();
+    });
+    if (verCalendario) wireCalendario();
+    for (const b of screenEl.querySelectorAll("[data-mover-paginas]")) b.addEventListener("click", () => moverPaginas(b.dataset.moverPaginas));
     const estilo = document.getElementById("btn-estilo-cuaderno");
     if (estilo) estilo.addEventListener("click", () => {
       Sonido.sonar("tocar");
       abrirEstiloCuaderno();
     });
     // volver de decorar una pagina: que quede a la vista
-    if (paginaParaMostrar) {
+    if (paginaParaMostrar && !verCalendario) {
       const fig = screenEl.querySelector(`.polaroid[data-dia="${paginaParaMostrar}"]`);
       if (fig) fig.scrollIntoView({ block: "nearest", inline: "center" });
-      paginaParaMostrar = null;
+      if (fig && recienElegida === paginaParaMostrar) {
+        fig.classList.add("recien-elegida");
+        setTimeout(() => fig.classList.remove("recien-elegida"), 1600);
+      }
+      paginaParaMostrar = recienElegida = null;
     }
   }
   if (tipo === "stats") {
@@ -3037,7 +3065,8 @@ function renderConsulta() {
   }
   document.getElementById("btn-volver-consulta").addEventListener("click", () => {
     estadoTiendaUI = {};
-    verCartas = verAlbum = verMeses = false;
+    verCartas = verAlbum = verMeses = verCalendario = false;
+    anclaDiario = null;
     conTransicion(irACasa);
   });
 }
@@ -3455,6 +3484,110 @@ function renderSobreMesActual() {
   });
 }
 
+// ------------------------------------------------------------------
+// v67: la tira por ventanas y el calendario
+// ------------------------------------------------------------------
+
+/** Las paginas que se ven en la tira: alrededor de la que se quiere mostrar, o desde el ancla. */
+function ventanaDiario() {
+  const todas = diario.todasRecientes();
+  const N = R.VENTANA_DIARIO;
+  const maxInicio = Math.max(0, todas.length - N);
+  let inicio = 0;
+  const buscar = (c) => todas.findIndex((e) => e.fecha === c);
+  if (paginaParaMostrar && buscar(paginaParaMostrar) >= 0) {
+    const i = buscar(paginaParaMostrar);
+    const actual = anclaDiario ? Math.max(0, buscar(anclaDiario)) : 0;
+    // si ya esta a la vista, la ventana no se mueve
+    inicio = i >= actual && i < actual + N ? actual : Math.min(maxInicio, Math.max(0, i - Math.floor(N / 2)));
+  } else if (anclaDiario) {
+    const i = buscar(anclaDiario);
+    inicio = i < 0 ? 0 : Math.min(maxInicio, i);
+  }
+  anclaDiario = inicio > 0 ? todas[inicio].fecha : null;
+  return { entradas: todas.slice(inicio, inicio + N), masNuevas: inicio > 0, masViejas: inicio + N < todas.length };
+}
+
+function centroDeVentana() {
+  const v = ventanaDiario();
+  return v.entradas.length ? v.entradas[Math.floor(v.entradas.length / 2)].fecha : claveDelDia();
+}
+
+/** Correr la tira: hacia las paginas mas nuevas o mas viejas (se solapan 3 para no perderse). */
+function moverPaginas(hacia) {
+  Sonido.sonar("tocar");
+  const todas = diario.todasRecientes();
+  const N = R.VENTANA_DIARIO;
+  const actual = anclaDiario ? Math.max(0, todas.findIndex((e) => e.fecha === anclaDiario)) : 0;
+  const paso = N - 3;
+  const inicio = hacia === "nuevas" ? Math.max(0, actual - paso) : Math.min(Math.max(0, todas.length - N), actual + paso);
+  anclaDiario = inicio > 0 ? todas[inicio].fecha : null;
+  renderConsulta();
+  const tira = screenEl.querySelector(".tira-diario");
+  if (tira && hacia === "nuevas") tira.scrollLeft = tira.scrollWidth;
+}
+
+/** Los atajos del calendario (solo los que tienen paginas para mostrar). */
+function saltosCalendario() {
+  const hoy = claveDelDia();
+  const primera = diario.primeraFecha();
+  const [y, m, d] = hoy.split("-").map(Number);
+  const s = [{ id: "hoy", nombre: "Today", glifo: "check" }];
+  if (primera && primera < hoy) s.push({ id: "primero", nombre: "Our first day", glifo: "corazon" });
+  const haceMes = claveDelDia(new Date(y, m - 2, Math.min(d, new Date(y, m - 1, 0).getDate())));
+  const haceAnio = claveDelDia(new Date(y - 1, m - 1, Math.min(d, new Date(y - 1, m, 0).getDate())));
+  if (primera && haceMes >= primera.slice(0, 7) + "-01") s.push({ id: "mes", nombre: "1 month ago", glifo: "girar" });
+  if (primera && haceAnio >= primera.slice(0, 7) + "-01") s.push({ id: "anio", nombre: "1 year ago", glifo: "girar" });
+  return s;
+}
+
+function destinoSalto(id) {
+  const hoy = claveDelDia();
+  const [y, m, d] = hoy.split("-").map(Number);
+  if (id === "primero") return diario.primeraFecha() || hoy;
+  if (id === "mes") return claveDelDia(new Date(y, m - 2, Math.min(d, new Date(y, m - 1, 0).getDate())));
+  if (id === "anio") return claveDelDia(new Date(y - 1, m - 1, Math.min(d, new Date(y - 1, m, 0).getDate())));
+  return hoy;
+}
+
+function wireCalendario() {
+  const cont = screenEl.querySelector(".calendario-diario");
+  if (!cont) return;
+  cont.addEventListener("click", (e) => {
+    const flecha = e.target.closest("[data-cal-mes]");
+    if (flecha && !flecha.disabled) {
+      Sonido.sonar("tocar");
+      cal.mes = R.sumarMes(cal.mes, Number(flecha.dataset.calMes));
+      renderConsulta();
+      return;
+    }
+    const salto = e.target.closest("[data-cal-ir]");
+    if (salto) {
+      Sonido.sonar("tocar");
+      const dia = destinoSalto(salto.dataset.calIr);
+      cal.mes = dia.slice(0, 7);
+      cal.marcado = dia;
+      renderConsulta();
+      return;
+    }
+    const filtro = e.target.closest("[data-cal-filtro]");
+    if (filtro) {
+      Sonido.sonar("tocar");
+      cal.filtro = filtro.dataset.calFiltro;
+      renderConsulta();
+      return;
+    }
+    const dia = e.target.closest("[data-cal-dia]");
+    if (dia) {
+      Sonido.sonar("tocar");
+      cal.marcado = dia.dataset.calDia;
+      verCalendario = false;
+      paginaParaMostrar = recienElegida = dia.dataset.calDia;
+      renderConsulta();
+    }
+  });
+}
+
 function wireDiario() {
   // v21: despues del si, el video del momento arriba del diario (se ve y se guarda)
   if (Final.dijoQueSi()) {
@@ -3707,7 +3840,7 @@ let borradorHoy = null; // { animo, texto } mientras no se guarda (sobrevive a i
 let escribiendo = { clave: null, alDiario: false };
 
 function irAlDiario() {
-  verCartas = verAlbum = verMeses = false;
+  verCartas = verAlbum = verMeses = verCalendario = false;
   controller.abrirConsulta("diary");
   controller.vista = "consulta";
   renderVistaActual();

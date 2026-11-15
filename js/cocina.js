@@ -53,6 +53,7 @@ export const LIQUIDOS = {
   caldo: { nombre: "broth", color: "rgb(214,170,110)" },
   // v64
   vinagre_dulce: { nombre: "sweet vinegar sauce", color: "rgb(150,70,40)" },
+  te_negro: { nombre: "black tea", color: "rgb(150,90,50)" },
 };
 /** v58: lo que se corta, se lava o se aplasta */
 export const INGREDIENTES = {
@@ -197,6 +198,20 @@ export function dibujarIngrediente(g, que, x0, x1, cy) {
   const borde = { stroke: TINTA, "stroke-width": 3 };
   if (que === "pescado") return dibujarPescado(g, x0, x1, cy, h);
   if (que === "bokchoy") return dibujarBokchoy(g, (x0 + x1) / 2, cy);
+  if (que === "queso") {
+    // v66: el bloque de queso campesino, con sus huequitos
+    el(g, "rect", { x: x0 + 10, y: cy - 22, width: L - 20, height: 40, rx: 6, fill: "rgb(250,232,170)", ...borde });
+    el(g, "rect", { x: x0 + 14, y: cy - 18, width: L - 28, height: 5, rx: 2, fill: "rgb(255,246,214)" });
+    for (const [fx, fy, r] of [[0.2, 0.2, 4], [0.45, -0.3, 3], [0.7, 0.35, 4.5], [0.85, -0.2, 2.5], [0.33, 0.55, 2.5]]) el(g, "circle", { cx: x0 + L * fx, cy: cy + 10 * fy, r, fill: "rgb(230,206,130)" });
+    return;
+  }
+  if (que === "pollo") {
+    // v66: una pechuga de pollo cruda
+    el(g, "path", { d: `M${x0 + 8} ${cy + 6} Q${x0 + 4} ${cy - 26} ${x0 + L * 0.45} ${cy - 24} Q${x1 - 6} ${cy - 20} ${x1 - 4} ${cy + 2} Q${x0 + L * 0.6} ${cy + 26} ${x0 + 8} ${cy + 6} Z`, fill: "rgb(246,206,190)", ...borde });
+    el(g, "path", { d: `M${x0 + 22} ${cy - 10} Q${x0 + L * 0.5} ${cy - 20} ${x1 - 24} ${cy - 8}`, fill: "none", stroke: "rgb(252,228,216)", "stroke-width": 4 });
+    for (const fx of [0.3, 0.5, 0.7]) el(g, "path", { d: `M${x0 + L * fx} ${cy - 6} q6 6 2 14`, fill: "none", stroke: "rgb(230,180,166)", "stroke-width": 2 });
+    return;
+  }
   if (que === "cebollin") {
     // un manojito de tres cebollines (parte blanca con raicitas, parte verde)
     for (let j = 0; j < 3; j++) {
@@ -311,6 +326,82 @@ function dibujarBokchoy(g, cx, cy) {
   for (const t of [0.35, 0.6, 0.82]) el(g, "line", { x1: cx + 6 + 72 * t, y1: cy - 2 - 4 * t, x2: cx + 6 + 72 * t + 6, y2: cy - 18 + 6 * t, stroke: "rgb(200,230,180)", "stroke-width": 2 });
 }
 
+// ---------- v66: las adiciones van EN la comida (rom: "no se meten en la comida, se ponen en el plato") ----------
+// como entra cada adicion: salsa (chorreada por encima), polvo (espolvoreada), encima (puesta arriba),
+// dentro (en la bebida: perlas al fondo, hielo arriba), lado (al lado, en el plato: el pan, el limon…)
+const MODO_ADICION = { chile: "salsa", soya: "salsa", vinagre: "salsa", salsa_dulce: "salsa", arequipe: "salsa", hogao: "salsa", aji: "salsa", guacamole: "salsa", crema: "salsa", sesamo: "polvo", azucar: "polvo", canela: "polvo", pimienta: "polvo", sal: "polvo", coco: "polvo", osmanto: "polvo", cebollin: "polvo", cilantro: "polvo", mani: "polvo", panela: "polvo", perlas: "dentro", hielo: "dentro", almojabana: "lado", limon: "lado", bocadillo: "lado" };
+const PICADO = { cebollin: "rgb(110,180,80)", cilantro: "rgb(90,170,80)", mani: "rgb(214,170,110)", osmanto: "rgb(250,180,50)" }; // los polvos que son pedacitos
+// donde esta la comida en el dibujo de cada plato (% de la imagen): [x0, y0, x1, y1] (calculado de los pixeles)
+export const ZONA_COMIDA = {"aborrajados":[20,31,80,46],"ajiaco":[14,32,84,48],"arepa":[22,30,78,51],"arroz_con_leche":[22,24,78,46],"arroz_frito":[21,29,67,46],"bao_cerdo":[24,28,76,60],"bao_frijol":[24,28,76,60],"bao_verdura":[24,28,76,60],"bunuelos":[30,24,73,54],"camarones_longjing":[23,31,81,42],"chocolate":[30,27,88,61],"chunjuan":[17,29,80,51],"congyoubing":[20,29,80,49],"dan_ta":[21,24,79,42],"dongpo":[25,25,71,46],"empanada":[22,30,84,49],"fideos":[16,30,84,48],"guotie":[18,32,82,59],"hargow":[18,32,82,59],"jianbing":[19,11,81,63],"jiaozi":[18,32,82,59],"jugo":[20,33,73,67],"lamian":[14,30,84,48],"liusha":[22,26,78,56],"longjing":[30,22,70,66],"lulada":[34,31,66,66],"luna":[15,22,85,59],"mango_biche":[24,10,79,38],"mapo":[15,27,85,42],"obleas":[21,33,75,46],"osmanto":[23,26,84,45],"ouzi":[17,29,83,49],"pandebono":[23,23,77,51],"patacones":[12,35,85,46],"pescado_vinagre":[15,33,74,48],"pollo_mendigo":[20,23,80,49],"salpicon":[21,21,75,67],"siumai":[16,19,84,61],"sopa_ternera":[18,27,82,42],"tamal":[21,30,79,58],"tanghulu":[39,17,56,50],"tangyuan":[20,24,80,50],"te_leche":[32,16,68,66],"tinto":[30,28,60,44],"xiaolongbao":[16,28,84,68],"zongzi":[24,17,76,59]};
+const BEBIDAS = new Set(["te_leche", "tinto", "jugo", "lulada", "chocolate", "longjing"]);
+const azarDe = (txt) => {
+  let h = 2166136261;
+  for (const c of txt) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
+    return (h % 10000) / 10000;
+  };
+};
+/**
+ * Lo que se le puso al plato, dibujado SOBRE la comida (encima de la imagen del plato).
+ * lista: [{ id, color, icono }]. Devuelve HTML (un svg pixelado + iconitos). La caja que lo
+ * contiene tiene que tener el mismo tamano y lugar que la imagen del plato.
+ */
+export function capaAdiciones(lista, receta) {
+  const [x0, y0, x1, y1] = ZONA_COMIDA[receta] || [22, 26, 78, 56];
+  const bebida = BEBIDAS.has(receta);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  let svg = "";
+  let imgs = "";
+  let encima = 0;
+  let lado = 0;
+  const px = 3; // el "pixel" de los platos (son de ~32 px)
+  const punto = (x, y, color, borde = true) => (borde ? `<rect x="${(x + 0.8).toFixed(1)}" y="${(y + 0.8).toFixed(1)}" width="${px}" height="${px}" fill="rgba(22,20,22,0.45)"/>` : "") + `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${px}" height="${px}" fill="${color}"/>`;
+  lista.forEach((o, k) => {
+    const modo = MODO_ADICION[o.id] || "encima";
+    const r = azarDe(o.id + receta);
+    if (modo === "salsa") {
+      // un chorrito en zigzag por encima de la comida (bebidas: un remolino en la superficie)
+      const ya = y0 + h * (bebida ? 0.05 : 0.12) + k * 4;
+      const amp = Math.max(4, h * (bebida ? 0.08 : 0.28));
+      let d = "";
+      for (let t = 0; t <= 1; t += 0.035) {
+        const x = x0 + w * (0.12 + 0.76 * t);
+        const y = ya + amp * (0.5 + 0.5 * Math.sin(t * Math.PI * 5 + k));
+        d += punto(x, y, o.color, true);
+      }
+      svg += `<g class="ad-salsa">${d}</g>`;
+    } else if (modo === "polvo") {
+      const n = PICADO[o.id] ? 9 : 16;
+      let d = "";
+      for (let i = 0; i < n; i++) {
+        const x = x0 + w * (0.1 + 0.8 * r());
+        const y = y0 + h * (bebida ? 0.02 + 0.12 * r() : 0.05 + 0.55 * r());
+        d += punto(x, y, PICADO[o.id] || o.color, true);
+        if (PICADO[o.id]) d += punto(x + px, y, PICADO[o.id], false);
+      }
+      svg += `<g class="ad-polvo">${d}</g>`;
+    } else if (modo === "dentro" && bebida) {
+      if (o.id === "perlas") {
+        let d = "";
+        for (let i = 0; i < 9; i++) d += `<circle cx="${(x0 + w * (0.2 + 0.6 * r())).toFixed(1)}" cy="${(y1 - 6 - 8 * r()).toFixed(1)}" r="3.4" fill="rgb(60,38,34)" stroke="rgb(22,20,22)" stroke-width="0.8"/>`;
+        svg += `<g class="ad-dentro">${d}</g>`;
+      } else imgs += `<img class="ad-hielo" src="${esc(o.icono || "")}" alt="" draggable="false" style="left:${(x0 + w * (0.32 + 0.3 * (k % 2))).toFixed(1)}%;top:${(y0 + h * 0.2).toFixed(1)}%" />` + `<img class="ad-hielo" src="${esc(o.icono || "")}" alt="" draggable="false" style="left:${(x0 + w * 0.62).toFixed(1)}%;top:${(y0 + h * 0.34).toFixed(1)}%" />`;
+    } else if (modo === "lado") {
+      const ang = ((60 + lado++ * 40) * Math.PI) / 180;
+      imgs += `<img class="ad-lado" src="${esc(o.icono || "")}" alt="" draggable="false" style="left:${(50 + 52 * Math.cos(ang)).toFixed(1)}%;top:${(50 + 46 * Math.sin(ang)).toFixed(1)}%" />`;
+    } else {
+      // encima de la comida, chiquito y un poco hundido (el huevo en los fideos, el queso en la arepa…)
+      const cx = x0 + w * (0.5 + (encima % 2 ? 0.22 : -0.08) * Math.min(1, encima));
+      const cy = y0 + h * (bebida ? 0.08 : 0.3) - encima * 3;
+      encima++;
+      imgs += `<img class="ad-encima" src="${esc(o.icono || "")}" alt="" draggable="false" style="left:${cx.toFixed(1)}%;top:${cy.toFixed(1)}%" />`;
+    }
+  });
+  return `<div class="cocina-sobre"><svg viewBox="0 0 100 100" preserveAspectRatio="none" shape-rendering="crispEdges">${svg}</svg>${imgs}</div>`;
+}
+
 /**
  * v65 (rom: "la taza desde donde se pour la leche … se ve bastante fake"): con que se sirve.
  * Una tetera (te), una olleta de metal (agua, cafe) o una jarra de ceramica (leche, jugos,
@@ -319,7 +410,7 @@ function dibujarBokchoy(g, cx, cy) {
  */
 function crearVertedor(padre, liquido, px = 228, py = 40) {
   const L = LIQUIDOS[liquido] || LIQUIDOS.agua;
-  const tipo = liquido === "te" ? "tetera" : liquido === "agua" || liquido === "cafe" ? "olleta" : "jarra";
+  const tipo = liquido === "te" || liquido === "te_negro" ? "tetera" : liquido === "agua" || liquido === "cafe" ? "olleta" : "jarra";
   const chorroBorde = el(padre, "path", { d: "", fill: "none", stroke: TINTA, "stroke-width": 7.5, "stroke-linecap": "round", opacity: 0.85 });
   const chorro = el(padre, "path", { d: "", fill: "none", stroke: L.color, "stroke-width": 4.5, "stroke-linecap": "round" });
   const brillo = el(padre, "path", { d: "", fill: "none", stroke: "rgba(255,255,255,0.55)", "stroke-width": 1.4, "stroke-linecap": "round" });
@@ -540,10 +631,15 @@ export function crearPaso(area, paso, ctx, alTerminar) {
   // ---------- RELLENAR / VERTER ----------
   else if (paso.t === "rellenar" || paso.t === "verter") {
     const MEDIO_RV = ancho(0.09) + 0.015 * (MJ.ollas || 0);
-    const A = 0.71 - MEDIO_RV;
-    const B = 0.71 + MEDIO_RV;
+    // v66: meta = hasta donde llenar (0.71 por defecto); previo = lo que ya habia en el vaso (el te del te con leche)
+    const META = paso.meta || 0.71;
+    const A = META - MEDIO_RV;
+    const B = META + MEDIO_RV;
     const esVerter = paso.t === "verter";
-    let f = 0;
+    const F0 = paso.previo ? paso.previo.nivel : 0;
+    let f = F0;
+    s.dataset.meta = META;
+    s.dataset.desde = F0;
     let apretado = false;
     let barra;
     if (esVerter && (paso.en === "plancha" || paso.en === "plato")) {
@@ -617,7 +713,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         el(s, "ellipse", { cx: G.x + G.w / 2, cy: G.y + G.h + 8, rx: G.w / 2 + 22, ry: 9, fill: "rgb(250,248,240)", stroke: TINTA, "stroke-width": 3 }); // el platico
       }
       el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: taza ? "rgb(250,248,240)" : "rgba(255,255,255,0.55)", stroke: TINTA, "stroke-width": 3 });
-      barra = el(s, "rect", { x: G.x + 3, y: FONDO, width: G.w - 6, height: 0, rx: taza ? 6 : 0, fill: L.color });
+      if (paso.previo) el(s, "rect", { x: G.x + 3, y: FONDO - ALT * F0, width: G.w - 6, height: ALT * F0, fill: (LIQUIDOS[paso.previo.liquido] || LIQUIDOS.agua).color }); // lo que ya estaba
+      barra = el(s, "rect", { x: G.x + 3, y: FONDO - ALT * F0, width: G.w - 6, height: 0, rx: taza ? 6 : 0, fill: L.color });
       el(s, "rect", { x: G.x, y: G.y + G.h * (1 - B), width: G.w, height: G.h * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: "none", stroke: TINTA, "stroke-width": 3 });
       if (taza) for (let i = 0; i < 4; i++) el(s, "rect", { x: G.x + 10 + i * 24, y: G.y + 8, width: 12, height: 4, fill: "rgb(110,170,214)" }); // la cenefa del pocillo
@@ -629,7 +726,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         tPrevV = t;
         if (apretado) f = Math.min(1, f + 0.0085 * dt);
         barra.setAttribute("y", FONDO - ALT * f);
-        barra.setAttribute("height", ALT * f);
+        barra.setAttribute("height", ALT * (f - F0));
         vertedor.actualizar(apretado, [G.x + G.w / 2 + 8, FONDO - ALT * f], t);
         if (f >= 1 && apretado) {
           apretado = false;
@@ -704,7 +801,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const soltar = () => {
       if (!vivo || !apretado) return;
       apretado = false;
-      if (f > 0.05) fin(estrellasDeCantidad(f, A, B));
+      if (f > F0 + 0.05) fin(estrellasDeCantidad(f, A, B));
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", soltar);
@@ -2247,6 +2344,86 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     });
   }
 
+  // ---------- UNTAR (v66) ----------
+  // rom: "la mantequilla en vez de verterla, deberiamos esparcirla": pasar el cuchillo con
+  // mantequilla por toda la arepa, sin salirse. Se cubre por cuadritos; salirse ensucia.
+  else if (paso.t === "untar") {
+    const color = paso.color || "rgb(255,226,120)";
+    const CX = 150;
+    const CY = 104;
+    const RX = 88;
+    const RY = 60;
+    const dentro = (x, y) => ((x - CX) / RX) ** 2 + ((y - CY) / RY) ** 2 <= 1;
+    // la arepa asada, vista desde arriba (con sus marquitas de la plancha)
+    el(s, "ellipse", { cx: CX, cy: CY + 6, rx: RX + 6, ry: RY + 6, fill: "rgba(60,40,30,0.2)" });
+    el(s, "ellipse", { cx: CX, cy: CY, rx: RX, ry: RY, fill: paso.fondo || "rgb(244,214,140)", stroke: TINTA, "stroke-width": 3 });
+    for (const [x, y, rx] of [[-40, -20, 12], [10, -32, 9], [44, 6, 13], [-14, 22, 11], [-58, 18, 7], [30, 34, 8]]) el(s, "ellipse", { cx: CX + x, cy: CY + y, rx, ry: rx * 0.55, fill: "rgb(206,150,80)", opacity: 0.8 });
+    // la mantequilla queda solo sobre la arepa (recortada a su forma); lo que se sale mancha la mesa aparte
+    const idU = `untar${++idClip}`;
+    const cp = el(el(s, "defs", {}), "clipPath", { id: idU });
+    el(cp, "ellipse", { cx: CX, cy: CY, rx: RX - 1.5, ry: RY - 1.5 });
+    const capa = el(s, "g", { "clip-path": `url(#${idU})` });
+    const capaFuera = el(s, "g", {});
+    const cuchillo = el(s, "g", { opacity: 0 });
+    el(cuchillo, "path", { d: "M-6 -4 L26 -4 Q32 0 26 4 L-6 4 Z", fill: "rgb(226,232,238)", stroke: TINTA, "stroke-width": 2.5 });
+    el(cuchillo, "rect", { x: -30, y: -4, width: 24, height: 8, rx: 3, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 2.5 });
+    el(cuchillo, "rect", { x: 4, y: -3, width: 18, height: 4, rx: 2, fill: color });
+    // los cuadritos que hay que cubrir (solo los que caen dentro de la arepa)
+    const CEL = 16;
+    const celdas = [];
+    for (let y = CY - RY + CEL / 2; y < CY + RY; y += CEL) for (let x = CX - RX + CEL / 2; x < CX + RX; x += CEL) if (dentro(x, y) && ((x - CX) / (RX - 6)) ** 2 + ((y - CY) / (RY - 6)) ** 2 <= 1) celdas.push({ x, y, ok: false });
+    el(s, "rect", { x: 30, y: 180, width: 240, height: 10, fill: "rgb(240,230,200)", stroke: TINTA, "stroke-width": 2 });
+    const barra = el(s, "rect", { x: 31, y: 181, width: 0, height: 8, fill: color });
+    const R_UNTAR = ancho(17, 0.3) + 2; // que tan ancho unta el cuchillo
+    let prev = null;
+    let fuera = 0;
+    let total = 0;
+    s.dataset.untar = `${CX},${CY},${RX},${RY}`;
+    ayuda("Drag the knife all over the arepa · don't spread off the edge");
+    const untarEn = (x, y) => {
+      total++;
+      if (!dentro(x, y)) {
+        fuera++;
+        if (fuera % 4 === 1) el(capaFuera, "circle", { cx: x, cy: y, r: 5, fill: color, opacity: 0.6, stroke: "rgba(0,0,0,0.2)", "stroke-width": 1 }); // se ensucia la mesa
+        return;
+      }
+      el(capa, "circle", { cx: x, cy: y, r: R_UNTAR, fill: color, opacity: 0.32 });
+      for (const c of celdas) if (!c.ok && Math.abs(c.x - x) <= R_UNTAR * 0.8 && Math.abs(c.y - y) <= R_UNTAR * 0.8) c.ok = true;
+    };
+    s.addEventListener("pointerdown", (e) => {
+      if (!vivo) return;
+      e.preventDefault();
+      try {
+        s.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* nada */
+      }
+      prev = aSvg(e);
+      cuchillo.setAttribute("opacity", 1);
+    });
+    s.addEventListener("pointermove", (e) => {
+      if (!vivo || !prev) return;
+      const p = aSvg(e);
+      const d = Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+      const pasos = Math.max(1, Math.ceil(d / 6));
+      for (let i = 1; i <= pasos; i++) untarEn(prev[0] + ((p[0] - prev[0]) * i) / pasos, prev[1] + ((p[1] - prev[1]) * i) / pasos);
+      cuchillo.setAttribute("transform", `translate(${p[0].toFixed(1)} ${p[1].toFixed(1)}) rotate(${((Math.atan2(p[1] - prev[1], p[0] - prev[0]) * 180) / Math.PI).toFixed(0)})`);
+      prev = p;
+      const cubierto = celdas.filter((c) => c.ok).length / celdas.length;
+      barra.setAttribute("width", (238 * cubierto).toFixed(1));
+      if (cubierto >= 0.95) {
+        const mancha = fuera / Math.max(1, total);
+        fin(mancha <= 0.08 ? 3 : mancha <= 0.22 ? 2 : 1);
+      }
+    });
+    const soltar = () => {
+      prev = null;
+      cuchillo.setAttribute("opacity", 0);
+    };
+    s.addEventListener("pointerup", soltar);
+    s.addEventListener("pointercancel", soltar);
+  }
+
   // ---------- ELEGIR ----------
   else if (paso.t === "elegir") {
     const opciones = paso.opciones || [];
@@ -2265,21 +2442,12 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     if (paso.pincho) caja.querySelector(".cocina-elegir-plato").classList.add("con-pincho");
     const pintar = () => {
       const ids = [...elegido];
-      const n = ids.length;
       if (paso.pincho) {
         // v64: el tanghulu: las frutas se ensartan en el palito, una encima de otra
         puestos.innerHTML = `<i class="cocina-palito"></i>` + ids.map((id, k) => { const o = opciones.find((x) => x.id === id) || {}; return `<img src="${esc(o.icono || "")}" alt="" draggable="false" style="left:50%;top:${(74 - k * 21).toFixed(1)}%" />`; }).join("");
         return;
       }
-      puestos.innerHTML = ids
-        .map((id, k) => {
-          const o = opciones.find((x) => x.id === id) || {};
-          const ang = ((n === 1 ? 60 : 150 - (k * 120) / Math.max(1, n - 1)) * Math.PI) / 180; // de abajo-izq a abajo-der
-          const x = 50 + 44 * Math.cos(ang);
-          const y = 50 + 40 * Math.sin(ang);
-          return o.icono ? `<img src="${esc(o.icono)}" alt="" draggable="false" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%" />` : `<span style="--c:${esc(o.color || "#fff")};left:${x.toFixed(1)}%;top:${y.toFixed(1)}%"></span>`;
-        })
-        .join("");
+      puestos.innerHTML = capaAdiciones(ids.map((id) => opciones.find((x) => x.id === id)).filter(Boolean), ctx.receta);
     };
     for (const b of caja.querySelectorAll("[data-op]")) {
       b.addEventListener("click", () => {

@@ -1745,12 +1745,13 @@ function cabezaDiario(diario, cartas = 0, extra = {}) {
   return `
     <div class="cabeza-diario">
       ${tarjetaHoy}
-      <div class="semana-diario">
+      <button class="semana-diario" id="btn-semana-calendario" type="button" aria-label="Open the calendar">
         <div class="semana-dias">${tira}</div>
         <div class="racha">${esc(rachaTxt)}</div>
-      </div>
+      </button>
       ${tarjetaRecuerdo}
       <div class="fila-cabeza-diario">
+        ${extra.paginas ? `<button class="tarjeta-calendario" id="btn-ver-calendario" type="button"><i class="icono-calendario" aria-hidden="true"></i> <span>Calendar</span><b>${extra.paginas}</b></button>` : ""}
         ${cartas ? `<button class="tarjeta-cartas" id="btn-ver-cartas" type="button">${glifo("corazon")} <span>Letters</span><b>${cartas}</b></button>` : ""}
         ${extra.meses ? `<button class="tarjeta-meses" id="btn-ver-meses" type="button">${glifo("estrella")} <span>Our months</span><b>${extra.meses}</b></button>` : ""}
         <button class="tarjeta-album" id="btn-ver-album" type="button"><span class="flor-album" aria-hidden="true">✿</span> <span>Sticker album</span><b>${extra.album || 0}/${TOTAL_ALBUM}</b></button>
@@ -1842,18 +1843,128 @@ export function htmlPolaroid(e, { puedeRepetirFinal = false, htmlSticker = null,
     </figure>`;
 }
 
+/**
+ * v67: la tira muestra una ventana de paginas (no todas: con 200 dias pesaba
+ * y no se podia volver atras). opts.ventana = { entradas, masNuevas, masViejas };
+ * en las puntas, una tarjeta para correr la ventana.
+ */
 export function renderDiario(container, diario, opts = {}) {
-  const entradas = diario ? diario.entradasRecientes(60) : [];
+  const v = opts.ventana || { entradas: diario ? diario.entradasRecientes(VENTANA_DIARIO) : [], masNuevas: false, masViejas: false };
+  const entradas = v.entradas;
+  const punta = (cual) =>
+    `<button class="pagina-mas" type="button" data-mover-paginas="${cual}">
+       ${glifo(cual === "nuevas" ? "izq" : "der", "x2")}
+       <span>${cual === "nuevas" ? "Newer pages" : "Older pages"}</span>
+     </button>`;
 
   const cuerpo = entradas.length
-    ? `<div class="tira-diario">${entradas.map((e) => htmlPolaroid(e, opts)).join("")}</div>`
+    ? `<div class="tira-diario">${v.masNuevas ? punta("nuevas") : ""}${entradas.map((e) => htmlPolaroid(e, opts)).join("")}${v.masViejas ? punta("viejas") : ""}</div>`
     : `<div class="vacio-suave">No pages yet. Take care of Baozi and go places together — this notebook writes itself.</div>`;
 
   container.innerHTML = `
     ${encabezado("Diary", "btn-volver-consulta")}
-    ${cabezaDiario(diario, opts.cartas || 0, { meses: opts.meses || 0, album: opts.album || 0 })}
+    ${cabezaDiario(diario, opts.cartas || 0, { meses: opts.meses || 0, album: opts.album || 0, paginas: diario ? diario.entradas.length : 0 })}
     ${cuerpo}
   `;
+}
+
+/** v67: cuantas paginas entran en la tira de una vez. */
+export const VENTANA_DIARIO = 21;
+
+// ------------------------------------------------------------------
+// v67: el calendario del diario (para volver a cualquier dia)
+// ------------------------------------------------------------------
+
+const FILTROS_CAL = [
+  ["todo", "All", ""],
+  ["fotos", "Photos", "camara"],
+  ["cartas", "Letters", "corazon"],
+  ["lugares", "Places", "pin"],
+];
+
+const clave2 = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+/** "2026-10" -> "2026-09" (n = -1) */
+export function sumarMes(mes, n) {
+  const [y, m] = mes.split("-").map(Number);
+  const f = new Date(y, m - 1 + n, 1);
+  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Lo que tiene un dia, para el calendario y sus filtros. */
+export function marcasDelDia(e) {
+  if (!e) return null;
+  const fotos = fotosDelDia(e.fecha).filter((f) => f.dataUrl);
+  return {
+    fotos: fotos.length > 0,
+    cartas: e.cartas.length > 0,
+    lugares: e.lugares.length > 0 || Donde.pinesDe(e.fecha).pines.length > 0,
+    hitos: e.hitos.length > 0,
+    foto: fotos.find((f) => f.tipo === "final") || fotos[0] || null,
+  };
+}
+
+function miniDelDia(e, m) {
+  if (m.foto) return `<img class="cal-mini foto-real" src="${m.foto.dataUrl}" alt="" draggable="false" />`;
+  const f = fotoDelDia(e);
+  if (f.tipo === "lugar") return `<img class="cal-mini" src="${arteDeLugar(f.id)}" alt="" draggable="false" />`;
+  if (f.tipo === "npc") return `<img class="cal-mini retrato" src="${arte("npcs/npc_" + f.id + "_saludo.png")}" alt="" draggable="false" />`;
+  if (e.animo) return caraAnimo(e.animo, "cal-cara");
+  return `<span class="animo-cara cal-cara sin-animo">${spriteCara("ojo_base_energia_alta.png", f.id === "feliz" ? "boca_base_feliz.png" : "boca_base_neutral.png")}</span>`;
+}
+
+/**
+ * opts: { mes: "AAAA-MM", filtro, marcado: clave, hoy: clave, primera: clave, saltos: [{ id, nombre, glifo }] }
+ */
+export function renderCalendario(container, diario, { mes, filtro = "todo", marcado = null, hoy, primera = null, saltos = [] } = {}) {
+  const [y, m] = mes.split("-").map(Number);
+  const primerDiaSemana = new Date(y, m - 1, 1).getDay();
+  const diasMes = new Date(y, m, 0).getDate();
+  let celdas = "";
+  for (let i = 0; i < primerDiaSemana; i++) celdas += `<div class="cal-dia vacio"></div>`;
+  let cuenta = 0;
+  for (let d = 1; d <= diasMes; d++) {
+    const clave = clave2(y, m, d);
+    const e = diario ? diario.entrada(clave) : null;
+    const mk = marcasDelDia(e);
+    const pasa = !!mk && (filtro === "todo" || mk[filtro]);
+    if (pasa) cuenta += 1;
+    const cl = ["cal-dia", e ? "con-pagina" : "sin", e && !pasa ? "filtrado" : "", clave === hoy ? "hoy" : "", clave === marcado ? "marcado" : "", clave > hoy ? "futuro" : ""].filter(Boolean).join(" ");
+    const marcas = mk
+      ? [mk.cartas ? glifo("corazon") : "", mk.lugares ? glifo("pin") : "", mk.hitos ? glifo("estrella") : ""].join("")
+      : "";
+    celdas += e
+      ? `<button class="${cl}" type="button" data-cal-dia="${clave}" aria-label="${esc(fechaLegible(clave))}"><span class="cal-num">${d}</span>${pasa ? miniDelDia(e, mk) : ""}${pasa && marcas ? `<span class="cal-marcas">${marcas}</span>` : ""}</button>`
+      : `<div class="${cl}"><span class="cal-num">${d}</span></div>`;
+  }
+  const mesHoy = hoy.slice(0, 7);
+  const hayAntes = primera && mes > primera.slice(0, 7);
+  const hayDespues = mes < mesHoy;
+  const que = filtro === "todo" ? (cuenta === 1 ? "page" : "pages") : filtro === "fotos" ? "with photos" : filtro === "cartas" ? "with letters" : "with places";
+  container.innerHTML = `
+    ${encabezado("Calendar", "btn-volver-consulta")}
+    <div class="calendario-diario">
+      <div class="cal-lado">
+        <button class="boton chico boton-fantasma cal-volver" id="btn-calendario-volver" data-cal-volver type="button">${glifo("atras")} Pages</button>
+        <div class="cal-saltos">
+          ${saltos.map((s) => `<button class="boton chico cal-salto" type="button" data-cal-ir="${s.id}">${glifo(s.glifo)} ${esc(s.nombre)}</button>`).join("")}
+        </div>
+        <div class="cal-solo">Show only</div>
+        <div class="cal-filtros">
+          ${FILTROS_CAL.map(([id, nombre, g]) => `<button class="cal-filtro ${id === filtro ? "activo" : ""}" type="button" data-cal-filtro="${id}" aria-pressed="${id === filtro}">${g ? glifo(g) : ""}${nombre}</button>`).join("")}
+        </div>
+      </div>
+      <div class="cal-mes">
+        <div class="cal-cabeza">
+          <button class="boton chico boton-fantasma cal-volver-chico" type="button" data-cal-volver aria-label="Back to the pages">${glifo("atras")}</button>
+          <button class="boton chico boton-fantasma cal-flecha" type="button" data-cal-mes="-1" ${hayAntes ? "" : "disabled"} aria-label="Previous month">${glifo("izq")}</button>
+          <div class="cal-titulo"><b>${MESES_LARGOS[m - 1]} ${y}</b><span>${cuenta} ${que}</span></div>
+          <button class="boton chico boton-fantasma cal-flecha" type="button" data-cal-mes="1" ${hayDespues ? "" : "disabled"} aria-label="Next month">${glifo("der")}</button>
+        </div>
+        <div class="cal-semana">${["S", "M", "T", "W", "T", "F", "S"].map((x) => `<span>${x}</span>`).join("")}</div>
+        <div class="cal-grilla">${celdas}</div>
+      </div>
+    </div>`;
 }
 
 /**

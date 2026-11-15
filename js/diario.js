@@ -320,7 +320,19 @@ export class Diario {
 
   /** Mas reciente primero — asi se lee el album. */
   entradasRecientes(limite = 60) {
-    return [...this.entradas].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)).slice(0, limite);
+    return this.todasRecientes().slice(0, limite);
+  }
+
+  /** v67: todas las paginas, la mas reciente primero (el calendario y la tira por ventanas). */
+  todasRecientes() {
+    return [...this.entradas].sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+  }
+
+  /** v67: el dia de la primera pagina (o null). */
+  primeraFecha() {
+    let p = null;
+    for (const e of this.entradas) if (!p || e.fecha < p) p = e.fecha;
+    return p;
   }
 
   aObjeto() {
