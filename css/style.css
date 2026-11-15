@@ -6298,3 +6298,158 @@ button.nota-polaroid {
 @keyframes rest-presenta-gira { to { transform: translate(-50%, -50%) rotate(360deg); } }
 @keyframes rest-presenta-entra { from { transform: scale(0.3); } to { transform: scale(1); } }
 @keyframes rest-presenta-extra { to { transform: translate(-50%, -50%) scale(1); } }
+
+/* v66: las adiciones EN la comida (la capa va justo encima de la imagen del plato) */
+.cocina-sobre { position: absolute; left: 15%; top: 15%; width: 70%; height: 70%; pointer-events: none; }
+.rest-presenta-plato .cocina-sobre { left: 13%; top: 13%; width: 74%; height: 74%; }
+.cocina-sobre svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cocina-sobre svg g { animation: cocina-chorrea 0.3s ease-out; }
+@keyframes cocina-chorrea { from { opacity: 0; transform: translateY(-6px); } }
+.cocina-elegir-puestos .cocina-sobre img, .rest-presenta-plato .cocina-sobre img { position: absolute; transform: translate(-50%, -50%); image-rendering: pixelated; animation: cocina-puesto 0.22s ease-out; }
+.cocina-sobre img.ad-encima { width: 34%; height: 34%; }
+.cocina-sobre img.ad-hielo { width: 24%; height: 24%; opacity: 0.85; }
+.cocina-sobre img.ad-lado { width: 40%; height: 40%; }
+
+/* ------------------------------------------------------------------
+   v67 — El calendario del diario
+   ------------------------------------------------------------------ */
+.tarjeta-calendario {
+  flex: 1 1 150px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: none;
+  background: rgb(255, 236, 214);
+  color: rgb(150, 80, 40);
+  box-shadow: 0 0 0 1px rgba(150, 80, 40, 0.35);
+  font-family: var(--fuente-cuerpo);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.tarjeta-calendario span { flex: 1; }
+.fila-cabeza-diario > button { white-space: nowrap; flex: 1 1 auto; }
+.tarjeta-calendario b { font-family: var(--fuente-display); font-size: 9px; }
+.icono-calendario {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  background: url("../assets/ui/pestanas.png") 0 0 / 140px 20px no-repeat;
+  image-rendering: pixelated;
+}
+/* la semana tambien abre el calendario */
+button.semana-diario { border: none; font: inherit; color: inherit; cursor: pointer; text-align: center; }
+button.semana-diario:active { transform: translateY(1px); }
+
+/* las puntas de la tira: correr a paginas mas nuevas / mas viejas */
+.pagina-mas {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 92px;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  background: rgba(22, 20, 22, 0.04);
+  box-shadow: inset 0 0 0 2px rgba(22, 20, 22, 0.25);
+  border-radius: 2px;
+  color: var(--tinta);
+  font-family: var(--fuente-cuerpo);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  scroll-snap-align: center;
+}
+.pagina-mas:active { transform: translateY(1px); }
+.polaroid.recien-elegida { animation: pagina-elegida 0.4s steps(2) 3; }
+@keyframes pagina-elegida { 50% { transform: translateY(-6px) rotate(-1deg); } }
+
+.calendario-diario { display: flex; gap: 12px; align-items: flex-start; color: var(--tinta); }
+.cal-lado { flex: none; width: 132px; display: flex; flex-direction: column; gap: 6px; }
+.cal-lado .boton { justify-content: flex-start; width: 100%; }
+.calendario-diario .boton-fantasma { --relleno: rgba(22, 20, 22, 0.04); --texto: var(--tinta); --borde: var(--tinta); }
+.cal-saltos { display: flex; flex-direction: column; gap: 6px; }
+.cal-solo { font-family: var(--fuente-cuerpo); font-size: 12px; color: rgba(22, 20, 22, 0.6); margin-top: 4px; }
+.cal-filtros { display: flex; flex-wrap: wrap; gap: 5px; }
+.cal-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 7px;
+  border: none;
+  background: var(--papel);
+  box-shadow: 0 0 0 1.5px rgba(22, 20, 22, 0.6);
+  color: var(--tinta);
+  font-family: var(--fuente-cuerpo);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cal-filtro.activo { background: rgb(160, 210, 140); box-shadow: 0 0 0 2px var(--tinta); }
+.cal-filtro .glifo { width: 12px; height: 12px; }
+
+.cal-mes { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cal-cabeza { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cal-flecha, .cal-volver-chico { min-width: 38px; justify-content: center; }
+.cal-volver-chico { display: none; }
+.cal-flecha[disabled] { opacity: 0.25; pointer-events: none; }
+.cal-titulo { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.cal-titulo b { font-family: var(--fuente-display); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: normal; }
+.cal-titulo span { font-family: var(--fuente-cuerpo); font-size: 12px; color: rgba(22, 20, 22, 0.6); }
+.cal-semana, .cal-grilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.cal-semana span { text-align: center; font-family: var(--fuente-display); font-size: 7px; color: rgba(22, 20, 22, 0.5); padding: 2px 0; }
+.cal-dia {
+  position: relative;
+  aspect-ratio: 1.3;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.3);
+  font: inherit;
+  color: var(--tinta);
+}
+button.cal-dia { cursor: pointer; }
+button.cal-dia:active { transform: translateY(1px); }
+.cal-dia.vacio { background: none; box-shadow: none; }
+.cal-dia.sin { background: rgba(255, 255, 255, 0.25); box-shadow: 0 0 0 1px rgba(22, 20, 22, 0.12); }
+.cal-dia.sin .cal-num, .cal-dia.futuro .cal-num { color: rgba(22, 20, 22, 0.35); }
+.cal-dia.filtrado { background: rgba(255, 255, 255, 0.35); }
+.cal-dia.filtrado .cal-num { color: rgba(22, 20, 22, 0.4); }
+.cal-dia.hoy .cal-num { color: var(--rosa-oscuro); }
+.cal-dia.hoy { box-shadow: 0 0 0 1.5px var(--rosa-oscuro); }
+.cal-dia.marcado { box-shadow: 0 0 0 2.5px rgb(214, 80, 60); z-index: 1; }
+.cal-num { position: absolute; left: 2px; top: 1px; z-index: 2; font-family: var(--fuente-display); font-size: 8px; line-height: 1; padding: 1px; background: rgba(255, 255, 255, 0.7); }
+.cal-mini { width: 88%; height: 84%; object-fit: cover; image-rendering: pixelated; }
+.cal-mini.foto-real { image-rendering: auto; }
+.cal-mini.retrato { object-fit: contain; object-position: center bottom; }
+.cal-dia .animo-cara.cal-cara { width: 44%; height: auto; aspect-ratio: 1; background: rgba(232, 142, 160, 0.22); }
+.cal-dia .animo-cara.cal-cara.sin-animo { background: rgba(22, 20, 22, 0.06); }
+.cal-marcas { position: absolute; right: 1px; bottom: 1px; z-index: 2; display: flex; gap: 1px; padding: 1px; background: rgba(255, 255, 255, 0.75); color: var(--rosa-oscuro); }
+.cal-marcas .glifo { width: 9px; height: 9px; }
+.cal-marcas .g-pin { color: rgb(200, 70, 60); }
+.cal-marcas .g-estrella { color: rgb(200, 140, 30); }
+
+/* pantallas chicas: el calendario arriba y los atajos abajo; las tarjetas del diario, mas bajitas */
+@media (max-width: 700px) {
+  .calendario-diario { flex-direction: column-reverse; gap: 10px; }
+  .cal-lado { width: 100%; }
+  .cal-lado .boton { width: auto; }
+  .cal-saltos { flex-direction: row; flex-wrap: wrap; }
+  .cal-filtros { display: flex; flex-wrap: wrap; }
+  .cal-mes { width: 100%; }
+  .cal-lado .cal-volver { display: none; }
+  .cal-volver-chico { display: inline-flex; }
+  .fila-cabeza-diario { gap: 6px; }
+  .fila-cabeza-diario > button { min-height: 32px; padding: 5px 8px; font-size: 12px; gap: 6px; flex: 1 1 120px; }
+}
