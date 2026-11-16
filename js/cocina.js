@@ -19,6 +19,7 @@
  */
 
 import { dibujarCoccion } from "./coccion.js";
+import { pixelar } from "./pixelar.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -37,6 +38,8 @@ export const RELLENOS = {
   natilla: { nombre: "golden custard", color: "rgb(255,200,80)", sombra: "rgb(226,160,50)" },
   sesamo: { nombre: "black sesame", color: "rgb(60,50,56)", sombra: "rgb(30,26,30)" },
   repollo: { nombre: "cabbage & carrot", color: "rgb(190,220,140)", sombra: "rgb(150,190,100)" },
+  // v70: el jiaozi es de cerdo CON repollo (se ven los pedacitos verdes)
+  carne_repollo: { nombre: "pork & cabbage", color: "rgb(200,120,96)", sombra: "rgb(160,84,70)", motas: "rgb(150,206,110)" },
 };
 export const LIQUIDOS = {
   agua: { nombre: "hot water", color: "rgb(200,226,240)" },
@@ -96,6 +99,7 @@ export const INGREDIENTES = {
   mazorca: { nombre: "corn", color: "rgb(250,210,80)", alto: 36 },
   molde: { nombre: "mooncake", color: "rgb(236,190,120)", alto: 40 },
   perlas: { nombre: "tapioca pearls", color: "rgb(60,38,34)", alto: 20 },
+  cafe: { nombre: "ground coffee", color: "rgb(70,46,32)", alto: 20 },
 };
 export const COCCIONES = {
   vapor: { verbo: "STEAM", boton: "Take it out!", ms: 3600 },
@@ -516,6 +520,7 @@ function crearVertedor(padre, liquido, px = 228, py = 40) {
       brillo.setAttribute("d", "");
     }
     for (const gt of [...gotas.children]) {
+      if (gt.hasAttribute("data-px")) continue; // (la gemela pixelada: se mueve sola con su original)
       const e = (t - gt._t) / 1000;
       if (e > 0.35) gt.remove();
       else {
@@ -544,6 +549,19 @@ function baseEspolvorear(s, receta, plato) {
   };
   const VASOS = { jugo: "rgb(255,196,60)", longjing: "rgb(228,240,232)", mango_biche: "papel" };
   const TAZONES = { ajiaco: "rgb(250,214,110)", arroz_con_leche: "rgb(250,244,226)", mapo: "rgb(200,60,40)" };
+  if (receta === "tinto") {
+    // v70: la olleta con el agua de panela hirviendo: ahi va el cafe molido
+    el(s, "ellipse", { cx, cy: cy + 6, rx: rx + 14, ry: ry + 14, fill: "rgba(60,40,30,0.15)" });
+    el(s, "ellipse", { cx, cy, rx: rx + 12, ry: ry + 12, fill: "rgb(196,204,214)", stroke: TINTA, "stroke-width": 3 });
+    el(s, "ellipse", { cx, cy, rx: rx + 6, ry: ry + 6, fill: "none", stroke: "rgb(70,110,170)", "stroke-width": 3 });
+    el(s, "ellipse", { cx, cy, rx, ry, fill: "rgb(176,120,64)", stroke: "rgba(0,0,0,0.25)", "stroke-width": 2 });
+    for (let i = 0; i < 10; i++) {
+      const [x, y] = dentro(0.8);
+      el(s, "circle", { cx: x, cy: y, r: 2 + r() * 3, fill: "none", stroke: "rgba(255,240,210,0.7)", "stroke-width": 1.5 }); // las burbujas
+    }
+    el(s, "rect", { x: cx + rx + 8, y: cy - 6, width: 34, height: 10, rx: 4, fill: "rgb(90,60,40)", stroke: TINTA, "stroke-width": 2.5 }); // el mango
+    return Z;
+  }
   if (VASOS[receta]) {
     const papel = VASOS[receta] === "papel";
     el(s, "ellipse", { cx, cy: cy + 4, rx: rx + 10, ry: ry + 12, fill: "rgba(60,40,30,0.15)" });
@@ -702,6 +720,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     setTimeout(() => alTerminar(e), 450);
   };
   const s = svg(area);
+  // v69 (rom: "podemos pasar TODO a pixel art para que matchee el juego?"): todo lo que se dibuja
+  // aca se ve en pixeles de 2 unidades (el tamano de los pixeles de los personajes)
+  const pix = pixelar(s, { G: 2 });
   const t0 = performance.now();
   const bucle = (fn) => {
     const f = (ahora) => {
@@ -817,11 +838,16 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     s.dataset.desde = F0;
     let apretado = false;
     let barra;
-    if (esVerter && (paso.en === "plancha" || paso.en === "plato" || paso.en === "wok")) {
+    if (esVerter && (paso.en === "plancha" || paso.en === "plato" || paso.en === "wok" || paso.en === "tazon")) {
       // v61 pasada: verter sobre la plancha (la masa del jianbing) o sobre el plato (el almibar):
       // visto desde arriba, el charquito crece hasta el anillo verde
       const L = LIQUIDOS[paso.liquido] || LIQUIDOS.agua;
-      if (paso.en === "plancha" || paso.en === "wok") {
+      if (paso.en === "tazon") {
+        // v70: el tazon con los fideos ya hervidos: el caldo va encima (fideos y lamian)
+        el(s, "circle", { cx: 130, cy: 108, r: 84, fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+        el(s, "circle", { cx: 130, cy: 108, r: 78, fill: "none", stroke: "rgb(110,150,214)", "stroke-width": 3 });
+        el(s, "circle", { cx: 130, cy: 108, r: 72, fill: "rgb(236,232,222)" });
+      } else if (paso.en === "plancha" || paso.en === "wok") {
         // v68: el wok (camarones Longjing): el te va sobre los camarones, no en una olla vacia
         el(s, "circle", { cx: 130, cy: 108, r: 82, fill: paso.en === "wok" ? "rgb(56,56,64)" : "rgb(70,70,80)", stroke: TINTA, "stroke-width": 3 });
         el(s, "circle", { cx: 130, cy: 108, r: 74, fill: paso.en === "wok" ? "rgb(84,84,96)" : "rgb(96,96,108)" });
@@ -835,6 +861,18 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(s, "circle", { cx: 130, cy: 108, r: 60 * B, fill: "rgba(120,190,110,0.22)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "circle", { cx: 130, cy: 108, r: 60 * A, fill: "none", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       barra = el(s, "circle", { cx: 130, cy: 108, r: 0, fill: L.color, stroke: "rgba(0,0,0,0.25)", "stroke-width": 2, opacity: paso.en === "plato" ? 0.85 : paso.en === "wok" ? 0.8 : 1 });
+      if (paso.en === "tazon") {
+        // los fideos encima del caldo (se ven a traves), y la carne si es lamian
+        for (let i = 0; i < 7; i++) {
+          const y = 108 - 36 + i * 12;
+          el(s, "path", { d: `M${90} ${y} q10 -6 20 0 t20 0 t20 0 t20 0`, fill: "none", stroke: "rgb(196,170,110)", "stroke-width": 6, "stroke-linecap": "round" });
+          el(s, "path", { d: `M${90} ${y} q10 -6 20 0 t20 0 t20 0 t20 0`, fill: "none", stroke: "rgb(250,236,190)", "stroke-width": 3, "stroke-linecap": "round" });
+        }
+        if (ctx.receta === "lamian") for (const [x, y] of [[-30, -30], [16, -34], [30, 20], [-22, 26]]) {
+          el(s, "rect", { x: 130 + x - 10, y: 108 + y - 6, width: 20, height: 12, rx: 3, fill: "rgb(170,80,66)", stroke: TINTA, "stroke-width": 2 });
+          el(s, "rect", { x: 130 + x - 8, y: 108 + y - 4, width: 16, height: 3, fill: "rgb(236,190,170)" });
+        }
+      }
       if (paso.en === "wok") for (const [x, y, gi] of [[-30, -12, false], [4, -26, true], [30, -4, false], [-8, 16, true], [22, 24, false]]) dibujarCamaron(s, 130 + x, 108 + y, 0.75, gi);
       const vertedor = crearVertedor(s, paso.liquido, 236, 44);
       ayuda("Hold to pour · let go in the green ring");
@@ -920,8 +958,15 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(s, "rect", { x: G.x, y: G.y + G.h * (1 - B), width: G.w, height: G.h * (B - A), fill: "rgba(120,190,110,0.28)", stroke: "rgb(80,150,80)", "stroke-width": 2, "stroke-dasharray": "5 4" });
       el(s, "rect", { x: G.x, y: G.y, width: G.w, height: G.h, rx: taza ? 10 : 0, fill: "none", stroke: TINTA, "stroke-width": 3 });
       if (taza) for (let i = 0; i < 4; i++) el(s, "rect", { x: G.x + 10 + i * 24, y: G.y + 8, width: 12, height: 4, fill: "rgb(110,170,214)" }); // la cenefa del pocillo
+      if (paso.colar) {
+        // v70: el colador de tela del tinto, sobre el pocillo (el cafe molido se queda en la tela)
+        el(s, "path", { d: `M${G.x + 18} ${G.y - 26} Q${G.x + G.w / 2} ${G.y + 18} ${G.x + G.w - 18} ${G.y - 26} Z`, fill: "rgb(246,236,214)", stroke: TINTA, "stroke-width": 3 });
+        el(s, "path", { d: `M${G.x + 30} ${G.y - 18} Q${G.x + G.w / 2} ${G.y + 4} ${G.x + G.w - 30} ${G.y - 18}`, fill: "rgb(90,60,44)" }); // el cafe en la tela
+        el(s, "ellipse", { cx: G.x + G.w / 2, cy: G.y - 26, rx: G.w / 2 - 18, ry: 4, fill: "none", stroke: "rgb(150,154,170)", "stroke-width": 3 });
+        el(s, "rect", { x: G.x + G.w - 20, y: G.y - 30, width: 40, height: 7, rx: 3, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 2 });
+      }
       const vertedor = crearVertedor(s, paso.liquido, 244, taza ? 40 : 36);
-      ayuda(`Hold to pour · let go on the green line`);
+      ayuda(paso.colar ? "Hold to strain it into the cup · let go on the green line" : `Hold to pour · let go on the green line`);
       let tPrevV = 0;
       bucle((t) => {
         const dt = Math.min(50, t - tPrevV) / (1000 / 60); // en "cuadros de 60fps" (asi da igual 30, 60 o 120 Hz)
@@ -964,6 +1009,11 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         // v64: la gelatina de caldo (la sopa de adentro del xiaolongbao), en cubitos sobre la carne
         camarones = el(s, "g", { transform: "translate(130 108) scale(0)" });
         for (const [x, y] of [[-16, -8], [6, -14], [14, 6], [-6, 10], [-18, 10], [20, -6]]) el(camarones, "rect", { x, y, width: 9, height: 9, rx: 2, fill: "rgba(250,220,150,0.85)", stroke: "rgb(214,170,100)", "stroke-width": 1.5 });
+      }
+      if (R.motas) {
+        // los pedacitos de repollo en la carne
+        camarones = el(s, "g", { transform: "translate(130 108) scale(0)" });
+        for (const [x, y] of [[-20, -10], [-6, -20], [12, -14], [24, 2], [8, 10], [-14, 12], [-26, 2], [2, -2], [18, 18]]) el(camarones, "rect", { x, y, width: 6, height: 4, rx: 1, fill: R.motas });
       }
       if (paso.relleno === "camaron") {
         camarones = el(s, "g", { transform: "translate(130 108) scale(0)" });
@@ -1022,6 +1072,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const angCanasta = [];
     const disco = el(s, "circle", { cx: 150, cy: 104, r: 74, fill: MASA_R, stroke: TINTA, "stroke-width": 3 });
     el(s, "ellipse", { cx: 150, cy: 104, rx: 34, ry: 30, fill: R.color, stroke: R.sombra, "stroke-width": 3 });
+    if (R.motas) for (const [x, y] of [[-20, -10], [-6, -20], [12, -14], [22, 2], [8, 10], [-14, 12], [-26, 0], [2, -2], [14, 16]]) el(s, "rect", { x: 150 + x, y: 104 + y, width: 6, height: 4, rx: 1, fill: R.motas });
     if (paso.relleno === "camaron") {
       dibujarCamaron(s, 136, 100, 0.8);
       dibujarCamaron(s, 166, 98, 0.8, true);
@@ -1392,7 +1443,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const brilloFuego = el(s, "ellipse", { cx: 150, cy: WOK_Y + 18, rx: 80, ry: 26, fill: "rgb(255,150,60)", opacity: 0.15 });
     const fogon = el(s, "g", {});
     el(fogon, "rect", { x: -60, y: 26, width: 120, height: 8, fill: "rgb(50,46,54)", stroke: TINTA, "stroke-width": 2 });
-    const llama = el(s, "g", {});
+    const llama = el(s, "g", { "data-sin-px": "" }); // (el fuego ya esta hecho de pixeles)
     const PX = 4; // el "pixel" del fuego
     const COLS = 35; // mas ancho que el wok: en la llamarada lo abraza por los costados
     const capasFuego = Array.from({ length: COLS }, () => [
@@ -1403,7 +1454,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       el(llama, "rect", { width: PX / 2, height: PX, fill: "rgb(214,64,40)" }), // la puntita (se afina)
     ]);
     const azul = Array.from({ length: COLS }, () => el(llama, "rect", { width: PX, height: PX, fill: "rgb(110,150,240)" }));
-    const chispas = el(s, "g", {});
+    const chispas = el(s, "g", { "data-sin-px": "" });
     const ruidoFuego = Array.from({ length: COLS }, () => Math.random());
     const wok = el(s, "g", {});
     el(wok, "path", { d: "M-62 -10 Q0 40 62 -10 Z", fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
@@ -1502,6 +1553,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         c._t = t;
       }
       for (const c of [...chispas.children]) {
+        if (c.hasAttribute("data-px")) continue;
         const dt = (t - c._t) / 1000;
         c.setAttribute("y", base - 30 - c._vy * dt);
         c.setAttribute("opacity", Math.max(0, 1 - dt * 1.6));
@@ -2917,6 +2969,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     destruir() {
       vivo = false;
       cancelAnimationFrame(raf);
+      pix.parar();
       if (ctx._alDestruir) ctx._alDestruir();
     },
     resolver(e = 3) {

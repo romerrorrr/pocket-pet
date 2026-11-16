@@ -60,6 +60,9 @@ export const EN_LA_OLLA = {
   sopa_ternera: { pieza: "sopa", n: 1, caldo: "rgb(214,180,120)", trozos: ["rgb(170,70,60)", "rgb(255,226,110)", "rgb(110,170,80)"] },
   tanghulu: { pieza: "pincho", n: 2, cocido: "rgb(214,120,40)" },
   osmanto: { pieza: "gelatina", n: 1 },
+  // v70
+  te_leche: { pieza: "perlas", n: 4 }, // las perlas de tapioca: de blancas a negras brillantes, y suben
+  arroz_con_leche: { pieza: "sopa", n: 1, caldo: "rgb(214,232,240)", trozos: ["rgb(255,255,250)", "rgb(246,244,236)", "rgb(250,250,244)"] },
 };
 
 /**
@@ -148,7 +151,7 @@ export function dibujarCoccion(s, como, recetaId, opts = {}) {
     el(fondo, "rect", { x: 70, y: 40, width: 160, height: 124, rx: 8, fill: "rgb(214,236,248)", stroke: TINTA, "stroke-width": 3 });
     el(fondo, "rect", { x: 78, y: 122, width: 144, height: 5, fill: "rgb(170,200,220)" }); // la rejilla
     for (let i = 0; i < 5; i++) el(frente, "rect", { x: 82 + i * 30, y: 46, width: 3, height: 7, fill: "rgba(255,255,255,0.9)" }); // escarcha
-    lugares = fila(122, 150, 150, 1.5);
+    lugares = fila(122, n === 1 ? 150 : 120, n === 1 ? 150 : 180, n === 1 ? 1.5 : 1.15); // (v70: el tanghulu, dos pinchos lado a lado)
   } else return null;
 
   // ---------- las piezas ----------
@@ -275,6 +278,11 @@ export function dibujarCoccion(s, como, recetaId, opts = {}) {
       }
       // el brillo del caramelo sobre cada fruta (aparece al cocinarse)
       g._caramelo = Array.from({ length: 4 }, (_, j) => el(g, "ellipse", { cx: -2, cy: -11 - j * 13, rx: 3, ry: 2, fill: "rgb(255,240,200)", opacity: 0 }));
+    } else if (p === "perlas") {
+      for (const [x, y] of [[-8, -6], [0, -9], [8, -6], [-4, -1], [5, -1]]) {
+        pc(el(g, "circle", { cx: x, cy: y, r: 4.2, stroke: TINTA, "stroke-width": 1.5 }), "fill", "rgb(236,226,210)", "rgb(64,40,36)");
+        el(g, "circle", { cx: x - 1.4, cy: y - 1.6, r: 1.1, fill: "rgba(255,255,255,0.55)" });
+      }
     } else if (p === "gelatina") {
       el(g, "path", { d: "M-30 0 L-26 -36 L26 -36 L30 0 Z", fill: "rgba(255,255,255,0.5)", stroke: TINTA, "stroke-width": 3 });
       const jalea = pc(el(g, "path", { d: "M-28 -2 L-25 -30 L25 -30 L28 -2 Z" }), "fill", "rgb(250,222,150)", "rgb(250,196,80)");
