@@ -134,6 +134,33 @@ export function dibujarCoccion(s, como, recetaId, opts = {}) {
     const burb = el(extra, "g", {});
     const bs = Array.from({ length: 12 }, (_, i) => el(burb, "circle", { cx: 80 + i * 12.5, cy: 100 + (i % 3) * 2, r: 0, fill: "rgba(255,250,220,0.9)", stroke: "rgb(214,160,60)", "stroke-width": 1 }));
     animados.push((t) => bs.forEach((b, i) => b.setAttribute("r", (Math.max(0, Math.sin(t / 90 + i * 2.3)) * 2.6).toFixed(1))));
+  } else if (como === "tapar") {
+    // v71 (rom: "el guotie se le echa agua pero no pasa nada"): la sarten tapada; el agua hierve y
+    // se va secando, y cuando se acaba la base queda dorada. Destapar justo cuando ya no hay agua.
+    el(fondo, "ellipse", { cx: 150, cy: 112, rx: 98, ry: 36, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
+    el(fondo, "ellipse", { cx: 150, cy: 106, rx: 86, ry: 28, fill: "rgb(96,96,108)" });
+    el(fondo, "rect", { x: 244, y: 104, width: 50, height: 10, rx: 4, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 3 });
+    const agua = el(fondo, "ellipse", { cx: 150, cy: 108, rx: 82, ry: 24, fill: "rgb(196,224,240)", opacity: 0.85 });
+    const burb = el(fondo, "g", {});
+    const bs = Array.from({ length: 10 }, (_, i) => el(burb, "circle", { cx: 82 + i * 15, cy: 108 + (i % 3) * 5 - 5, r: 0, fill: "none", stroke: "rgba(255,255,255,0.9)", "stroke-width": 1.5 }));
+    // la tapa de vidrio, con su perilla, y el vapor que se ve adentro
+    const vapor = el(frente, "g", {});
+    for (let i = 0; i < 5; i++) el(vapor, "ellipse", { cx: 96 + i * 27, cy: 76 + (i % 2) * 6, rx: 12, ry: 6, fill: "rgba(255,255,255,0.75)" });
+    // (el borde de la tapa apoyado en la sarten: el frente pasa por DEBAJO de los guotie)
+    el(frente, "path", { d: "M56 110 Q60 44 150 42 Q240 44 244 110 A94 30 0 0 1 56 110 Z", fill: "rgba(214,236,246,0.3)", stroke: TINTA, "stroke-width": 3 });
+    el(frente, "path", { d: "M56 110 A94 30 0 0 0 244 110", fill: "none", stroke: "rgb(170,180,190)", "stroke-width": 4 });
+    el(frente, "path", { d: "M80 92 Q86 60 130 54", fill: "none", stroke: "rgba(255,255,255,0.8)", "stroke-width": 4, "stroke-linecap": "round" });
+    el(frente, "rect", { x: 138, y: 32, width: 24, height: 12, rx: 4, fill: "rgb(110,72,50)", stroke: TINTA, "stroke-width": 2.5 });
+    animados.push((t, x, centro) => {
+      // el agua se va con la coccion; las burbujas, mientras haya agua; el vapor, igual
+      const queda = Math.max(0, 1 - x / centro);
+      agua.setAttribute("opacity", (0.85 * queda).toFixed(2));
+      agua.setAttribute("rx", (40 + 42 * queda).toFixed(1));
+      agua.setAttribute("ry", (10 + 14 * queda).toFixed(1));
+      bs.forEach((b, i) => b.setAttribute("r", (queda > 0.05 ? Math.max(0, Math.sin(t / 160 + i * 1.9)) * 3 : 0).toFixed(1)));
+      vapor.setAttribute("opacity", (0.3 + 0.7 * Math.min(1, x * 1.5) * (queda > 0 ? 1 : 0.5)).toFixed(2));
+    });
+    lugares = fila(110, n === 1 ? 150 : 100, n === 1 ? 150 : 200, n === 1 ? 1.4 : 1.15);
   } else if (como === "plancha") {
     el(fondo, "ellipse", { cx: 150, cy: 112, rx: 98, ry: 36, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
     el(fondo, "ellipse", { cx: 150, cy: 106, rx: 86, ry: 28, fill: "rgb(96,96,108)" });
@@ -326,7 +353,7 @@ export function dibujarCoccion(s, como, recetaId, opts = {}) {
       if (g._caramelo) g._caramelo.forEach((b) => b.setAttribute("opacity", (0.9 * coc * (1 - que)).toFixed(2)));
       if (g._cuajar) g._cuajar.setAttribute("opacity", (1 - coc).toFixed(2));
     }
-    for (const a of animados) a(t);
+    for (const a of animados) a(t, x, centro);
   };
   return {
     ok: true,
