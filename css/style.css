@@ -6453,3 +6453,6 @@ button.cal-dia:active { transform: translateY(1px); }
   .fila-cabeza-diario { gap: 6px; }
   .fila-cabeza-diario > button { min-height: 32px; padding: 5px 8px; font-size: 12px; gap: 6px; flex: 1 1 120px; }
 }
+
+/* v69: la cocina en pixel art (js/pixelar.js): la figura original se esconde, se ve su gemela pixelada */
+.cocina-svg.pixelada [data-v] { visibility: hidden; }
