@@ -347,7 +347,7 @@ export class Restaurante {
 
   _alDia(ahora) {
     const d = claveDia(ahora);
-    if (this.hoy.dia !== d) this.hoy = { dia: d, turnos: 0, felices: 0, ganado: 0, contado: false, esp: 0 };
+    if (this.hoy.dia !== d) this.hoy = { dia: d, turnos: 0, felices: 0, ganado: 0, contado: false, esp: 0, espServido: false };
   }
 
   primeroDeHoy(ahora = Date.now()) {
@@ -394,7 +394,7 @@ export class Restaurante {
     r.reembolso = viejas.reduce((s, m) => s + ({ vapor2: 120, fuego: 150, lugar4: 200 }[m] || 0), 0);
     r.mejorTurno = ent(d.mejorTurno);
     const h = d.hoy || {};
-    if (typeof h.dia === "string") r.hoy = { dia: h.dia, turnos: ent(h.turnos), felices: ent(h.felices), ganado: ent(h.ganado), contado: h.contado === true, esp: ent(h.esp) };
+    if (typeof h.dia === "string") r.hoy = { dia: h.dia, turnos: ent(h.turnos), felices: ent(h.felices), ganado: ent(h.ganado), contado: h.contado === true, esp: ent(h.esp), espServido: h.espServido === true };
     r.fama = ent(d.fama);
     r.compradas = new Set((Array.isArray(d.compradas) ? d.compradas : []).filter((id) => recetaPorId(id)));
     if (d.libro && typeof d.libro === "object") {
@@ -436,16 +436,17 @@ export class Restaurante {
  * dias del local en el mismo dia real, el especial salia una y otra vez. Ahora:
  *  - una "bolsa": ninguna receta se repite en el dia hasta que salieron todas
  *  - nunca el mismo plato dos veces seguidas
- *  - el especial sale 1 vez por dia real (2 si hay 6+ clientes), aunque abra el local varias veces
+ *  - v72 (rom: "que si o si aparezca en la primera ronda del dia, y luego ya sea random y tenga la
+ *    misma probabilidad que los demas"): vecesEspecial = cuantas veces sale SEGURO en esta ronda
+ *    (1 hasta que se sirva el del dia); con 0, el especial va en la bolsa como cualquier otro
  *  - lo que se pidio hace poco (recientes) sale menos; lo recien comprado (nuevas), mas
  */
 export function elegirPedidos(menu, n, { especial = null, recientes = [], nuevas = [], azar = Math.random, vecesEspecial = null } = {}) {
   if (!menu.length || n <= 0) return [];
   if (menu.length === 1) return Array(n).fill(menu[0]);
-  const conEsp = especial && menu.includes(especial);
+  const veces = especial && menu.includes(especial) ? Math.min(n, vecesEspecial ?? 1) : 0;
+  const conEsp = veces > 0;
   const resto = conEsp ? menu.filter((x) => x !== especial) : [...menu];
-  // vecesEspecial: cuantas veces puede salir todavia hoy (el local se abre varias veces al dia)
-  const veces = conEsp ? Math.min(n, vecesEspecial ?? (n >= 6 ? 2 : 1)) : 0;
   // donde va el especial (si son dos, no pegados)
   const posEsp = new Set();
   while (posEsp.size < veces) {
@@ -487,10 +488,10 @@ export function elegirPedidos(menu, n, { especial = null, recientes = [], nuevas
   return out;
 }
 
-export function armarDia(menu, { fama = 1, especial = null, amigos = [], azar = Math.random, asientos = 0, recientes = [], nuevas = [], especialHoy = 0 } = {}) {
+export function armarDia(menu, { fama = 1, especial = null, amigos = [], azar = Math.random, asientos = 0, recientes = [], nuevas = [], especialGarantizado = true } = {}) {
   const n = clientesPorDia(fama, asientos);
   const pool = [...amigos.map((a) => ({ ...a, amigo: true })), ...CLIENTES.map((c) => ({ ...c, amigo: false }))];
-  const ids = elegirPedidos(menu, n, { especial, recientes, nuevas, azar, vecesEspecial: Math.max(0, (n >= 6 ? 2 : 1) - especialHoy) });
+  const ids = elegirPedidos(menu, n, { especial, recientes, nuevas, azar, vecesEspecial: especialGarantizado ? 1 : 0 });
   const out = [];
   for (let i = 0; i < n; i++) {
     const quien = pool.length ? pool[Math.floor(azar() * pool.length)] : { id: "usagi", nombre: "Usagi", amigo: true };
@@ -817,12 +818,13 @@ export function abrirRestaurante(contenedor, opts) {
 
   // ---------------- el dia ----------------
   function abrirDia() {
+    reg._alDia(Date.now()); // (dia real nuevo: el especial vuelve a estar garantizado)
     const menu = reg.menu(sellados);
     const esp = reg.especial(sellados);
     const cuenta = reg.cuentaHoy();
     // v59: la dificultad sube con la fama (0 en ★1 .. 1 en ★5); en modo relajado, mas facil que nunca
     const dif = reg.relajado ? -0.5 : (reg.estrellasFama() - 1) / 4;
-    const pedidos = armarDia(menu, { fama: reg.estrellasFama(), especial: esp, amigos, asientos: reg.nivel("asientos"), recientes: reg.recientes, nuevas: reg.recetasNuevas(), especialHoy: reg.hoy.esp || 0 });
+    const pedidos = armarDia(menu, { fama: reg.estrellasFama(), especial: esp, amigos, asientos: reg.nivel("asientos"), recientes: reg.recientes, nuevas: reg.recetasNuevas(), especialGarantizado: !reg.hoy.espServido });
     reg.anotarPedidos(pedidos.map((q) => q.receta));
     reg.hoy.esp = (reg.hoy.esp || 0) + pedidos.filter((q) => q.receta === esp).length;
     guardar();
@@ -1008,6 +1010,7 @@ export function abrirRestaurante(contenedor, opts) {
     dia.resenas.push({ quien: p.quien.nombre, texto, estrellas: e });
     if (e === 3) dia.resenas.sort((a, b) => b.estrellas - a.estrellas);
     reg.anotarPlato(r.id, e, dia.cuenta);
+    if (esp) reg.hoy.espServido = true; // v72: desde ahora el especial sale como cualquier otro (hasta manana)
     guardar();
     paso = null;
     const src = arte(p.quien.amigo ? `npcs/npc_${p.quien.id}_saludo.png` : `restaurante/cliente_${p.quien.id}_saludo.png`);
