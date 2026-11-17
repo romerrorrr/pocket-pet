@@ -2665,6 +2665,89 @@ function tapita(s, paso, H) {
   });
 }
 
+// ====================================================================================
+// v76: tanda 2 (las masas).
+// VOLAR (sopa de fideos): cortar tiras del bloque de masa directo a la olla (刀削面), cada pasada a la misma velocidad.
+function volar(s, paso, H) {
+  const { el, TINTA } = H;
+  const N = H.mas(paso.n || 6, 2);
+  const V0 = 0.32 * H.rapido(0.15);
+  const TOL = H.ancho(0.3, 0.35);
+  el(s, "rect", { x: 120, y: 120, width: 150, height: 66, rx: 8, fill: OLLA, stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 126, y: 132, width: 138, height: 48, rx: 4, fill: "rgb(170,204,224)" });
+  const tiras = el(s, "g", {});
+  const bloque = el(s, "rect", { x: 40, y: 50, width: 80, height: 40, rx: 10, fill: H.MASA_R, stroke: TINTA, "stroke-width": 3 });
+  el(s, "line", { x1: 50, y1: 70, x2: 200, y2: 120, stroke: VERDE_O, "stroke-width": 2, "stroke-dasharray": "5 6" });
+  const med = medidor(H, s, { x: 70, y: 14, w: 160, h: 10, a: (1 - TOL) / 2, b: (1 + TOL) / 2 });
+  const cuenta = letrero(H, s, `0 / ${N}`, 284, 40, "end");
+  H.ayuda("Swipe over the dough toward the pot · same speed every time (green)");
+  Object.assign(H.g, { tipo: "volar", v0: V0, n: 0 });
+  let ini = null;
+  let n = 0;
+  const notas = [];
+  arrastrar(s, H, {
+    abajo: (p) => {
+      ini = { p, t: H.ahora() };
+    },
+    arriba: (p) => {
+      if (!ini) return;
+      const d = Math.hypot(p[0] - ini.p[0], p[1] - ini.p[1]);
+      const v = d / Math.max(1, H.ahora() - ini.t);
+      ini = null;
+      if (d < 40 || p[0] < 60) return;
+      med.poner(v / V0 / 2);
+      const nota = H.notaDe(v / V0 - 1, TOL, 0.8);
+      notas.push(nota);
+      n++;
+      H.g.n = n;
+      const grosor = clamp(6 / (v / V0), 2, 12);
+      el(tiras, "path", { d: `M${140 + (n % 6) * 20} ${150 + (n % 3) * 8} q12 -8 24 0`, fill: "none", stroke: H.MASA_R, "stroke-width": grosor.toFixed(1), "stroke-linecap": "round" });
+      bloque.setAttribute("width", Math.max(30, 80 - n * 5));
+      H.sonar(nota >= 2.5 ? "tocar" : "no");
+      cuenta.textContent = `${n} / ${N}`;
+      if (n >= N) H.fin(H.promedio(notas));
+    },
+  });
+}
+
+// FLOTAR (tangyuan): hierven en el fondo y van subiendo; tocar cuando ya flotan todos (sin esperar de mas).
+function flotar(s, paso, H) {
+  const { el, TINTA } = H;
+  const N = 5;
+  const az = H.azarDe("flotar");
+  el(s, "rect", { x: 60, y: 60, width: 180, height: 120, rx: 10, fill: OLLA, stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 68, y: 74, width: 164, height: 100, rx: 4, fill: "rgb(190,214,226)" });
+  const sube = [];
+  for (let i = 0; i < N; i++) sube.push((1500 + az() * 2600) / H.rapido(0.2));
+  const tUlt = Math.max(...sube);
+  const bolas = sube.map((ts, i) => ({ ts, e: el(s, "circle", { cx: 90 + i * 30, cy: 160, r: 11, fill: "rgb(253,252,248)", stroke: TINTA, "stroke-width": 2.5 }) }));
+  const cuenta = letrero(H, s, `0 / ${N} floating`);
+  H.ayuda("Wait until ALL of them float, then tap to scoop them out");
+  Object.assign(H.g, { tipo: "flotar", tUlt, t: 0 });
+  let tA = 0;
+  H.bucle((t) => {
+    tA = t;
+    H.g.t = t;
+    let arriba = 0;
+    bolas.forEach((b, i) => {
+      const k = clamp((t - b.ts) / 500 + 1, 0, 1);
+      if (t >= b.ts) arriba++;
+      b.e.setAttribute("cy", (160 - 78 * k + Math.sin(t / 200 + i) * 2).toFixed(1));
+    });
+    cuenta.textContent = `${arriba} / ${N} floating`;
+    if (t > tUlt + 4000) H.fin(1.3);
+  });
+  s.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!H.vivo()) return;
+    if (tA < tUlt) {
+      H.sonar("no");
+      return H.fin(1.4);
+    }
+    H.fin(H.notaDe(tA - tUlt - 300, H.ancho(450, 0.3), 2500));
+  });
+}
+
 export const GESTOS = {
   torcer: { nombre: "TWIST", texto: (p) => `Twist the top closed (${p.n || 18} pleats)`, crear: torcer },
   cuchilla: { nombre: "SMEAR", texto: () => "Smear the wrappers with the cleaver", crear: cuchilla },
@@ -2702,5 +2785,7 @@ export const GESTOS = {
   aceite_tibio: { nombre: "WARM OIL", texto: () => "Take each shrimp out the moment it turns white", crear: aceiteTibio },
   raspar: { nombre: "SCRAPE", texto: () => "Scrape the pork skin clean", crear: raspar },
   tapita: { nombre: "PIN LID", texto: () => "Pin the lid back on with toothpicks", crear: tapita },
+  volar: { nombre: "SHAVE", texto: () => "Shave the noodles straight into the pot", crear: volar },
+  flotar: { nombre: "FLOAT", texto: () => "Boil until they all float", crear: flotar },
   palillo: { nombre: "POACH", texto: () => "Poach it gently and test with a chopstick", crear: palillo },
 };
