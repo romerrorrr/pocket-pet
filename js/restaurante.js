@@ -24,6 +24,7 @@
 
 import { HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
 import { crearPaso, capaAdiciones, RELLENOS, LIQUIDOS, COCCIONES, INGREDIENTES } from "./cocina.js";
+import { GESTOS } from "./gestos.js";
 
 // ------------------------------------------------------------------
 // Los datos
@@ -84,54 +85,54 @@ const BAO = (relleno) => [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", re
  * precio: lo que paga un plato de 3 estrellas. compra: lo que cuesta desbloquearla antes de tiempo.
  */
 export const RECETAS = [
-  { id: "bao_cerdo", nombre: "Pork bao", grupo: "dimsum", precio: 8, pasos: [{ t: "cortar", que: "cerdo", n: 4 }, ...BAO("carne")], extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Soft and round, like you know who." },
-  { id: "jiaozi", nombre: "Jiaozi", grupo: "dimsum", precio: 8, pasos: [{ t: "cortar", que: "repollo", n: 4 }, { t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "carne_repollo" }, { t: "plegar", n: 7, forma: "media", relleno: "carne_repollo" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["vinagre", "chile", "jengibre"], amigo: "mimi", nota: "On my planet these are called ‘moon pockets’." },
+  { id: "bao_cerdo", nombre: "Pork bao", grupo: "dimsum", precio: 8, pasos: [{ t: "cortar", que: "cerdo", n: 4 }, { t: "leudar" }, ...BAO("carne").slice(1)], extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Soft and round, like you know who." },
+  { id: "jiaozi", nombre: "Jiaozi", grupo: "dimsum", precio: 8, pasos: [{ t: "cortar", que: "repollo", n: 4 }, { t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "carne_repollo" }, { t: "plegar", n: 7, forma: "media", relleno: "carne_repollo" }, { t: "agua_fria", n: 3 }, { t: "emplatar" }], extras: ["vinagre", "chile", "jengibre"], amigo: "mimi", nota: "On my planet these are called ‘moon pockets’." },
   { id: "te_leche", nombre: "Milk tea", grupo: "chino", precio: 6, pasos: [{ t: "cocinar", como: "calentar" }, { t: "verter", liquido: "te_negro", meta: 0.42 }, { t: "verter", liquido: "leche", previo: { liquido: "te_negro", nivel: 0.42 } }, { t: "agitar", color: "rgb(214,170,120)" }, { t: "cocinar", como: "hervir", texto: "Boil the pearls until they float" }, { t: "apilar", que: "perlas", n: 3, color: "rgb(214,170,120)" }, { t: "emplatar" }], extras: ["perlas", "hielo", "azucar"], amigo: "chagee", nota: "Extra pearls, darling. Always." },
-  { id: "arepa", nombre: "Arepa with cheese", grupo: "colombia", precio: 8, pasos: [{ t: "amasar" }, { t: "aplastar", que: "masa_arepa", n: 1 }, { t: "cocinar", como: "plancha" }, { t: "untar" }, { t: "rallar", que: "queso", n: 4 }, { t: "emplatar" }], extras: ["queso", "huevo"], nota: "Breakfast in Bogotá, lunch in Hangzhou." },
+  { id: "arepa", nombre: "Arepa with cheese", grupo: "colombia", precio: 8, pasos: [{ t: "amasar" }, { t: "palmear", n: 8 }, { t: "cocinar", como: "plancha" }, { t: "untar" }, { t: "rallar", que: "queso", n: 4 }, { t: "emplatar" }], extras: ["queso", "huevo"], nota: "Breakfast in Bogotá, lunch in Hangzhou." },
   { id: "guotie", nombre: "Guotie", grupo: "dimsum", precio: 9, desbloqueo: { fama: 1 }, compra: 60, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "carne" }, { t: "plegar", n: 6, forma: "media", relleno: "carne" }, { t: "verter", liquido: "agua", en: "plancha", tapar: true }, { t: "cocinar", como: "tapar" }, { t: "emplatar" }], extras: ["vinagre", "chile", "sesamo"], nota: "Crispy bottom, soft top." },
-  { id: "bao_verdura", nombre: "Veggie bao", grupo: "dimsum", precio: 8, desbloqueo: { fama: 1 }, compra: 50, pasos: [{ t: "lavar", que: "bokchoy" }, { t: "cortar", que: "bokchoy", n: 4 }, { t: "amasar" }, { t: "rellenar", relleno: "verdura" }, { t: "plegar", n: 9, relleno: "verdura" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Usagi's favorite. Lots of greens." },
-  { id: "tinto", nombre: "Tinto", grupo: "colombia", precio: 5, desbloqueo: { fama: 1 }, compra: 40, pasos: [{ t: "rallar", que: "panela", n: 4 }, { t: "cocinar", como: "calentar" }, { t: "espolvorear", que: "cafe", color: "rgb(70,46,32)" }, { t: "verter", liquido: "cafe", colar: true }, { t: "revolver", color: "rgb(90,56,40)" }, { t: "emplatar" }], extras: ["panela", "azucar"], nota: "A little black coffee. Wakes you right up." },
-  { id: "xiaolongbao", nombre: "Xiaolongbao", grupo: "dimsum", precio: 12, desbloqueo: { fama: 2 }, compra: 90, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "caldo" }, { t: "plegar", n: 14, relleno: "caldo" }, { t: "apilar", n: 2 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["vinagre", "jengibre"], amigo: "ruchong", nota: "Careful… the soup inside is hot!" },
-  { id: "fideos", nombre: "Noodle soup", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "cortar", que: "masa", n: 5 }, { t: "cocinar", como: "hervir" }, { t: "verter", liquido: "caldo", en: "tazon" }, { t: "elegir", topping: true }, { t: "emplatar" }], toppings: ["huevo", "bokchoy", "cebollin"], extras: ["chile", "soya", "sesamo"], nota: "Long noodles, long life." },
+  { id: "bao_verdura", nombre: "Veggie bao", grupo: "dimsum", precio: 8, desbloqueo: { fama: 1 }, compra: 50, pasos: [{ t: "cortar", que: "bokchoy", n: 4 }, { t: "exprimir", que: "verdura", n: 2 }, { t: "amasar" }, { t: "rellenar", relleno: "verdura" }, { t: "plegar", n: 9, relleno: "verdura" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Usagi's favorite. Lots of greens." },
+  { id: "tinto", nombre: "Tinto", grupo: "colombia", precio: 5, desbloqueo: { fama: 1 }, compra: 40, pasos: [{ t: "rallar", que: "panela", n: 4 }, { t: "cocinar", como: "calentar" }, { t: "moler" }, { t: "verter", liquido: "cafe", colar: true }, { t: "revolver", color: "rgb(90,56,40)" }, { t: "emplatar" }], extras: ["panela", "azucar"], nota: "A little black coffee. Wakes you right up." },
+  { id: "xiaolongbao", nombre: "Xiaolongbao", grupo: "dimsum", precio: 12, desbloqueo: { fama: 2 }, compra: 90, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "caldo" }, { t: "torcer", n: 18 }, { t: "apilar", n: 2 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["vinagre", "jengibre"], amigo: "ruchong", nota: "Careful… the soup inside is hot!" },
+  { id: "fideos", nombre: "Noodle soup", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "cortar", que: "masa", n: 5 }, { t: "cocinar", como: "hervir" }, { t: "escurrir" }, { t: "verter", liquido: "caldo", en: "tazon" }, { t: "elegir", topping: true }, { t: "emplatar" }], toppings: ["huevo", "bokchoy", "cebollin"], extras: ["chile", "soya", "sesamo"], nota: "Long noodles, long life." },
   { id: "empanada", nombre: "Empanadas", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "pollo" }, { t: "dibujar", forma: "media_luna", fondo: "rgb(250,226,160)", tinta: "rgb(200,140,70)" }, { t: "cocinar", como: "freir" }, { t: "emplatar" }], extras: ["aji", "limon"], nota: "With ají and a squeeze of lime." },
-  { id: "bao_frijol", nombre: "Red bean bao", grupo: "dimsum", precio: 9, desbloqueo: { fama: 2 }, compra: 60, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "frijol" }, { t: "plegar", n: 9, relleno: "frijol" }, { t: "cocinar", como: "vapor" }, { t: "manga", n: 3, color: "rgb(214,60,60)", fondo: "rgb(252,250,244)", punto: true }, { t: "emplatar" }], extras: ["sesamo", "azucar"], nota: "Sweet bao with a red dot on top." },
-  { id: "jugo", nombre: "Passion fruit juice", grupo: "colombia", precio: 6, desbloqueo: { fama: 1 }, compra: 50, pasos: [{ t: "cortar", que: "fruta", n: 3 }, { t: "verter", liquido: "agua_fria", previo: { liquido: "pulpa", nivel: 0.18 } }, { t: "espolvorear", color: "rgb(255,255,255)" }, { t: "agitar", color: "rgb(255,196,60)" }, { t: "emplatar" }], extras: ["hielo", "azucar"], nota: "Maracuyá! Sour and sunny." },
-  { id: "hargow", nombre: "Har gow", grupo: "dimsum", precio: 12, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "lavar", que: "camaron" }, { t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "camaron" }, { t: "plegar", n: 10, relleno: "camaron" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "See-through skin, a whole shrimp inside." },
-  { id: "bunuelos", nombre: "Buñuelos", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "rallar", que: "queso", n: 5 }, { t: "amasar" }, { t: "bolitas", n: 3, color: "rgb(250,230,170)" }, { t: "cocinar", como: "freir" }, { t: "emplatar" }], extras: ["azucar", "panela"], nota: "Golden cheese balls, like at Christmas." },
+  { id: "bao_frijol", nombre: "Red bean bao", grupo: "dimsum", precio: 9, desbloqueo: { fama: 2 }, compra: 60, pasos: [{ t: "mortero", que: "frijol", n: 8 }, { t: "amasar" }, { t: "rellenar", relleno: "frijol" }, { t: "plegar", n: 9, relleno: "frijol" }, { t: "cocinar", como: "vapor" }, { t: "manga", n: 3, color: "rgb(214,60,60)", fondo: "rgb(252,250,244)", punto: true }, { t: "emplatar" }], extras: ["sesamo", "azucar"], nota: "Sweet bao with a red dot on top." },
+  { id: "jugo", nombre: "Passion fruit juice", grupo: "colombia", precio: 6, desbloqueo: { fama: 1 }, compra: 50, pasos: [{ t: "cortar", que: "fruta", n: 3 }, { t: "verter", liquido: "agua_fria", previo: { liquido: "pulpa", nivel: 0.18 } }, { t: "espolvorear", color: "rgb(255,255,255)" }, { t: "licuar", color: "rgb(255,196,60)" }, { t: "emplatar" }], extras: ["hielo", "azucar"], nota: "Maracuyá! Sour and sunny." },
+  { id: "hargow", nombre: "Har gow", grupo: "dimsum", precio: 12, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "lavar", que: "camaron" }, { t: "amasar" }, { t: "cuchilla", n: 3 }, { t: "rellenar", relleno: "camaron" }, { t: "plegar", n: 10, relleno: "camaron" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "See-through skin, a whole shrimp inside." },
+  { id: "bunuelos", nombre: "Buñuelos", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "rallar", que: "queso", n: 5 }, { t: "amasar" }, { t: "bolitas", n: 3, color: "rgb(250,230,170)" }, { t: "aceite" }, { t: "emplatar" }], extras: ["azucar", "panela"], nota: "Golden cheese balls, like at Christmas." },
   // v58: mas recetas, con los pasos nuevos (cortar, revolver, saltear, lamian, lavar, espolvorear, dibujar, aplastar, agitar)
-  { id: "arroz_frito", nombre: "Fried rice", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 90, pasos: [{ t: "cortar", que: "cebollin", n: 5 }, { t: "verter", liquido: "huevo", en: "plancha" }, { t: "saltear", n: 4 }, { t: "emplatar" }], extras: ["huevo", "soya", "chile"], nota: "Day-old rice makes the best fried rice!" },
+  { id: "arroz_frito", nombre: "Fried rice", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 90, pasos: [{ t: "cortar", que: "cebollin", n: 5 }, { t: "verter", liquido: "huevo", en: "plancha" }, { t: "desgranar", n: 5 }, { t: "saltear", n: 4 }, { t: "emplatar" }], extras: ["huevo", "soya", "chile"], nota: "Day-old rice makes the best fried rice!" },
   { id: "patacones", nombre: "Patacones", grupo: "colombia", precio: 11, desbloqueo: { fama: 2 }, compra: 80, pasos: [{ t: "cortar", que: "platano", n: 3 }, { t: "cocinar", como: "freir" }, { t: "aplastar", que: "platano", n: 2 }, { t: "cocinar", como: "freir", segunda: true }, { t: "espolvorear", color: "rgb(240,240,240)" }, { t: "emplatar" }], extras: ["hogao", "guacamole", "sal"], nota: "Smashed green plantain, fried twice. Crunchy!" },
-  { id: "camarones_longjing", nombre: "Longjing shrimp", grupo: "chino", precio: 15, desbloqueo: { fama: 4 }, compra: 120, pasos: [{ t: "lavar", que: "camaron" }, { t: "saltear", n: 3 }, { t: "verter", liquido: "te", en: "wok" }, { t: "espolvorear", color: "rgb(110,160,80)", hojas: true }, { t: "emplatar" }], extras: ["jengibre"], nota: "龙井虾仁 · Shrimp with Dragon Well tea leaves. Pure Hangzhou." },
+  { id: "camarones_longjing", nombre: "Longjing shrimp", grupo: "chino", precio: 15, desbloqueo: { fama: 4 }, compra: 120, pasos: [{ t: "descascarar" }, { t: "saltear", n: 3 }, { t: "verter", liquido: "te", en: "wok" }, { t: "espolvorear", color: "rgb(110,160,80)", hojas: true }, { t: "emplatar" }], extras: ["jengibre"], nota: "龙井虾仁 · Shrimp with Dragon Well tea leaves. Pure Hangzhou." },
   { id: "lamian", nombre: "Hand-pulled noodles", grupo: "chino", precio: 13, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "amasar" }, { t: "lamian", n: 4 }, { t: "cocinar", como: "hervir" }, { t: "cortar", que: "res", n: 4 }, { t: "verter", liquido: "caldo", en: "tazon" }, { t: "cortar", que: "cebollin", n: 4 }, { t: "emplatar" }], extras: ["chile", "vinagre", "sesamo"], nota: "Pull, fold, pull, fold… sixteen strands!" },
-  { id: "ajiaco", nombre: "Ajiaco", grupo: "colombia", precio: 13, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "cortar", que: "papa", n: 4 }, { t: "cortar", que: "mazorca", n: 2 }, { t: "cortar", que: "pollo", n: 3 }, { t: "cocinar", como: "hervir" }, { t: "revolver", color: "rgb(250,210,80)" }, { t: "espolvorear", color: "rgb(90,150,60)", hojas: true }, { t: "emplatar" }], extras: ["crema", "alcaparras", "aguacate"], nota: "Bogotá's chicken and potato soup. Warms you up." },
-  { id: "pescado_vinagre", nombre: "West Lake fish", grupo: "chino", precio: 16, desbloqueo: { fama: 4 }, compra: 130, pasos: [{ t: "lavar", que: "pescado" }, { t: "cortar", que: "pescado", n: 3 }, { t: "cocinar", como: "hervir" }, { t: "revolver", color: "rgb(130,60,36)" }, { t: "verter", liquido: "vinagre_dulce", en: "plato" }, { t: "emplatar" }], extras: ["jengibre", "cebollin"], nota: "西湖醋鱼 · Fish in sweet vinegar sauce, from the lake itself." },
-  { id: "dongpo", nombre: "Dongpo pork", grupo: "chino", precio: 16, desbloqueo: { fama: 5 }, compra: 130, pasos: [{ t: "cortar", que: "cerdo", n: 4 }, { t: "dibujar", forma: "lazo", fondo: "rgb(214,110,96)", capas: "rgb(252,236,214)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "revolver", color: "rgb(150,70,40)" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["bokchoy", "soya"], nota: "东坡肉 · The poet Su Dongpo's slow pork. Melts in your mouth." },
+  { id: "ajiaco", nombre: "Ajiaco", grupo: "colombia", precio: 13, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "cortar", que: "papa", n: 4 }, { t: "cortar", que: "mazorca", n: 2 }, { t: "cortar", que: "pollo", n: 3 }, { t: "cocinar", como: "hervir" }, { t: "espesar" }, { t: "espolvorear", color: "rgb(90,150,60)", hojas: true }, { t: "emplatar" }], extras: ["crema", "alcaparras", "aguacate"], nota: "Bogotá's chicken and potato soup. Warms you up." },
+  { id: "pescado_vinagre", nombre: "West Lake fish", grupo: "chino", precio: 16, desbloqueo: { fama: 4 }, compra: 130, pasos: [{ t: "lavar", que: "pescado" }, { t: "marcar", n: 4 }, { t: "cocinar", como: "hervir" }, { t: "revolver", color: "rgb(130,60,36)" }, { t: "verter", liquido: "vinagre_dulce", en: "plato" }, { t: "emplatar" }], extras: ["jengibre", "cebollin"], nota: "西湖醋鱼 · Fish in sweet vinegar sauce, from the lake itself." },
+  { id: "dongpo", nombre: "Dongpo pork", grupo: "chino", precio: 16, desbloqueo: { fama: 5 }, compra: 130, pasos: [{ t: "cortar", que: "cerdo", n: 4 }, { t: "dibujar", forma: "lazo", fondo: "rgb(214,110,96)", capas: "rgb(252,236,214)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "banar", n: 4 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["bokchoy", "soya"], nota: "东坡肉 · The poet Su Dongpo's slow pork. Melts in your mouth." },
   { id: "obleas", nombre: "Obleas", grupo: "colombia", precio: 10, desbloqueo: { fama: 3 }, compra: 80, pasos: [{ t: "untar", sobre: "oblea", color: "rgb(170,96,46)" }, { t: "espolvorear", color: "rgb(250,250,246)" }, { t: "apilar", que: "oblea", n: 1 }, { t: "emplatar" }], extras: ["arequipe", "queso", "fresa", "coco"], nota: "Two thin wafers and arequipe. A Colombian street treat." },
   // v61: 20 recetas mas (rom: "agregar unas 20 recetas mas, con mas pasos nuevos"), con los pasos
   // nuevos: enrollar, rallar, pelar, manga, apilar, bolitas
-  { id: "arroz_con_leche", nombre: "Arroz con leche", grupo: "colombia", precio: 9, desbloqueo: { fama: 1 }, compra: 70, pasos: [{ t: "lavar", que: "arroz" }, { t: "cocinar", como: "hervir", texto: "Boil the rice until soft" }, { t: "verter", liquido: "leche", en: "olla", previo: { liquido: "arroz_cocido", nivel: 0.3 } }, { t: "revolver", color: "rgb(250,244,228)" }, { t: "espolvorear", color: "rgb(170,110,60)" }, { t: "emplatar" }], extras: ["canela", "pasas"], nota: "Grandma's recipe: slow, sweet and creamy." },
+  { id: "arroz_con_leche", nombre: "Arroz con leche", grupo: "colombia", precio: 9, desbloqueo: { fama: 1 }, compra: 70, pasos: [{ t: "lavar", que: "arroz" }, { t: "cocinar", como: "hervir", texto: "Boil the rice until soft" }, { t: "verter", liquido: "leche", en: "olla", previo: { liquido: "arroz_cocido", nivel: 0.3 } }, { t: "balanza", g: 120, nombre: "sugar", color: "rgb(250,250,246)" }, { t: "revolver", color: "rgb(250,244,228)" }, { t: "espolvorear", color: "rgb(170,110,60)" }, { t: "emplatar" }], extras: ["canela", "pasas"], nota: "Grandma's recipe: slow, sweet and creamy." },
   { id: "chocolate", nombre: "Chocolate with cheese", lleva: ["queso"], grupo: "colombia", precio: 8, desbloqueo: { fama: 1 }, compra: 70, pasos: [{ t: "cocinar", como: "calentar" }, { t: "rallar", que: "chocolate", n: 5 }, { t: "verter", liquido: "chocolate" }, { t: "agitar", color: "rgb(110,62,40)" }, { t: "cortar", que: "queso", n: 3 }, { t: "emplatar" }], extras: ["queso", "almojabana"], nota: "Santafereño style: drop the cheese in the cup!" },
-  { id: "mango_biche", nombre: "Green mango", grupo: "colombia", precio: 7, desbloqueo: { fama: 1 }, compra: 60, pasos: [{ t: "pelar", que: "mango" }, { t: "cortar", que: "mango", n: 5 }, { t: "espolvorear", color: "rgb(240,240,240)" }, { t: "emplatar" }], extras: ["sal", "limon", "pimienta"], nota: "Sour, salty and crunchy, like at the park." },
-  { id: "chunjuan", nombre: "Spring rolls", grupo: "dimsum", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "cortar", que: "repollo", n: 4 }, { t: "rellenar", relleno: "repollo" }, { t: "enrollar", n: 3, relleno: "repollo" }, { t: "cocinar", como: "freir" }, { t: "emplatar" }], extras: ["vinagre", "chile"], nota: "Thin, crispy and golden. Spring in a roll." },
-  { id: "tangyuan", nombre: "Tangyuan", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "sesamo" }, { t: "bolitas", n: 3, color: "rgb(252,252,250)" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["osmanto"], nota: "Round like a family reunion. Black sesame inside." },
-  { id: "congyoubing", nombre: "Scallion pancake", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "cortar", que: "cebollin", n: 5 }, { t: "enrollar", cebollin: true }, { t: "aplastar", que: "masa_cebollin", n: 1 }, { t: "cocinar", como: "plancha" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "Flaky layers and lots of scallions." },
-  { id: "dan_ta", nombre: "Egg tarts", grupo: "dimsum", precio: 11, desbloqueo: { fama: 2 }, compra: 110, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "revolver", color: "rgb(255,214,90)", texto: "Whisk the egg custard" }, { t: "manga", n: 4, color: "rgb(255,214,90)" }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Wobbly custard, flaky crust, little burnt spots." },
-  { id: "pandebono", nombre: "Pandebono", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "rallar", que: "queso", n: 6 }, { t: "amasar" }, { t: "bolitas", n: 3, color: "rgb(250,226,160)" }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Cheesy bread rolls, best warm with coffee." },
+  { id: "mango_biche", nombre: "Green mango", grupo: "colombia", precio: 7, desbloqueo: { fama: 1 }, compra: 60, pasos: [{ t: "pelar", que: "mango" }, { t: "cortar", que: "mango", n: 5 }, { t: "exprimir", que: "limon", n: 2 }, { t: "espolvorear", color: "rgb(240,240,240)" }, { t: "emplatar" }], extras: ["sal", "limon", "pimienta"], nota: "Sour, salty and crunchy, like at the park." },
+  { id: "chunjuan", nombre: "Spring rolls", grupo: "dimsum", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "cortar", que: "repollo", n: 4 }, { t: "rellenar", relleno: "repollo" }, { t: "enrollar", n: 3, relleno: "repollo" }, { t: "aceite", forma: "rollo" }, { t: "emplatar" }], extras: ["vinagre", "chile"], nota: "Thin, crispy and golden. Spring in a roll." },
+  { id: "tangyuan", nombre: "Tangyuan", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "sesamo" }, { t: "rodar", n: 3 }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["osmanto"], nota: "Round like a family reunion. Black sesame inside." },
+  { id: "congyoubing", nombre: "Scallion pancake", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "cortar", que: "cebollin", n: 5 }, { t: "enrollar", cebollin: true }, { t: "enroscar" }, { t: "cocinar", como: "plancha" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "Flaky layers and lots of scallions." },
+  { id: "dan_ta", nombre: "Egg tarts", grupo: "dimsum", precio: 11, desbloqueo: { fama: 2 }, compra: 110, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "huevo", n: 3 }, { t: "manga", n: 4, color: "rgb(255,214,90)" }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Wobbly custard, flaky crust, little burnt spots." },
+  { id: "pandebono", nombre: "Pandebono", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "rallar", que: "queso", n: 6 }, { t: "balanza", g: 250, nombre: "yuca starch" }, { t: "amasar" }, { t: "bolitas", n: 3, color: "rgb(250,226,160)" }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Cheesy bread rolls, best warm with coffee." },
   { id: "lulada", nombre: "Lulada", grupo: "colombia", precio: 8, desbloqueo: { fama: 2 }, compra: 90, pasos: [{ t: "cortar", que: "lulo", n: 3 }, { t: "aplastar", que: "lulo", n: 1 }, { t: "verter", liquido: "agua_fria", previo: { liquido: "pulpa_lulo", nivel: 0.2 } }, { t: "agitar", color: "rgb(200,220,110)" }, { t: "emplatar" }], extras: ["hielo", "azucar"], nota: "From Cali: smashed lulo, ice and a lot of love." },
   { id: "salpicon", nombre: "Salpicón", grupo: "colombia", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "pelar", que: "papaya" }, { t: "cortar", que: "papaya", n: 5 }, { t: "elegir", topping: true, fruta: true }, { t: "verter", liquido: "jugo_sandia", trozos: "pedido" }, { t: "rallar", que: "queso", n: 4 }, { t: "emplatar" }], toppings: ["banano", "sandia", "fresa", "pina", "uva"], extras: ["helado", "crema"], nota: "A cup of chopped fruit, cream and grated cheese." },
-  { id: "jianbing", nombre: "Jianbing", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 130, pasos: [{ t: "verter", liquido: "masa", en: "plancha" }, { t: "untar", sobre: "crepe", color: "rgb(255,200,60)" }, { t: "espolvorear", color: "rgb(110,180,80)" }, { t: "enrollar", color: "rgb(250,222,150)" }, { t: "emplatar" }], extras: ["chile", "cilantro", "salsa_dulce"], nota: "The street crepe of every Chinese morning." },
-  { id: "mapo", nombre: "Mapo tofu", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 130, pasos: [{ t: "cortar", que: "tofu", n: 4 }, { t: "saltear", n: 3 }, { t: "revolver", color: "rgb(200,60,40)" }, { t: "espolvorear", color: "rgb(60,40,30)" }, { t: "emplatar" }], extras: ["cebollin", "chile"], nota: "Soft tofu, spicy and numbing. Careful!" },
-  { id: "ouzi", nombre: "Osmanthus lotus root", grupo: "chino", precio: 13, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "pelar", que: "loto" }, { t: "rellenar", relleno: "arroz", base: "loto" }, { t: "cocinar", como: "hervir" }, { t: "verter", liquido: "jarabe", en: "plato" }, { t: "emplatar" }], extras: ["osmanto"], nota: "桂花糖藕 · Lotus root stuffed with sticky rice. Very Hangzhou." },
-  { id: "zongzi", nombre: "Zongzi", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "lavar", que: "arroz" }, { t: "rellenar", relleno: "arroz", base: "hoja" }, { t: "enrollar", hoja: true, relleno: "arroz" }, { t: "dibujar", forma: "lazo", fondo: "rgb(110,160,80)", vetas: "rgb(150,200,110)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["azucar", "soya"], nota: "Sticky rice wrapped in bamboo leaves for the Dragon Boat Festival." },
+  { id: "jianbing", nombre: "Jianbing", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 130, pasos: [{ t: "verter", liquido: "masa", en: "plancha" }, { t: "huevo", sobre: "crepe" }, { t: "untar", sobre: "crepe", color: "rgb(255,200,60)", texto: "Spread the egg all over" }, { t: "espolvorear", color: "rgb(110,180,80)" }, { t: "enrollar", color: "rgb(250,222,150)" }, { t: "emplatar" }], extras: ["chile", "cilantro", "salsa_dulce"], nota: "The street crepe of every Chinese morning." },
+  { id: "mapo", nombre: "Mapo tofu", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 130, pasos: [{ t: "cortar", que: "tofu", n: 4 }, { t: "saltear", n: 3 }, { t: "revolver", color: "rgb(200,60,40)" }, { t: "mortero", que: "pimienta", n: 8 }, { t: "emplatar" }], extras: ["cebollin", "chile"], nota: "Soft tofu, spicy and numbing. Careful!" },
+  { id: "ouzi", nombre: "Osmanthus lotus root", grupo: "chino", precio: 13, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "pelar", que: "loto" }, { t: "huecos" }, { t: "cocinar", como: "hervir" }, { t: "verter", liquido: "jarabe", en: "plato" }, { t: "emplatar" }], extras: ["osmanto"], nota: "桂花糖藕 · Lotus root stuffed with sticky rice. Very Hangzhou." },
+  { id: "zongzi", nombre: "Zongzi", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "lavar", que: "arroz" }, { t: "cono", n: 2 }, { t: "rellenar", relleno: "arroz", base: "hoja" }, { t: "dibujar", forma: "lazo", fondo: "rgb(110,160,80)", vetas: "rgb(150,200,110)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["azucar", "soya"], nota: "Sticky rice wrapped in bamboo leaves for the Dragon Boat Festival." },
   { id: "siumai", nombre: "Siu mai", grupo: "dimsum", precio: 13, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "estirar" }, { t: "rellenar", relleno: "carne" }, { t: "plegar", n: 6, forma: "canasta" }, { t: "manga", n: 4, color: "rgb(250,130,40)" }, { t: "apilar", n: 3 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "Open on top, with a little orange dot." },
   { id: "aborrajados", nombre: "Aborrajados", grupo: "colombia", precio: 11, desbloqueo: { fama: 3 }, compra: 120, pasos: [{ t: "pelar", que: "maduro" }, { t: "cortar", que: "maduro", n: 2 }, { t: "rellenar", relleno: "queso", base: "maduro" }, { t: "cocinar", como: "rebozar" }, { t: "cocinar", como: "freir" }, { t: "emplatar" }], extras: ["bocadillo"], nota: "Sweet plantain, cheese inside, fried in batter." },
   { id: "pollo_mendigo", nombre: "Beggar's chicken", grupo: "chino", precio: 17, desbloqueo: { fama: 4 }, compra: 180, pasos: [{ t: "lavar", que: "pollo" }, { t: "enrollar", hoja: true, relleno: "pollo" }, { t: "untar", sobre: "hoja", color: "rgb(160,110,70)" }, { t: "cocinar", como: "horno" }, { t: "romper" }, { t: "emplatar" }], extras: ["soya"], nota: "叫化鸡 · Wrapped in lotus leaf and clay, a Hangzhou legend." },
-  { id: "sopa_ternera", nombre: "West Lake beef soup", grupo: "chino", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "cortar", que: "res", n: 5 }, { t: "cocinar", como: "hervir" }, { t: "revolver", color: "rgb(214,170,110)" }, { t: "verter", liquido: "huevo", en: "olla", previo: { liquido: "caldo", nivel: 0.5 }, meta: 0.66, texto: "Drizzle in the beaten egg" }, { t: "emplatar" }], extras: ["cilantro", "pimienta"], nota: "西湖牛肉羹 · Silky soup with egg ribbons, like ripples on the lake." },
-  { id: "liusha", nombre: "Golden lava buns", grupo: "dimsum", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "natilla" }, { t: "bolitas", n: 2 }, { t: "apilar", n: 3 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: [], nota: "流沙包 · Break it open: the custard flows like gold." },
-  { id: "tamal", nombre: "Tamal", grupo: "colombia", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "lavar", que: "hoja" }, { t: "cortar", que: "papa", n: 3 }, { t: "rellenar", relleno: "pollo", base: "hoja" }, { t: "enrollar", hoja: true, relleno: "pollo" }, { t: "dibujar", forma: "lazo", fondo: "rgb(110,160,80)", vetas: "rgb(150,200,110)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["almojabana", "canela"], nota: "Tolima style, wrapped in banana leaves. Sunday breakfast!" },
-  { id: "longjing", nombre: "Longjing tea", grupo: "chino", precio: 7, desbloqueo: { lugar: "longjing" }, pasos: [{ t: "cocinar", como: "calentar" }, { t: "espolvorear", color: "rgb(110,160,80)", hojas: true }, { t: "verter", liquido: "te", hojas: true }, { t: "emplatar" }], extras: [], nota: "Dragon Well green tea. Not too hot!" },
+  { id: "sopa_ternera", nombre: "West Lake beef soup", grupo: "chino", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "cortar", que: "res", n: 5 }, { t: "cocinar", como: "hervir" }, { t: "revolver", color: "rgb(214,170,110)" }, { t: "remolino", n: 2 }, { t: "emplatar" }], extras: ["cilantro", "pimienta"], nota: "西湖牛肉羹 · Silky soup with egg ribbons, like ripples on the lake." },
+  { id: "liusha", nombre: "Golden lava buns", grupo: "dimsum", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "natilla" }, { t: "bolitas", n: 2 }, { t: "apilar", n: 3 }, { t: "cocinar", como: "vapor" }, { t: "abrir" }, { t: "emplatar" }], extras: [], nota: "流沙包 · Break it open: the custard flows like gold." },
+  { id: "tamal", nombre: "Tamal", grupo: "colombia", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "soasar" }, { t: "cortar", que: "papa", n: 3 }, { t: "rellenar", relleno: "pollo", base: "hoja" }, { t: "enrollar", hoja: true, relleno: "pollo" }, { t: "dibujar", forma: "lazo", fondo: "rgb(110,160,80)", vetas: "rgb(150,200,110)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["almojabana", "canela"], nota: "Tolima style, wrapped in banana leaves. Sunday breakfast!" },
+  { id: "longjing", nombre: "Longjing tea", grupo: "chino", precio: 7, desbloqueo: { lugar: "longjing" }, pasos: [{ t: "termometro" }, { t: "espolvorear", color: "rgb(110,160,80)", hojas: true }, { t: "verter", liquido: "te", hojas: true }, { t: "emplatar" }], extras: [], nota: "Dragon Well green tea. Not too hot!" },
   { id: "tanghulu", nombre: "Tanghulu", grupo: "chino", precio: 8, desbloqueo: { lugar: "hefang" }, pasos: [{ t: "elegir", frutas: true }, { t: "revolver", color: "rgb(214,120,60)" }, { t: "cocinar", como: "caramelo" }, { t: "cocinar", como: "enfriar", texto: "Let the sugar harden" }, { t: "emplatar" }], frutas: ["espino", "fresa", "uva", "mandarina"], extras: ["sesamo"], nota: "Candied fruit on a stick from Hefang Street." },
-  { id: "luna", nombre: "Mooncake", grupo: "chino", precio: 11, desbloqueo: { lugar: "santan" }, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "loto" }, { t: "aplastar", que: "molde", n: 1 }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Round like the moon over Three Pools." },
+  { id: "luna", nombre: "Mooncake", grupo: "chino", precio: 11, desbloqueo: { lugar: "santan" }, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "loto" }, { t: "prensar", n: 2 }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Round like the moon over Three Pools." },
   { id: "osmanto", nombre: "Osmanthus cake", grupo: "chino", precio: 10, desbloqueo: { lugar: "botanico" }, pasos: [{ t: "verter", liquido: "jarabe", en: "olla" }, { t: "revolver", color: "rgb(250,210,110)" }, { t: "elegir", flores: true }, { t: "cocinar", como: "enfriar" }, { t: "emplatar" }], extras: ["osmanto"], nota: "Hangzhou's sweet flower, in a jelly." },
 ];
 // v71 (rom: "el egg tart al final te da la opcion de agregar extras, pero no hay extras disponibles"):
@@ -191,7 +192,16 @@ export function progresoFama(puntos) {
   return { estrella: e, puntos, desde, hasta, f: (puntos - desde) / (hasta - desde) };
 }
 /** Puntos de fama de un plato. */
-export const famaPorPlato = (estrellas) => (estrellas === 3 ? 2 : estrellas === 2 ? 1 : -1);
+export const famaPorPlato = (estrellas) => {
+  const n = nivelDe(estrellas);
+  return n === 3 ? 2 : n === 2 ? 1 : estrellas >= 1.8 ? 0 : -1;
+};
+/**
+ * v73 (rom: "la valoracion de estrellas… mas exacto, tal vez por decimas, porque es demasiado facil
+ * siempre sacar 3 estrellas"): la nota del plato es un numero con una decima (1.0 .. 3.0).
+ * Para premios y caras se usa el nivel: 3 = perfecto (2.9+), 2 = bien (2.3+), 1 = flojo.
+ */
+export const nivelDe = (nota) => (nota >= 2.9 ? 3 : nota >= 2.3 ? 2 : 1);
 export const clientesPorDia = (fama, asientos = 0) => 2 + fama + asientos; // 3 a 7 (+3 con asientos)
 
 /**
@@ -210,12 +220,14 @@ export const mejoraPorId = (id) => MEJORAS_COCINA.find((m) => m.id === id) || nu
 
 /** Lo que paga un plato: el precio segun la calidad, propina con 3 estrellas, el especial el doble. */
 export function pagoDe(receta, estrellas, especial = false, propina = 3) {
-  const base = Math.round(receta.precio * [0, 0.5, 0.8, 1][Math.max(1, Math.min(3, estrellas))]);
-  const extra = estrellas === 3 ? propina : 0;
+  // v73: el pago sube parejo con la nota (1.0 = 40% del precio, 3.0 = el precio entero); propina solo perfecto
+  const nota = Math.max(1, Math.min(3, estrellas));
+  const base = Math.round(receta.precio * (0.4 + 0.6 * ((nota - 1) / 2)));
+  const extra = nivelDe(nota) === 3 ? propina : 0;
   return (base + extra) * (especial ? 2 : 1);
 }
-/** Las estrellas del plato: el promedio de los pasos, redondeado. */
-export const estrellasDelPlato = (pasos) => (pasos.length ? Math.max(1, Math.min(3, Math.round(pasos.reduce((s, x) => s + x, 0) / pasos.length))) : 3);
+/** Las estrellas del plato: el promedio de los pasos, con una decima (v73). */
+export const estrellasDelPlato = (pasos) => (pasos.length ? Math.max(1, Math.min(3, Math.round((pasos.reduce((s, x) => s + x, 0) / pasos.length) * 10) / 10)) : 3);
 
 const claveDia = (t) => {
   const d = new Date(t);
@@ -398,7 +410,7 @@ export class Restaurante {
     r.fama = ent(d.fama);
     r.compradas = new Set((Array.isArray(d.compradas) ? d.compradas : []).filter((id) => recetaPorId(id)));
     if (d.libro && typeof d.libro === "object") {
-      for (const [id, l] of Object.entries(d.libro)) if (recetaPorId(id) && l) r.libro[id] = { mejor: Math.max(0, Math.min(3, ent(l.mejor))), vendidos: ent(l.vendidos) };
+      for (const [id, l] of Object.entries(d.libro)) if (recetaPorId(id) && l) r.libro[id] = { mejor: Math.max(0, Math.min(3, Number.isFinite(l.mejor) ? Math.round(l.mejor * 10) / 10 : 0)), vendidos: ent(l.vendidos) };
     }
     r.decor = new Set((Array.isArray(d.decor) ? d.decor : []).filter((id) => DECOR.some((x) => x.id === id)));
     if (viejas.includes("faroles")) r.decor.add("farolitos");
@@ -517,11 +529,19 @@ export function armarDia(menu, { fama = 1, especial = null, amigos = [], azar = 
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const estrellas = (n, de = 3) => "★".repeat(n) + "☆".repeat(Math.max(0, de - n));
+/** v73: la nota con decimales: tres estrellas llenas en parte y el numero ("★★★ 2.6"). */
+const estrellasNota = (nota) => {
+  const n = Math.max(0, Math.min(3, nota || 0));
+  let h = "";
+  for (let i = 0; i < 3; i++) h += `<span class="est"><i style="width:${(Math.max(0, Math.min(1, n - i)) * 100).toFixed(0)}%">★</i>★</span>`;
+  return `<span class="estr-nota">${h}<b>${n.toFixed(1)}</b></span>`;
+};
 const NOMBRE_PASO = { amasar: "KNEAD", estirar: "ROLL", rellenar: "FILL", plegar: "FOLD", verter: "POUR", elegir: "PICK", emplatar: "PLATE", cortar: "CHOP", revolver: "STIR", saltear: "WOK", lamian: "PULL", lavar: "WASH", espolvorear: "SPRINKLE", dibujar: "DRAW", aplastar: "SMASH", agitar: "SHAKE", enrollar: "ROLL UP", rallar: "GRATE", pelar: "PEEL", manga: "PIPE", apilar: "STACK", bolitas: "BALLS", untar: "SPREAD", romper: "CRACK" };
-const nombrePaso = (p) => (p.t === "cocinar" ? (COCCIONES[p.como] || COCCIONES.vapor).verbo : p.t === "dibujar" && p.forma === "media_luna" ? "CRIMP" : p.t === "dibujar" && p.forma === "lazo" ? "TIE" : p.t === "apilar" && p.que === "perlas" ? "PEARLS" : p.t === "aplastar" && p.que === "molde" ? "PRESS" : NOMBRE_PASO[p.t] || p.t.toUpperCase());
+const nombrePaso = (p) => (GESTOS[p.t] ? GESTOS[p.t].nombre : p.t === "cocinar" ? (COCCIONES[p.como] || COCCIONES.vapor).verbo : p.t === "dibujar" && p.forma === "media_luna" ? "CRIMP" : p.t === "dibujar" && p.forma === "lazo" ? "TIE" : p.t === "apilar" && p.que === "perlas" ? "PEARLS" : p.t === "aplastar" && p.que === "molde" ? "PRESS" : NOMBRE_PASO[p.t] || p.t.toUpperCase());
 
 function textoPaso(p) {
   if (p.texto) return p.texto; // v70: un texto propio para el paso (la natilla, las perlas…)
+  if (GESTOS[p.t]) return GESTOS[p.t].texto(p); // v73
   if (p.t === "amasar") return "Knead the dough";
   if (p.t === "estirar") return "Roll it out";
   if (p.t === "rellenar") return `Fill: ${(RELLENOS[p.relleno] || RELLENOS.carne).nombre}`;
@@ -566,6 +586,11 @@ function textoPaso(p) {
 export function abrirRestaurante(contenedor, opts) {
   const { arte, sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, reg, tienda, sellados = new Set(), amigos = [], nombre = "Baozi", guardar = () => {}, alSalir = () => {}, alCerrarTurno = () => {} } = opts;
   const nombreLugar = opts.nombreLugar || ((id) => id);
+  // v73 (rom: "un modo en el modo director donde pueda probar todas las recetas"): la cocina de prueba.
+  // Con opts.prueba no hay local ni dias: se elige cualquier receta, se cocina y se vuelve a la lista.
+  // reg y tienda son de mentira (los pasa main.js), asi que nada de esto toca lo guardado.
+  const PRUEBA = !!opts.prueba;
+  let difPrueba = 0;
   let vivo = true;
   let dia = null; // el dia en curso: { pedidos, i, ganado, felices, resenas, especial }
   let paso = null; // el paso en curso (cocina.js)
@@ -741,13 +766,13 @@ export function abrirRestaurante(contenedor, opts) {
                 .map((x) => {
                   const ok = menu.includes(x.id);
                   const m = (reg.libro[x.id] || {}).mejor || 0;
-                  return `<button type="button" class="rest-rec ${ok ? "" : "no"} ${x.id === sel ? "sel" : ""}" data-receta="${x.id}">${imgPlato(x.id)}<span>${esc(x.nombre)}</span><small>${ok ? estrellas(m) : x.desbloqueo && x.desbloqueo.fama ? (reg.sePuedeComprar(x.id) ? "learn!" : "★".repeat(x.desbloqueo.fama)) : "?"}</small></button>`;
+                  return `<button type="button" class="rest-rec ${ok ? "" : "no"} ${x.id === sel ? "sel" : ""}" data-receta="${x.id}">${imgPlato(x.id)}<span>${esc(x.nombre)}</span><small>${ok ? (m ? estrellasNota(m) : "") : x.desbloqueo && x.desbloqueo.fama ? (reg.sePuedeComprar(x.id) ? "learn!" : "★".repeat(x.desbloqueo.fama)) : "?"}</small></button>`;
                 })
                 .join("")}</div>`,
             ).join("")}
           </div>
           <div class="rest-hoja detalle">
-            <div class="rest-receta-cabeza">${imgPlato(sel, tengo ? "" : "no")}<div><b>${esc(r.nombre)}</b><span class="rest-estr">${tengo ? estrellas(l.mejor) : ""}</span><small>${tengo ? (l.vendidos ? `Best: ${l.mejor} star${l.mejor === 1 ? "" : "s"} · served ${l.vendidos}` : "Not cooked yet") : bloqueo}</small></div></div>
+            <div class="rest-receta-cabeza">${imgPlato(sel, tengo ? "" : "no")}<div><b>${esc(r.nombre)}</b><span class="rest-estr">${tengo && l.mejor ? estrellasNota(l.mejor) : ""}</span><small>${tengo ? (l.vendidos ? `Best: ${Number(l.mejor).toFixed(1)} · served ${l.vendidos}` : "Not cooked yet") : bloqueo}</small></div></div>
             <ol class="rest-pasos-lista">${r.pasos.map((p) => `<li>${esc(textoPaso(p))}</li>`).join("")}</ol>
             <div class="rest-nota">${amigo ? `<i>${esc(amigo.nombre)}: “${esc(r.nota)}”</i>` : esc(r.nota)}</div>
             ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
@@ -841,7 +866,7 @@ export function abrirRestaurante(contenedor, opts) {
     contenedor.innerHTML = `
       <div class="pantalla-rest cocina">
         ${HTML_VOLVER}
-        ${hud(`DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
+        ${hud(PRUEBA ? `KITCHEN TEST · ${r.nombre.toUpperCase()}` : `DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
         <div class="rest-pasos" id="rest-pasos">${r.pasos.map((x, k) => `<span class="rest-paso" data-k="${k}">${nombrePaso(x)}</span>`).join("")}</div>
         <div class="rest-ticket">
           <div class="rest-ticket-quien"><img src="${arte(p.quien.amigo ? `npcs/npc_${p.quien.id}.png` : `restaurante/cliente_${p.quien.id}.png`)}" alt="" draggable="false" /><span>${esc(p.quien.nombre)}<small>“${esc(p.frase)}”</small></span></div>
@@ -948,11 +973,11 @@ export function abrirRestaurante(contenedor, opts) {
         }
         const prom = estrellasDelPlato(p.notas);
         const pe = $("rest-estr-plato");
-        if (pe) pe.textContent = estrellas(prom);
+        if (pe) pe.innerHTML = estrellasNota(prom);
         const pn = $("rest-notas-pasos");
-        if (pn) pn.textContent = p.notas.map((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${estrellas(x)}`).join(" · ");
-        if (e === 3) cara("ojo_especial_euforico.png", "boca_especial_euforico.png");
-        else if (e === 1) cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png");
+        if (pn) pn.textContent = p.notas.map((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${x.toFixed(1)}`).join(" · ");
+        if (e >= 2.9) cara("ojo_especial_euforico.png", "boca_especial_euforico.png");
+        else if (e < 2) cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png");
         siguientePaso();
       },
     );
@@ -971,19 +996,20 @@ export function abrirRestaurante(contenedor, opts) {
     const accion = contenedor.querySelector("#rest-accion");
     if (accion) accion.classList.add("oculto");
     const e = estrellasDelPlato(p.notas);
+    const nv = nivelDe(e);
     const puestos = [...new Set([...(r.lleva || []), ...(p.puestos || [])])].filter((x) => EXTRAS[x] && !(p.frutas || []).includes(x) && !(p.flores || []).includes(x)); // las frutas ya estan en el pincho; "lleva": lo que la receta siempre tiene (el queso del chocolate)
     const ay = contenedor.querySelector("#rest-ayuda");
     if (ay) ay.textContent = "Order up! (tap to serve)";
     const n = puestos.length;
     tabla.innerHTML = `
-      <div class="rest-presenta e${e}">
+      <div class="rest-presenta e${nv}">
         <div class="rest-presenta-luz"></div>
         <div class="rest-presenta-plato">${imgPlato(r.id, "rest-presenta-img")}${capaAdiciones(puestos.map((x) => ({ id: x, ...EXTRAS[x], icono: arte(`restaurante/extra_${x}.png`) })), r.id)}</div>
         <div class="rest-presenta-nombre">${esc(r.nombre)}</div>
-        <div class="rest-estr grande">${estrellas(e)}</div>
+        <div class="rest-estr grande">${estrellasNota(e)}</div>
       </div>`;
-    sonar(e === 3 ? "hallazgo" : "hito");
-    cara(e === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", e === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png", 1400);
+    sonar(nv === 3 ? "hallazgo" : "hito");
+    cara(nv === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", nv === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png", 1400);
     let listo = false;
     const seguir = () => {
       if (listo || !dia) return;
@@ -998,17 +1024,18 @@ export function abrirRestaurante(contenedor, opts) {
     const p = dia.pedidos[dia.i];
     const r = recetaPorId(p.receta);
     const e = estrellasDelPlato(p.notas);
+    const nv = nivelDe(e);
     const esp = p.receta === dia.especial;
-    dia.combo = e === 3 ? dia.combo + 1 : 0;
+    dia.combo = nv === 3 ? dia.combo + 1 : 0;
     const combo = dia.combo > 0 && dia.combo % 3 === 0;
-    const memoria = p.recordar && e === 3;
+    const memoria = p.recordar && nv === 3;
     const pago = pagoDe(r, e, esp, 3 + 2 * reg.nivel("propinas")) + (combo ? 5 : 0) + (memoria ? 2 : 0);
-    const opciones = RESENAS[e];
-    const texto = e === 3 && p.quien.amigo && GRACIAS_AMIGOS[p.quien.id] && Math.random() < 0.5 ? GRACIAS_AMIGOS[p.quien.id] : opciones[Math.floor(Math.random() * opciones.length)];
+    const opciones = RESENAS[nv];
+    const texto = nv === 3 && p.quien.amigo && GRACIAS_AMIGOS[p.quien.id] && Math.random() < 0.5 ? GRACIAS_AMIGOS[p.quien.id] : opciones[Math.floor(Math.random() * opciones.length)];
     dia.ganado += pago;
-    if (e >= 2) dia.felices += 1;
+    if (nv >= 2) dia.felices += 1;
     dia.resenas.push({ quien: p.quien.nombre, texto, estrellas: e });
-    if (e === 3) dia.resenas.sort((a, b) => b.estrellas - a.estrellas);
+    if (nv === 3) dia.resenas.sort((a, b) => b.estrellas - a.estrellas);
     reg.anotarPlato(r.id, e, dia.cuenta);
     if (esp) reg.hoy.espServido = true; // v72: desde ahora el especial sale como cualquier otro (hasta manana)
     guardar();
@@ -1016,22 +1043,23 @@ export function abrirRestaurante(contenedor, opts) {
     const src = arte(p.quien.amigo ? `npcs/npc_${p.quien.id}_saludo.png` : `restaurante/cliente_${p.quien.id}_saludo.png`);
     contenedor.innerHTML = `
       <div class="pantalla-rest local servir">
-        ${frente(`<div class="rest-baozi-ventana entrega">${sprite(e === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", e === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png")}</div>`, `${imgPlato(r.id, "rest-plato-servido")}<div class="rest-sombra-cliente"></div><img class="rest-cliente-servido" src="${src}" alt="" draggable="false" />`)}
+        ${frente(`<div class="rest-baozi-ventana entrega">${sprite(nv === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", nv === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png")}</div>`, `${imgPlato(r.id, "rest-plato-servido")}<div class="rest-sombra-cliente"></div><img class="rest-cliente-servido" src="${src}" alt="" draggable="false" />`)}
         ${HTML_VOLVER}
-        ${hud(`DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
+        ${hud(PRUEBA ? `KITCHEN TEST · ${r.nombre.toUpperCase()}` : `DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
         <div class="papel rest-resena">
-          <div class="rest-estr grande">${estrellas(e)}</div>
+          <div class="rest-estr grande">${estrellasNota(e)}</div>
           <div class="rest-resena-texto">“${esc(texto)}”<small>— ${esc(p.quien.nombre)}</small></div>
           <div class="rest-fin-monedas">${moneda()}+${pago}</div>
-          ${esp || e === 3 ? `<small class="rest-extra-pago">${[esp ? "special ×2" : "", e === 3 ? `+${3 + 2 * reg.nivel("propinas")} tip` : "", memoria ? "good memory +2" : ""].filter(Boolean).join(" · ")}</small>` : ""}
+          ${esp || nv === 3 ? `<small class="rest-extra-pago">${[esp ? "special ×2" : "", nv === 3 ? `+${3 + 2 * reg.nivel("propinas")} tip` : "", memoria ? "good memory +2" : ""].filter(Boolean).join(" · ")}</small>` : ""}
           ${combo ? `<div class="rest-combo-fin"><span class="rest-baila">${sprite("ojo_especial_euforico.png", "boca_especial_euforico.png")}</span><b>PERFECT ×${dia.combo}!</b><small>Baozi is dancing · +5</small></div>` : ""}
-          <button class="boton" id="btn-rest-siguiente" type="button">${dia.i + 1 < dia.pedidos.length ? "Next customer" : "Close the shop"}</button>
+          ${PRUEBA ? `<small class="rest-probar-notas">${esc(p.notas.map((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${x.toFixed(1)}`).join(" · "))}</small>` : ""}
+          <button class="boton" id="btn-rest-siguiente" type="button">${PRUEBA ? "Try another recipe" : dia.i + 1 < dia.pedidos.length ? "Next customer" : "Close the shop"}</button>
         </div>
       </div>`;
     blindarToques(contenedor.querySelector(".pantalla-rest"));
     cablearVolver(contenedor, () => terminarDia(true));
-    sonar(e === 3 ? "hallazgo" : e === 2 ? "hito" : "mimo");
-    vibrar(e === 3 ? [20, 40, 20] : 20);
+    sonar(nv === 3 ? "hallazgo" : nv === 2 ? "hito" : "mimo");
+    vibrar(nv === 3 ? [20, 40, 20] : 20);
     contenedor.querySelector("#btn-rest-siguiente").addEventListener("click", () => {
       sonar("tocar");
       dia.i += 1;
@@ -1042,6 +1070,7 @@ export function abrirRestaurante(contenedor, opts) {
 
   /** Cierra el dia (al terminar los clientes o con la flechita): cobra lo hecho. */
   function terminarDia(completo = false) {
+    if (PRUEBA) return probador();
     if (!dia) return local();
     if (paso) paso.destruir();
     paso = null;
@@ -1111,7 +1140,55 @@ export function abrirRestaurante(contenedor, opts) {
     });
   }
 
-  local();
+  if (PRUEBA) probador();
+  else local();
+
+  // ---------------- v73: la cocina de prueba (desde el modo director) ----------------
+  function probador() {
+    quitarPausa();
+    if (paso) paso.destruir();
+    paso = null;
+    dia = null;
+    const DIFS = [["Relaxed", -0.5], ["Fame ★1", 0], ["★3", 0.5], ["★5", 1]];
+    contenedor.innerHTML = `
+      <div class="pantalla-rest probador">
+        ${HTML_VOLVER}
+        <div class="rest-probar-cabeza">
+          <div class="juego-chip">KITCHEN TEST · nothing is saved</div>
+          <div class="rest-probar-dif">${DIFS.map(([n, d]) => `<button class="rest-probar-difb ${d === difPrueba ? "si" : ""}" data-dif="${d}" type="button">${n}</button>`).join("")}</div>
+        </div>
+        <div class="rest-probar-lista">${RECETAS.map((r) => {
+          const l = reg.libro[r.id];
+          return `<button class="rest-probar-receta" data-r="${r.id}" type="button">${imgPlato(r.id)}<span>${esc(r.nombre)}</span>${l && l.vendidos ? `<small>${Number(l.mejor).toFixed(1)}</small>` : ""}</button>`;
+        }).join("")}</div>
+      </div>`;
+    blindarToques(contenedor.querySelector(".pantalla-rest"));
+    cablearVolver(contenedor, () => vivo && alSalir());
+    for (const b of contenedor.querySelectorAll("[data-dif]"))
+      b.addEventListener("click", () => {
+        sonar("tocar");
+        difPrueba = Number(b.dataset.dif);
+        const y = contenedor.querySelector(".rest-probar-lista").scrollTop;
+        probador();
+        contenedor.querySelector(".rest-probar-lista").scrollTop = y;
+      });
+    for (const b of contenedor.querySelectorAll("[data-r]"))
+      b.addEventListener("click", () => {
+        sonar("tocar");
+        probarReceta(b.dataset.r);
+      });
+  }
+
+  function probarReceta(id) {
+    const pedidos = armarDia([id], { fama: 5, amigos, especialGarantizado: false }).slice(0, 1);
+    for (const q of pedidos) {
+      q.receta = id;
+      q.recordar = false;
+    }
+    dia = { pedidos, i: 0, ganado: 0, felices: 0, resenas: [], especial: null, combo: 0, cuenta: false, dif: difPrueba, famaAntes: reg.fama };
+    cliente();
+  }
+
   return {
     destruir() {
       vivo = false;

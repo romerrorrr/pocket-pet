@@ -136,6 +136,7 @@ export async function renderDirector(contenedor, acciones) {
             <div class="director-gps" id="dir-video-resultado"></div>
             ${fase !== "en_curso" ? `<button class="boton boton-fantasma" id="dir-ensayo">Rehearse everything</button>` : ""}
             ${acciones.mudanza ? `<button class="boton boton-fantasma" id="dir-mudanza">${acciones.mudanza.estado() === "vive" ? "Move-in test: undo (partner leaves)" : "Move-in test: preview now"}</button>` : ""}
+            ${acciones.probarCocina ? `<button class="boton boton-fantasma" id="dir-cocina">Kitchen test: try any recipe</button>` : ""}
             ${acciones.tienda ? `<button class="boton boton-fantasma" id="dir-monedas">Shop test: +200 coins</button>
             <button class="boton boton-fantasma" id="dir-semanas">${acciones.tienda.todo() ? "Shop test: all weeks ON (tap = off)" : "Shop test: show all weeks"}</button>
             <div class="director-gps" id="dir-tienda-resultado"></div>` : ""}
@@ -179,6 +180,7 @@ export async function renderDirector(contenedor, acciones) {
     });
   }
   // v23: para probar la tienda sin esperar semanas
+  if (acciones.probarCocina) $("dir-cocina").addEventListener("click", () => acciones.probarCocina());
   if (acciones.tienda) {
     $("dir-monedas").addEventListener("click", () => {
       $("dir-tienda-resultado").textContent = `Coins: ${acciones.tienda.sumar(200)}`;

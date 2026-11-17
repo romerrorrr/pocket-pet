@@ -20,6 +20,7 @@
 
 import { dibujarCoccion } from "./coccion.js";
 import { pixelar } from "./pixelar.js";
+import { GESTOS } from "./gestos.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -118,25 +119,23 @@ export const COCCIONES = {
 };
 
 // --------- la puntuacion (sin DOM) ---------
-export const estrellasDeAciertos = (buenos, total) => (total <= 0 ? 3 : buenos / total >= 0.85 ? 3 : buenos / total >= 0.55 ? 2 : 1);
-/** estirar: el radio final contra la franja [min, max]. Mas grande que max = se rompio. */
-export function estrellasDeEstirar(r, min, max) {
-  if (r >= min && r <= max) return 3;
-  if (r > max) return r <= max + 8 ? 2 : 1;
-  return r >= min - 8 ? 2 : 1;
+// v73 (rom: "es demasiado facil siempre sacar 3 estrellas pase lo que pase… tal vez por decimas"):
+// cada paso da una nota con decimales de 1.0 a 3.0 segun que tan exacto fue. Justo en el centro
+// = 3.0; en el borde de lo verde = 2.5; fuera de lo verde baja hasta 1.0.
+export function notaDe(err, tol, fuera = tol) {
+  const e = Math.abs(err);
+  if (e <= tol) return 3 - 0.5 * (e / Math.max(1e-9, tol));
+  return Math.max(1, 2.5 - 1.5 * Math.min(1, (e - tol) / Math.max(1e-9, fuera)));
 }
+export const promedio = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 3);
+/** aciertos sueltos (cuando no hay una medida mas fina): todo bien = 3.0 */
+export const estrellasDeAciertos = (buenos, total) => (total <= 0 ? 3 : 1 + 2 * Math.pow(Math.max(0, Math.min(1, buenos / total)), 1.6));
+/** estirar: el radio final contra la franja [min, max]. */
+export const estrellasDeEstirar = (r, min, max) => notaDe(r - (min + max) / 2, (max - min) / 2, 10);
 /** rellenar / verter: cuanto (0..1) contra la franja [a, b]. */
-export function estrellasDeCantidad(f, a, b) {
-  if (f >= a && f <= b) return 3;
-  const d = f < a ? a - f : f - b;
-  return d <= 0.1 ? 2 : 1;
-}
+export const estrellasDeCantidad = (f, a, b) => notaDe(f - (a + b) / 2, (b - a) / 2, 0.12);
 /** cocinar: donde estaba la aguja (0..1) contra la zona perfecta [a, b]. */
-export function estrellasDeCoccion(x, a, b) {
-  if (x >= a && x <= b) return 3;
-  const d = x < a ? a - x : x - b;
-  return d <= 0.07 ? 2 : 1;
-}
+export const estrellasDeCoccion = (x, a, b) => notaDe(x - (a + b) / 2, (b - a) / 2, 0.1);
 /** elegir: lo elegido contra lo pedido (listas de ids). */
 export function estrellasDeEleccion(elegido, pedido) {
   const e = new Set(elegido);
@@ -719,8 +718,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     vivo = false;
     cancelAnimationFrame(raf);
     boton(null);
-    sonar(e === 3 ? "hallazgo" : e === 2 ? "hito" : "mimo");
-    vibrar(e === 3 ? [15, 30, 15] : 20);
+    e = Math.max(1, Math.min(3, Math.round(e * 10) / 10)); // v73: una decima
+    sonar(e >= 2.9 ? "hallazgo" : e >= 2.3 ? "hito" : "mimo");
+    vibrar(e >= 2.9 ? [15, 30, 15] : 20);
     setTimeout(() => alTerminar(e), 450);
   };
   const s = svg(area);
@@ -758,6 +758,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     ayuda("Tap when the red ring meets the green line");
     const P = 1300 / rapido();
     const TOL = ancho(0.13);
+    const notasA = [];
     let k = 1;
     bucle((t) => {
       k = 1 + 0.95 * (1 - ((t % P) / P)); // 1.95 -> 1.0
@@ -770,6 +771,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       n++;
       const ok = Math.abs(k - 1.09) < TOL;
       if (ok) buenos++;
+      notasA.push(notaDe(k - 1.09, TOL, 0.25));
       sonar(ok ? "tocar" : "no");
       masa.setAttribute("rx", ok ? 52 : 44);
       masa.setAttribute("ry", ok ? 32 : 40);
@@ -779,7 +781,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }, 140);
       zona.setAttribute("stroke", ok ? "rgb(120,190,110)" : "rgb(222,110,100)");
       cuenta.textContent = `${n} / ${TOTAL}`;
-      if (n >= TOTAL) fin(estrellasDeAciertos(buenos, TOTAL));
+      if (n >= TOTAL) fin(promedio(notasA));
     };
     s.addEventListener("pointerdown", tocar);
   }
@@ -1127,6 +1129,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     dibujarZona();
     ayuda(`Tap when the pink mark is in the green`);
     let ang = objetivo() - 70;
+    const notasP = [];
     const VEL = 0.11 * rapido(0.35); // grados por ms
     let tPrev = 0;
     bucle((t) => {
@@ -1141,6 +1144,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       e.preventDefault();
       const ok = Math.abs(ang - objetivo()) <= ANCHO / 2 + 3;
       if (ok) buenos++;
+      notasP.push(notaDe(ang - objetivo(), ANCHO / 2 + 3, 25));
       sonar(ok ? "tocar" : "no");
       const a = objetivo();
       if (canasta) {
@@ -1163,7 +1167,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       if (k >= N) {
         zona.setAttribute("d", "");
         cuenta.textContent = `PLEAT ${N} / ${N}`;
-        fin(estrellasDeAciertos(buenos, N));
+        fin(promedio(notasP));
         return;
       }
       ang = objetivo() - 70;
@@ -1259,7 +1263,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         boton("Take it out!", sacar);
         return;
       }
-      fin(C.vuelta ? Math.round((suma + e) / 2) : e);
+      fin(C.vuelta ? (suma + e) / 2 : e);
     };
     boton(C.boton, sacar);
   }
@@ -1290,6 +1294,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }
     };
     const hechos = [];
+    const notasC = [];
     const cortesX = [];
     pintar([]);
     const guias = lineas.map((x) => el(s, "line", { x1: x, y1: 52, x2: x, y2: 156, stroke: "rgb(80,150,80)", "stroke-width": 3, "stroke-dasharray": "6 5" }));
@@ -1339,6 +1344,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       const torcido = Math.abs(p[0] - a[0]) > TORCIDO;
       const ok = dmin <= TOL_C && !torcido;
       if (ok) buenos++;
+      notasC.push(Math.min(notaDe(dmin, TOL_C, 14), torcido ? 1.8 : 3));
       hechos.push(mejor);
       guias[mejor].setAttribute("stroke", ok ? "rgb(120,190,110)" : "rgb(222,110,100)");
       guias[mejor].setAttribute("stroke-dasharray", "");
@@ -1348,7 +1354,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       sonar(ok ? "tocar" : "no");
       vibrar(ok ? 12 : 25);
       cuenta.textContent = `CUT ${hechos.length} / ${N}`;
-      if (hechos.length >= N) fin(estrellasDeAciertos(buenos, N));
+      if (hechos.length >= N) fin(promedio(notasC));
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", () => {
@@ -1490,7 +1496,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       prog.setAttribute("width", 238 * progreso);
       if (progreso >= 1) {
         const r = tBien / Math.max(0.1, tTotal);
-        fin(r >= 0.8 ? 3 : r >= 0.55 ? 2 : 1);
+        fin(1 + 2 * Math.max(0, Math.min(1, (r - 0.45) / 0.5)));
       } else if (tTotal > 14) fin(1);
     });
   }
@@ -1534,6 +1540,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let k = 0;
     let buenos = 0;
     let vuelo = null; // { t0, x0, vx, conLlama }
+    const notasW = [];
     let ini = null;
     const P = 1500;
     const flama = (t) => {
@@ -1637,6 +1644,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
           const atrapo = Math.abs(x - wokX) < ATRAPA;
           const ok = atrapo && vuelo.conLlama;
           if (ok) buenos++;
+          notasW.push(!atrapo ? 1 : !vuelo.conLlama ? 1.8 : notaDe(x - wokX, ATRAPA, 1));
           brillo.textContent = !atrapo ? "Oops! It fell" : vuelo.conLlama ? "Wok hei! ✨" : "Wait for the flame";
           brillo.setAttribute("opacity", 1);
           setTimeout(() => brillo.setAttribute("opacity", 0), 700);
@@ -1645,7 +1653,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
           vuelo = null;
           k++;
           cuenta.textContent = `TOSS ${k} / ${N}`;
-          if (k >= N) fin(estrellasDeAciertos(buenos, N));
+          if (k >= N) fin(promedio(notasW));
         }
       } else {
         comida.setAttribute("transform", `translate(${wokX} ${WOK_Y - 6})`);
@@ -1664,6 +1672,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let hilos = 1;
     let k = 0;
     let buenos = 0;
+    const notasL = [];
     let ini = null;
     el(s, "rect", { x: 150 - B / 2, y: 70, width: B, height: 70, fill: "rgba(120,190,110,0.12)" });
     el(s, "line", { x1: 150 - A / 2, y1: 64, x2: 150 - A / 2, y2: 146, stroke: "rgb(80,150,80)", "stroke-width": 3, "stroke-dasharray": "5 4" });
@@ -1720,6 +1729,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       const ok = largo >= A && largo <= B;
       const roto = largo > B + 12;
       if (ok) buenos++;
+      notasL.push(notaDe(largo - (A + B) / 2, (B - A) / 2, 20));
       sonar(ok ? "tocar" : "no");
       vibrar(ok ? 12 : 30);
       if (roto) pintar(true);
@@ -1730,7 +1740,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
           hilos = ok || !roto ? hilos * 2 : hilos; // si se rompio, no se dobla
           largo = 70;
           pintar();
-          if (k >= N) fin(estrellasDeAciertos(buenos, N));
+          if (k >= N) fin(promedio(notasL));
         },
         roto ? 400 : 120,
       );
@@ -1821,7 +1831,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       prev = p;
       if (manchas.every((m) => m.sucio <= 0.05)) {
         const r = (performance.now() - t0) / T;
-        fin(r <= 0.65 ? 3 : 2);
+        fin(notaDe(Math.max(0, r - 0.3), 0.35, 0.6));
       }
     });
     const soltar = () => {
@@ -1913,8 +1923,8 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }
     });
     boton("Ready ✓", () => {
-      const bien = cant.filter((c) => c >= BAJO && c <= ALTO).length;
-      fin(bien >= ZONAS ? 3 : bien >= ZONAS - 2 ? 2 : 1);
+      const centro = (BAJO + Math.min(1, ALTO)) / 2;
+      fin(promedio(cant.map((c) => notaDe(c - centro, (Math.min(1, ALTO) - BAJO) / 2, 0.3))));
     });
   }
 
@@ -2021,7 +2031,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }
       const prolijo = dentro / Math.max(1, dentro + fuera);
       const exige = Math.max(0.6, Math.min(0.88, 0.75 + 0.12 * D));
-      fin(cubierto >= 0.85 && prolijo >= exige ? 3 : cubierto >= 0.6 && prolijo >= 0.5 ? 2 : 1);
+      const kC = Math.max(0, Math.min(1, (cubierto - 0.5) / 0.45));
+      const kP = Math.max(0, Math.min(1, (prolijo - 0.45) / (exige + 0.08 - 0.45)));
+      fin(1 + 2 * kC * kP);
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", soltar);
@@ -2089,12 +2101,12 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     });
     boton("Ready ✓", () => {
       if (!vivo) return;
-      const e = grosor >= A && grosor <= B ? 3 : Math.abs(grosor - (A + B) / 2) <= 0.18 ? 2 : 1;
+      const e = notaDe(grosor - (A + B) / 2, (B - A) / 2, 0.2);
       notas.push(e);
       pieza++;
-      if (pieza >= PIEZAS) fin(Math.round(notas.reduce((x, y) => x + y, 0) / notas.length));
+      if (pieza >= PIEZAS) fin(promedio(notas));
       else {
-        sonar(e === 3 ? "hito" : "mimo");
+        sonar(e >= 2.5 ? "hito" : "mimo");
         grosor = 1;
         pintar();
       }
@@ -2201,7 +2213,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         quitarMov();
         const seg = t / 1000;
         const k = 1 - 0.25 * D;
-        fin(seg <= 4 * k ? 3 : seg <= 7 * k ? 2 : 1);
+        fin(notaDe(Math.max(0, seg - 2.6 * k), 1.6 * k, 4 * k));
       }
     });
     const destruirViejo = () => quitarMov();
@@ -2223,6 +2235,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const cuenta = el(s, "text", { x: 8, y: 18, "text-anchor": "start", class: "cocina-cuenta" });
     let k = 0;
     let buenos = 0;
+    const notasE = [];
     let dedo = null;
     let desvio = 0;
     let y = Y1;
@@ -2278,10 +2291,11 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       dedo = null;
       const ok = desvio < 40;
       if (ok) buenos++;
+      notasE.push(notaDe(desvio, 40, 80));
       sonar(ok ? "tocar" : "no");
       k++;
       if (k >= N) {
-        fin(estrellasDeAciertos(buenos, N));
+        fin(promedio(notasE));
         return;
       }
       y = Y1;
@@ -2327,6 +2341,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let tam = 1;
     let k = 0;
     let buenos = 0;
+    const notasR = [];
     let dedo = null;
     let bajaDesde = null;
     let toco = false;
@@ -2368,6 +2383,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const pasada = () => {
       const ok = !toco;
       if (ok) buenos++;
+      notasR.push(ok ? 3 : 1.4);
       k++;
       tam = Math.max(0.15, 1 - k / N);
       for (let i = 0; i < 6; i++) {
@@ -2377,7 +2393,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       }
       sonar(ok ? "tocar" : "no");
       toco = false;
-      if (k >= N) fin(estrellasDeAciertos(buenos, N));
+      if (k >= N) fin(promedio(notasR));
     };
     let yBloque = GY0 + 30;
     let fondo = yBloque; // lo mas abajo que llego esta bajada
@@ -2535,7 +2551,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         if (Math.random() < 0.3) el(tira, "rect", { x: p[0] + 6, y: p[1], width: 5, height: 3, fill: cascaraColor, transform: `rotate(${(a * 180) / Math.PI} ${p[0]} ${p[1]})` });
         inicio.setAttribute("opacity", 0.25);
         pintar();
-        if (girado >= Math.PI * 2 - 0.01) fin(roturas === 0 ? 3 : roturas <= 2 ? 2 : 1);
+        if (girado >= Math.PI * 2 - 0.01) fin(Math.max(1, 3 - 0.45 * roturas));
       }
     });
     s.addEventListener("pointerup", () => {
@@ -2575,6 +2591,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     let actual = null;
     let buenos = 0;
     let hechos = 0;
+    const notasM = [];
     s.addEventListener("pointerdown", (e) => {
       if (!vivo) return;
       e.preventDefault();
@@ -2591,8 +2608,9 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       hechos++;
       const ok = Math.abs(q.r - OBJ) <= TOL;
       if (ok) buenos++;
+      notasM.push(notaDe(q.r - OBJ, TOL, TOL * 1.5));
       sonar(ok ? "tocar" : "no");
-      if (hechos >= N) fin(estrellasDeAciertos(buenos, N));
+      if (hechos >= N) fin(promedio(notasM));
     };
     s.addEventListener("pointerup", soltar);
     s.addEventListener("pointercancel", soltar);
@@ -2674,7 +2692,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         for (const [dx, dy] of [[-6, 0], [0, -3], [6, 0], [-3, 5], [3, 5]]) perla(cayendo, caida.x + dx, caida.y + dy);
         if (caida.y >= destino) {
           const off = Math.abs(caida.x - 150);
-          const e = !dentroVaso ? 1 : off <= ancho(8) + 2 ? 3 : off <= ancho(22) + 4 ? 2 : 1;
+          const e = !dentroVaso ? 1 : notaDe(off, ancho(8) + 2, 22);
           suma += e;
           // quedan al fondo del vaso (o en la mesa, si cayeron afuera)
           for (const [dx, dy] of [[-6, 0], [0, -3], [6, 0], [-3, 4], [3, 4]]) {
@@ -2683,12 +2701,12 @@ export function crearPaso(area, paso, ctx, alTerminar) {
           }
           k++;
           cuenta.textContent = `PEARLS ${k} / ${N}`;
-          sonar(e === 3 ? "tocar" : e === 2 ? "hito" : "no");
-          vibrar(e === 3 ? 12 : 25);
+          sonar(e >= 2.5 ? "tocar" : e >= 2 ? "hito" : "no");
+          vibrar(e >= 2.5 ? 12 : 25);
           caida = null;
           x = Math.random() < 0.5 ? 60 : 240;
           dir = x < 150 ? 1 : -1;
-          if (k >= N) fin(Math.round(suma / N));
+          if (k >= N) fin(suma / N);
           else llenarCuchara();
         }
       }
@@ -2751,18 +2769,18 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         canasta(mov, cayendo.x, cayendo.y);
         if (cayendo.y >= destino) {
           const off = Math.abs(cayendo.x - arriba);
-          const e = off <= ancho(8) + 2 ? 3 : off <= ancho(22) + 4 ? 2 : 1;
+          const e = notaDe(off, ancho(8) + 2, 22);
           suma += e;
           canasta(pila, cayendo.x, destino);
           arriba = cayendo.x;
           k++;
           cuenta.textContent = `STACK ${k} / ${N}`;
-          sonar(e === 3 ? "tocar" : e === 2 ? "hito" : "no");
-          vibrar(e === 3 ? 12 : 25);
+          sonar(e >= 2.5 ? "tocar" : e >= 2 ? "hito" : "no");
+          vibrar(e >= 2.5 ? 12 : 25);
           cayendo = null;
           x = Math.random() < 0.5 ? 60 : 240;
           dir = x < 150 ? 1 : -1;
-          if (k >= N) fin(Math.round(suma / N));
+          if (k >= N) fin(suma / N);
         }
       }
     });
@@ -2784,6 +2802,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     const nivel = el(s, "rect", { x: 243, y: 168, width: 12, height: 0, fill: "rgb(232,168,30)" });
     let k = 0;
     let buenos = 0;
+    const notasB = [];
     let redondo = 0;
     let prevAng = null;
     let dedo = false;
@@ -2834,11 +2853,12 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       if (!vivo) return;
       const ok = redondo >= A && redondo <= B;
       if (ok) buenos++;
+      notasB.push(notaDe(redondo - (A + B) / 2, (B - A) / 2, 0.2));
       sonar(ok ? "tocar" : "no");
       el(hechas, "circle", { cx: 40 + k * 26, cy: 176, r: 10, fill: color, stroke: TINTA, "stroke-width": 2, opacity: ok ? 1 : 0.6 });
       k++;
       if (k >= N) {
-        fin(estrellasDeAciertos(buenos, N));
+        fin(promedio(notasB));
         return;
       }
       redondo = 0;
@@ -2942,7 +2962,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       barra.setAttribute("width", (238 * cubierto).toFixed(1));
       if (cubierto >= 0.95) {
         const mancha = fuera / Math.max(1, total);
-        fin(mancha <= 0.08 ? 3 : mancha <= 0.22 ? 2 : 1);
+        fin(notaDe(mancha, 0.06, 0.2));
       }
     });
     const soltar = () => {
@@ -2986,6 +3006,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     });
     let k = 0;
     let buenos = 0;
+    const notasK = [];
     const ponerMeta = () => {
       const [x, y] = lugares[k];
       meta.setAttribute("cx", x.toFixed(1));
@@ -3003,6 +3024,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
       const [mx, my] = lugares[k];
       const ok = Math.hypot(x - mx, y - my) <= R + 2;
       if (ok) buenos++;
+      notasK.push(notaDe(Math.hypot(x - mx, y - my), R + 2, 16));
       sonar(ok ? "tocar" : "no");
       vibrar(ok ? 18 : 30);
       mazo.setAttribute("opacity", 1);
@@ -3031,7 +3053,7 @@ export function crearPaso(area, paso, ctx, alTerminar) {
         barro.style.transformOrigin = "150px 104px";
         barro.style.transform = "scale(1.12) translateY(14px)";
         barro.style.opacity = "0";
-        fin(estrellasDeAciertos(buenos, N));
+        fin(promedio(notasK));
         return;
       }
       ponerMeta();
@@ -3079,6 +3101,18 @@ export function crearPaso(area, paso, ctx, alTerminar) {
     boton("Ready ✓", () => {
       if (ctx.alElegir) ctx.alElegir([...elegido]);
       fin(estrellasDeEleccion([...elegido], pedido));
+    });
+  }
+
+  // ---------- v73: los gestos propios de cada receta (gestos.js) ----------
+  else if (GESTOS[paso.t]) {
+    const g = {};
+    area.__g = g;
+    GESTOS[paso.t].crear(s, paso, {
+      el, fin, bucle, aSvg, ancho, rapido, mas, D, MASA_R, TINTA, sonar, vibrar, ayuda, boton, notaDe, promedio, azarDe, oscurecer,
+      dibujarCamaron, dibujarPescado, g, t0,
+      vivo: () => vivo,
+      ahora: () => performance.now(),
     });
   }
 

@@ -41,7 +41,7 @@ import { Tienda, porId as productoTienda } from "./tienda.js";
 import { leerRecord } from "./juego.js";
 import { iniciarPesca, leerRecordPesca, PECES, pezPorId } from "./pesca.js";
 import { iniciarTorre, leerRecordTorre } from "./torre.js";
-import { Restaurante, abrirRestaurante } from "./restaurante.js"; // v54
+import { Restaurante, abrirRestaurante, RECETAS as RECETAS_REST } from "./restaurante.js"; // v54
 import { iniciarFaroles, leerRecordFaroles } from "./faroles.js"; // v54
 import { iniciarRitmo } from "./ritmo.js";
 import { iniciarTejo, leerRecordTejo } from "./tejo.js"; // v40: el tejo reemplaza a Boat Ride
@@ -2544,6 +2544,8 @@ function abrirDirector() {
         guardarTodo();
       },
     },
+    // v73: la cocina de prueba: todas las recetas, con un restaurante y una tienda de mentira
+    probarCocina: () => conTransicion(abrirCocinaDePrueba),
     tienda: {
       sumar: (n) => {
         tienda.monedas += n;
@@ -3296,6 +3298,35 @@ function abrirElRestaurante() {
       }
       if (paga) setTimeout(() => mostrarMonedas(paga), 400);
     },
+  });
+}
+
+function abrirCocinaDePrueba() {
+  if (restaurante) restaurante.destruir();
+  prepararVista("restaurante");
+  Musica.detener(0.3);
+  const reg = new Restaurante();
+  for (const r of RECETAS_REST) reg.compradas.add(r.id);
+  restaurante = abrirRestaurante(screenEl, {
+    prueba: true,
+    arte,
+    sprite: (ojo, boca) => R.spriteCara(ojo, boca),
+    cambiarCara: (el, ojo, boca) => R.cambiarCara(el, ojo, boca),
+    sonar: (n) => Sonido.sonar(n),
+    vibrar,
+    reg,
+    tienda: { monedas: 0, gastar: () => false, ganar: () => {}, darComida: () => {} },
+    sellados: new Set(),
+    nombreLugar: nombreDeLugar,
+    amigos: NPCS.map((n) => ({ id: n.id, nombre: n.nombre, conocido: true })),
+    nombre: Personaje.nombre(),
+    guardar: () => {},
+    alSalir: () => {
+      if (restaurante) restaurante.destruir();
+      restaurante = null;
+      conTransicion(abrirDirector);
+    },
+    alCerrarTurno: () => {},
   });
 }
 
