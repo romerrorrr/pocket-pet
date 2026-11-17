@@ -6006,6 +6006,12 @@ button.nota-polaroid {
 .rest-aviso { font-family: var(--fuente-display); font-size: 8px; color: rgb(60, 120, 70); background: var(--papel); padding: 5px 7px; box-shadow: 0 0 0 2px var(--tinta); }
 .rest-estr { color: rgb(232, 168, 30); letter-spacing: 2px; font-size: 16px; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
 .rest-estr.grande { font-size: 30px; letter-spacing: 4px; }
+/* v73: nota con decimas — estrellas llenas en parte y el numero */
+.estr-nota { display: inline-flex; align-items: center; gap: 1px; white-space: nowrap; }
+.estr-nota .est { position: relative; display: inline-block; color: rgba(120, 90, 60, 0.28); text-shadow: none; }
+.estr-nota .est i { position: absolute; left: 0; top: 0; overflow: hidden; font-style: normal; color: rgb(232, 168, 30); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); white-space: nowrap; }
+.estr-nota b { margin-left: 6px; font-size: 0.62em; letter-spacing: 0; color: rgb(110, 70, 40); text-shadow: none; }
+.rest-estr.grande .estr-nota b { font-size: 0.6em; }
 .rest-hud { position: absolute; z-index: 6; top: var(--arr); left: calc(var(--sx) + 56px); right: var(--dx); display: flex; gap: 8px; align-items: center; }
 .rest-hud .juego-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .rest-hud-titulo { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -6456,3 +6462,15 @@ button.cal-dia:active { transform: translateY(1px); }
 
 /* v69: la cocina en pixel art (js/pixelar.js): la figura original se esconde, se ve su gemela pixelada */
 .cocina-svg.pixelada [data-v] { visibility: hidden; }
+
+/* v73: la cocina de prueba (modo director) */
+.pantalla-rest.probador { background: rgb(224, 184, 138); display: flex; flex-direction: column; }
+.rest-probar-cabeza { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px 6px 64px; }
+.rest-probar-dif { display: flex; gap: 6px; }
+.rest-probar-difb { font: inherit; font-size: 12px; padding: 6px 10px; border: 2px solid rgb(22, 20, 22); border-radius: 8px; background: rgb(252, 246, 232); color: rgb(22, 20, 22); }
+.rest-probar-difb.si { background: rgb(232, 168, 30); }
+.rest-probar-lista { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; padding: 6px 12px 16px; touch-action: pan-y; }
+.rest-probar-receta { position: relative; font: inherit; font-size: 11px; line-height: 1.2; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border: 2px solid rgb(22, 20, 22); border-radius: 10px; background: rgb(252, 246, 232); color: rgb(22, 20, 22); }
+.rest-probar-receta .rest-comida { width: 56px; height: 56px; image-rendering: pixelated; object-fit: contain; }
+.rest-probar-receta small { position: absolute; top: 4px; right: 6px; color: rgb(180, 120, 20); font-weight: bold; }
+.rest-probar-notas { display: block; font-size: 10px; line-height: 1.35; color: rgb(110, 70, 40); margin: 2px 0 6px; }
