@@ -1682,8 +1682,9 @@ function cono(s, paso, H) {
   let previo = null;
   let n = 0;
   const notas = [];
-  const apertura = () => clamp(84 - rot * 0.3, 6, 84);
-  Object.assign(H.g, { tipo: "cono", px: PX, py: PY, obj: OBJ, ap: apertura(), n: 0 });
+  const K_ROT = 0.62;
+  const apertura = () => clamp(84 - rot * K_ROT, 6, 84);
+  Object.assign(H.g, { tipo: "cono", px: PX, py: PY, obj: OBJ, ap: apertura(), n: 0, k: K_ROT });
   const pintar = () => {
     const ap = apertura();
     H.g.ap = ap;
@@ -3245,6 +3246,58 @@ function sinAbrir(s, paso, H) {
   });
 }
 
+/** Un ingrediente dibujado de verdad (para armar el tamal y el aborrajado). (x, y) = centro, k = escala. */
+function dibujarIng(H, padre, nombre, x, y, k = 1) {
+  const { el, TINTA } = H;
+  const g = el(padre, "g", { transform: `translate(${x} ${y}) scale(${k})` });
+  const sw = 2 / Math.max(0.4, k);
+  switch (nombre) {
+    case "Dough":
+      el(g, "rect", { x: -26, y: -9, width: 52, height: 18, rx: 7, fill: "rgb(250,226,140)", stroke: TINTA, "stroke-width": sw });
+      el(g, "path", { d: "M-18 -2 q6 -4 12 0 M4 2 q6 -4 12 0", fill: "none", stroke: "rgb(226,196,110)", "stroke-width": sw });
+      break;
+    case "Rice":
+      el(g, "ellipse", { cx: 0, cy: 0, rx: 24, ry: 10, fill: "rgb(252,252,246)", stroke: TINTA, "stroke-width": sw });
+      for (let i = 0; i < 7; i++) el(g, "ellipse", { cx: -16 + i * 5.5, cy: (i % 2) * 4 - 2, rx: 2.2, ry: 1.2, fill: "rgb(226,222,206)" });
+      break;
+    case "Chicken":
+      for (let i = 0; i < 4; i++) el(g, "path", { d: `M${-22 + i * 4} ${-6 + i * 4} q12 -5 26 0 q8 3 16 -1`, fill: "none", stroke: "rgb(226,180,120)", "stroke-width": 5, "stroke-linecap": "round" });
+      break;
+    case "Pork":
+      el(g, "rect", { x: -16, y: -10, width: 32, height: 20, rx: 4, fill: "rgb(214,110,96)", stroke: TINTA, "stroke-width": sw });
+      el(g, "rect", { x: -15, y: -3, width: 30, height: 5, fill: "rgb(252,236,214)" });
+      break;
+    case "Egg":
+      el(g, "ellipse", { cx: 0, cy: 0, rx: 15, ry: 11, fill: "rgb(255,252,244)", stroke: TINTA, "stroke-width": sw });
+      el(g, "circle", { cx: 0, cy: 0, r: 6, fill: "rgb(255,196,40)" });
+      break;
+    case "Carrot":
+      for (const dx of [-12, 0, 12]) {
+        el(g, "circle", { cx: dx, cy: 0, r: 6, fill: "rgb(240,130,50)", stroke: TINTA, "stroke-width": sw });
+        el(g, "circle", { cx: dx, cy: 0, r: 2.5, fill: "rgb(250,180,100)" });
+      }
+      break;
+    case "Peas":
+      for (const [dx, dy] of [[-10, 2], [0, -3], [10, 2], [-4, 6], [6, 6]]) el(g, "circle", { cx: dx, cy: dy, r: 4, fill: "rgb(110,170,70)", stroke: TINTA, "stroke-width": sw * 0.75 });
+      break;
+    case "Plantain":
+      el(g, "ellipse", { cx: 0, cy: 0, rx: 26, ry: 9, fill: "rgb(240,190,80)", stroke: "rgb(150,90,40)", "stroke-width": sw * 1.5 });
+      el(g, "path", { d: "M-16 0 q16 -5 32 0", fill: "none", stroke: "rgb(250,214,130)", "stroke-width": sw });
+      break;
+    case "Cheese":
+      el(g, "rect", { x: -22, y: -7, width: 44, height: 14, rx: 2, fill: "rgb(252,250,236)", stroke: TINTA, "stroke-width": sw });
+      for (const dx of [-12, 2, 14]) el(g, "circle", { cx: dx, cy: 0, r: 2, fill: "rgb(232,226,200)" });
+      break;
+    case "Guava":
+      el(g, "rect", { x: -20, y: -6, width: 40, height: 12, rx: 2, fill: "rgb(170,40,60)", stroke: TINTA, "stroke-width": sw });
+      el(g, "rect", { x: -18, y: -4, width: 12, height: 3, fill: "rgb(210,80,100)" });
+      break;
+    default:
+      el(g, "circle", { cx: 0, cy: 0, r: 10, fill: "rgb(220,200,170)", stroke: TINTA, "stroke-width": sw });
+  }
+  return g;
+}
+
 // ARMAR (tamal tolimense): poner los ingredientes sobre la hoja en el orden de la receta.
 function armar(s, paso, H) {
   const { el, TINTA } = H;
@@ -3259,8 +3312,9 @@ function armar(s, paso, H) {
     const x = 236;
     const y = 30 + k * alto + alto / 2;
     el(s, "rect", { x: x - 60, y: y - alto / 2 + 1, width: 120, height: alto - 3, rx: 5, fill: PAPEL, stroke: TINTA, "stroke-width": 2 });
-    el(s, "rect", { x: x - 56, y: y - alto / 2 + 4, width: 14, height: alto - 9, rx: 3, fill: color, stroke: TINTA, "stroke-width": 1.5 });
-    el(s, "text", { x: x - 38, y: y + 3.5, "text-anchor": "start", "font-size": 8.5, class: "cocina-cuenta" }).textContent = nombre;
+    dibujarIng(H, s, nombre, x - 44, y, 0.42);
+    void color;
+    el(s, "text", { x: x - 28, y: y + 3.5, "text-anchor": "start", "font-size": 8.5, class: "cocina-cuenta" }).textContent = nombre;
     return { x, y, i, nombre, alto };
   });
   const cartel = letrero(H, s, `Next: ${ORDEN[0][0]}`, 14, 24, "start");
@@ -3281,7 +3335,9 @@ function armar(s, paso, H) {
     H.sonar("tocar");
     b.usado = true;
     el(s, "rect", { x: b.x - 60, y: b.y - b.alto / 2 + 1, width: 120, height: b.alto - 3, rx: 5, fill: "rgba(120,120,120,0.45)" });
-    el(capa, "ellipse", { cx: 88, cy: 122 - i * 4, rx: 56 - i * 6, ry: 30 - i * 3, fill: ORDEN[i][1], stroke: TINTA, "stroke-width": 1.5 });
+    const capas = ORDEN.length;
+    const k = 1.25 - (0.35 * i) / capas;
+    for (const dx of capas > 5 ? [-22, 22] : [0]) dibujarIng(H, capa, ORDEN[i][0], 88 + dx + ((i * 7) % 9) - 4, 128 - i * (capas > 5 ? 6 : 9), k);
     i++;
     if (i >= ORDEN.length) return H.fin(Math.max(1, 3 - 0.3 * malos));
     cartel.textContent = `Next: ${ORDEN[i][0]}`;
@@ -4304,40 +4360,57 @@ function pulpa(s, paso, H) {
   });
 }
 
-// FLOR (mango biche): el mango gira en el palito; cortar (tocar) cada vez que la marca pasa por el cuchillo.
+// FLOR (mango biche): el mango gira en el palito; cortar (tocar) cada vez que la marca pasa por delante,
+// bajo el cuchillo. Cada corte queda en el mango y gira con el.
 function flor(s, paso, H) {
   const { el, TINTA } = H;
   const N = paso.n || 6;
   const P = 2400 / H.rapido(0.25);
   const TOL = H.ancho(14, 0.35);
+  const RX = 40;
   el(s, "rect", { x: 146, y: 150, width: 8, height: 46, fill: MADERA, stroke: TINTA, "stroke-width": 2 });
-  const mango = el(s, "g", {});
-  el(mango, "ellipse", { cx: 0, cy: 0, rx: 40, ry: 56, fill: "rgb(170,210,90)", stroke: TINTA, "stroke-width": 3 });
-  const marca = el(mango, "line", { x1: 0, y1: -56, x2: 0, y2: 56, stroke: ROJO, "stroke-width": 3, "stroke-dasharray": "5 4" });
-  const cortes = el(mango, "g", {});
-  mango.setAttribute("transform", "translate(150 96)");
+  el(s, "ellipse", { cx: 150, cy: 96, rx: RX, ry: 56, fill: "rgb(170,210,90)", stroke: TINTA, "stroke-width": 3 });
+  const vetas = [0, 1, 2, 3].map(() => el(s, "path", { d: "", fill: "none", stroke: "rgb(150,190,80)", "stroke-width": 2 }));
+  const cortesG = el(s, "g", {});
+  const marca = el(s, "path", { d: "", fill: "none", stroke: ROJO, "stroke-width": 3, "stroke-dasharray": "5 4" });
   el(s, "path", { d: "M150 30 l-10 -18 h20 Z", fill: METAL, stroke: TINTA, "stroke-width": 2 });
+  el(s, "line", { x1: 150, y1: 30, x2: 150, y2: 40, stroke: TINTA, "stroke-width": 2 });
   const cuenta = letrero(H, s, `0 / ${N}`, 14, 24, "start");
-  H.ayuda("The mango spins · tap to cut each time the red line passes under the knife");
-  // vista "de frente": la marca pasa por el centro cada medio periodo
+  H.ayuda("The mango spins · tap to cut each time the red line passes in front, under the knife");
+  // una linea sobre la superficie a un angulo a (0 = de frente): x = 150 + RX sin(a); visible si cos(a) > 0
+  const linea = (a) => {
+    const x = 150 + RX * 0.92 * Math.sin(a);
+    const curva = 6 * Math.sin(a);
+    return `M${x.toFixed(1)} 44 Q${(x + curva).toFixed(1)} 96 ${x.toFixed(1)} 148`;
+  };
   let fase = 0;
+  const cortes = [];
   const notas = [];
   Object.assign(H.g, { tipo: "flor", P, t0: H.t0, n: 0, N });
   H.bucle((t) => {
     fase = ((t / P) % 1) * 2 * Math.PI;
-    const x = 36 * Math.sin(fase);
-    marca.setAttribute("x1", x.toFixed(1));
-    marca.setAttribute("x2", x.toFixed(1));
-    marca.setAttribute("opacity", Math.cos(fase) > 0 ? 1 : 0.25);
+    const pinta = (e, a, base) => {
+      e.setAttribute("d", linea(a));
+      e.setAttribute("opacity", Math.cos(a) > 0 ? base : 0);
+    };
+    pinta(marca, fase, 1);
+    vetas.forEach((v, i) => pinta(v, fase + 0.8 + (i * Math.PI) / 2, 0.8));
+    cortes.forEach((c) => {
+      pinta(c.e, fase - c.a, 1);
+      pinta(c.e2, fase - c.a, 1);
+    });
   });
   s.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     if (!H.vivo()) return;
-    const x = 36 * Math.sin(fase);
+    const x = RX * Math.sin(fase);
     const err = Math.cos(fase) > 0 ? x : 60;
     const nota = H.notaDe(err, TOL / 2.2, 18);
     notas.push(nota);
-    el(cortes, "path", { d: `M${(x - 4).toFixed(1)} -50 Q${(x + 8).toFixed(1)} 0 ${(x - 4).toFixed(1)} 50`, fill: "none", stroke: "rgb(240,250,200)", "stroke-width": 3 });
+    // el corte queda donde estaba la superficie bajo el cuchillo (angulo -asin(x/RX) respecto a la marca)
+    const a = fase - Math.asin(clamp(0 / RX, -1, 1));
+    const c = { a, e: el(cortesG, "path", { d: "", fill: "none", stroke: "rgb(250,250,210)", "stroke-width": 4 }), e2: el(cortesG, "path", { d: "", fill: "none", stroke: TINTA, "stroke-width": 1 }) };
+    cortes.push(c);
     H.sonar(nota >= 2.5 ? "tocar" : "no");
     cuenta.textContent = `${notas.length} / ${N}`;
     H.g.n = notas.length;
