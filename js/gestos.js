@@ -3248,21 +3248,21 @@ function sinAbrir(s, paso, H) {
 // ARMAR (tamal tolimense): poner los ingredientes sobre la hoja en el orden de la receta.
 function armar(s, paso, H) {
   const { el, TINTA } = H;
-  const ORDEN = [["Corn dough", "rgb(250,226,140)"], ["Rice", "rgb(252,252,246)"], ["Chicken", "rgb(236,200,150)"], ["Pork", "rgb(214,110,96)"], ["Egg", "rgb(255,214,90)"], ["Carrot", "rgb(240,140,60)"], ["Peas", "rgb(110,170,70)"]];
-  el(s, "ellipse", { cx: 110, cy: 120, rx: 86, ry: 56, fill: "rgb(96,150,70)", stroke: TINTA, "stroke-width": 3 });
+  const ORDEN = paso.orden || [["Corn dough", "rgb(250,226,140)"], ["Rice", "rgb(252,252,246)"], ["Chicken", "rgb(236,200,150)"], ["Pork", "rgb(214,110,96)"], ["Egg", "rgb(255,214,90)"], ["Carrot", "rgb(240,140,60)"], ["Peas", "rgb(110,170,70)"]];
+  el(s, "ellipse", { cx: 110, cy: 120, rx: 86, ry: 56, fill: paso.base || "rgb(96,150,70)", stroke: TINTA, "stroke-width": 3 });
   const capa = el(s, "g", {});
   const az = H.azarDe("armar");
   const pos = ORDEN.map((_, i) => i).sort(() => az() - 0.5);
   const botones = ORDEN.map(([nombre, color], i) => {
     const k = pos[i];
-    const x = 226 + (k % 2) * 40;
+    const x = 218 + (k % 2) * 54;
     const y = 26 + Math.floor(k / 2) * 44;
     el(s, "circle", { cx: x, cy: y, r: 13, fill: color, stroke: TINTA, "stroke-width": 2.5 });
-    el(s, "text", { x, y: y + 22, "text-anchor": "middle", "font-size": 7, class: "cocina-cuenta" }).textContent = nombre.split(" ")[0];
+    el(s, "text", { x, y: y + 22, "text-anchor": "middle", "font-size": 6.5, class: "cocina-cuenta" }).textContent = nombre.split(" ")[0];
     return { x, y, i, nombre };
   });
   const cartel = letrero(H, s, `Next: ${ORDEN[0][0]}`, 14, 24, "start");
-  H.ayuda("Add the fillings in the tamal's order: tap the one shown at the top");
+  H.ayuda(paso.ayuda || "Add the fillings in the tamal's order: tap the one shown at the top");
   let i = 0;
   let malos = 0;
   Object.assign(H.g, { tipo: "armar", sig: { x: botones[0].x, y: botones[0].y } });
@@ -3270,18 +3270,20 @@ function armar(s, paso, H) {
     e.preventDefault();
     if (!H.vivo()) return;
     const [x, y] = H.aSvg(e);
-    const b = botones.find((q) => Math.hypot(q.x - x, q.y - y) < 16);
+    const b = botones.find((q) => !q.usado && Math.hypot(q.x - x, q.y - y) < 16);
     if (!b) return;
-    if (b.i !== i) {
+    if (b.nombre !== ORDEN[i][0]) {
       malos++;
       return H.sonar("no");
     }
     H.sonar("tocar");
+    b.usado = true;
     el(capa, "ellipse", { cx: 110, cy: 122 - i * 4, rx: 60 - i * 6, ry: 30 - i * 3, fill: ORDEN[i][1], stroke: TINTA, "stroke-width": 1.5 });
     i++;
     if (i >= ORDEN.length) return H.fin(Math.max(1, 3 - 0.3 * malos));
     cartel.textContent = `Next: ${ORDEN[i][0]}`;
-    H.g.sig = { x: botones[i].x, y: botones[i].y };
+    const sg = botones.find((q) => !q.usado && q.nombre === ORDEN[i][0]);
+    H.g.sig = { x: sg.x, y: sg.y };
   });
 }
 
@@ -3438,6 +3440,352 @@ function pelusa(s, paso, H) {
   });
 }
 
+// v79: tanda 4.
+// GOTA (tanghulu): dejar caer una gota de almibar en agua fria; si se quiebra, esta listo para banar las frutas.
+function gota(s, paso, H) {
+  const { el, TINTA } = H;
+  const T = 5000 / H.rapido(0.2);
+  const A = 0.88;
+  const B = 1.08;
+  el(s, "rect", { x: 40, y: 80, width: 110, height: 100, rx: 10, fill: OLLA, stroke: TINTA, "stroke-width": 3 });
+  const almibar = el(s, "rect", { x: 48, y: 110, width: 94, height: 62, rx: 4, fill: "rgb(250,230,170)" });
+  el(s, "path", { d: "M180 110 Q184 182 230 184 Q276 182 280 110 Z", fill: "rgb(220,236,246)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "ellipse", { cx: 230, cy: 112, rx: 50, ry: 8, fill: "rgb(170,210,236)", stroke: TINTA, "stroke-width": 2 });
+  const caida = el(s, "g", {});
+  const aviso = letrero(H, s, "", 160, 30);
+  H.ayuda("Tap to drop a bit of syrup in cold water · when it snaps, it's ready");
+  let k = 0;
+  let pruebas = 0;
+  Object.assign(H.g, { tipo: "gota", k: 0, a: A, b: B });
+  H.bucle((t) => {
+    k = t / T;
+    H.g.k = k;
+    almibar.setAttribute("fill", k > 1.3 ? "rgb(150,80,40)" : mezcla("rgb(250,230,170)", "rgb(220,150,60)", k));
+    if (k > 1.6) H.fin(1.2);
+  });
+  s.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!H.vivo()) return;
+    caida.innerHTML = "";
+    el(caida, "circle", { cx: 230, cy: 150, r: 7, fill: mezcla("rgb(250,230,170)", "rgb(220,150,60)", k), stroke: TINTA, "stroke-width": 1.5 });
+    if (k < A) {
+      pruebas++;
+      aviso.textContent = k < 0.6 ? "Still runny…" : "Soft, bends…";
+      return H.sonar("no");
+    }
+    el(caida, "path", { d: "M222 146 l6 4 l-4 6 l8 2", fill: "none", stroke: TINTA, "stroke-width": 2 });
+    aviso.textContent = "Snap!";
+    H.sonar("grieta");
+    H.fin(H.notaDe(k - (A + B) / 2, (B - A) / 2 + H.ancho(0.1, 0.35) - 0.1, 0.35) - 0.1 * Math.max(0, pruebas - 2));
+  });
+}
+
+// PITILLO (te con leche): clavar el pitillo en el vaso sellado de un golpe, bien al centro.
+function pitillo(s, paso, H) {
+  const { el, TINTA } = H;
+  const CX = 150;
+  const TOL = H.ancho(8, 0.35);
+  el(s, "path", { d: "M106 70 L116 186 L184 186 L194 70 Z", fill: "rgb(214,180,140)", stroke: TINTA, "stroke-width": 3 });
+  for (let i = 0; i < 6; i++) el(s, "circle", { cx: 126 + i * 10, cy: 176, r: 5, fill: "rgb(60,40,30)" });
+  el(s, "ellipse", { cx: CX, cy: 70, rx: 44, ry: 9, fill: "rgb(240,236,246)", stroke: TINTA, "stroke-width": 2.5 });
+  el(s, "circle", { cx: CX, cy: 70, r: 3, fill: ROJO });
+  const paja = el(s, "rect", { x: -6, y: -110, width: 12, height: 110, rx: 3, fill: "rgb(240,120,150)", stroke: TINTA, "stroke-width": 2 });
+  paja.setAttribute("transform", "translate(150 50)");
+  H.ayuda("Swipe down fast to stab the straw through the lid, right in the middle");
+  Object.assign(H.g, { tipo: "pitillo", cx: CX });
+  let ini = null;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      ini = { p, t: H.ahora() };
+    },
+    mover: (p) => paja.setAttribute("transform", `translate(${p[0].toFixed(1)} ${Math.min(60, p[1]).toFixed(1)})`),
+    arriba: (p) => {
+      if (!ini) return;
+      const dy = p[1] - ini.p[1];
+      const v = dy / Math.max(1, H.ahora() - ini.t);
+      ini = null;
+      if (dy < 40) return paja.setAttribute("transform", "translate(150 50)");
+      paja.setAttribute("transform", `translate(${p[0].toFixed(1)} 110)`);
+      H.sonar("enganche");
+      const lento = v < 0.35 ? 0.8 : 0;
+      H.fin(H.notaDe(p[0] - CX, TOL, 25) - lento);
+    },
+  });
+}
+
+// VOLTEAR (guotie: el sarten sobre el plato; arroz frito: el bol): un golpe hacia arriba con la fuerza justa.
+function voltear(s, paso, H) {
+  const { el, TINTA } = H;
+  const A = 0.55;
+  const B = 0.95;
+  const bol = paso.que === "bol";
+  el(s, "ellipse", { cx: 150, cy: 168, rx: 90, ry: 18, fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+  const cosa = el(s, "g", {});
+  if (bol) {
+    el(cosa, "path", { d: "M-50 -30 Q-46 30 0 32 Q46 30 50 -30 Z", fill: "rgb(236,240,246)", stroke: TINTA, "stroke-width": 3 });
+  } else {
+    el(cosa, "ellipse", { cx: 0, cy: 0, rx: 60, ry: 16, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
+    el(cosa, "rect", { x: 56, y: -5, width: 50, height: 10, rx: 4, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 2 });
+  }
+  cosa.setAttribute("transform", "translate(150 110)");
+  const med = medidor(H, s, { x: 70, y: 18, w: 160, h: 10, a: A / 1.5, b: B / 1.5 });
+  H.ayuda("Flip it onto the plate: one swipe up · not too soft, not too hard");
+  Object.assign(H.g, { tipo: "voltear", a: A, b: B });
+  let ini = null;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      ini = { p, t: H.ahora() };
+    },
+    arriba: (p) => {
+      if (!ini) return;
+      const dy = ini.p[1] - p[1];
+      const v = dy / Math.max(1, H.ahora() - ini.t);
+      ini = null;
+      if (dy < 25) return;
+      med.poner(v / 1.5);
+      cosa.setAttribute("transform", "translate(150 150) rotate(180)");
+      if (bol) el(s, "path", { d: "M110 166 Q112 120 150 118 Q188 120 190 166 Z", fill: "rgb(250,226,140)", stroke: TINTA, "stroke-width": 2.5 });
+      else for (let i = 0; i < 4; i++) el(s, "path", { d: `M${110 + i * 22} 166 q10 -14 20 0 Z`, fill: "rgb(220,170,90)", stroke: TINTA, "stroke-width": 2 });
+      const nota = H.notaDe(v - (A + B) / 2, (B - A) / 2 + H.ancho(0.1, 0.35) - 0.1, 0.5);
+      H.sonar(nota >= 2.5 ? "tocar" : "no");
+      setTimeout(() => cosa.setAttribute("opacity", 0), 250);
+      H.fin(nota);
+    },
+  });
+}
+
+// EXTENDER (jianbing): extender la masa con la paleta en circulos hasta cubrir toda la plancha, pareja.
+function extender(s, paso, H) {
+  const { el, TINTA } = H;
+  const CX = 140;
+  const CY = 110;
+  const R = 74;
+  el(s, "circle", { cx: CX, cy: CY, r: R + 8, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
+  const anillos = [];
+  for (let i = 0; i < 6; i++) anillos.push({ v: i === 0 ? 1 : 0, e: el(s, "circle", { cx: CX, cy: CY, r: (R * (i + 1)) / 6, fill: "none", stroke: "rgb(250,222,150)", "stroke-width": R / 6 + 0.5, opacity: i === 0 ? 1 : 0 }) });
+  anillos.forEach((a, i) => a.e.setAttribute("r", ((R * (i + 0.5)) / 6).toFixed(1)));
+  const paleta = el(s, "g", { transform: `translate(${CX + R + 30} ${CY})` });
+  el(paleta, "rect", { x: -3, y: -40, width: 6, height: 40, fill: MADERA, stroke: TINTA, "stroke-width": 2 });
+  el(paleta, "rect", { x: -16, y: -4, width: 32, height: 8, rx: 3, fill: MADERA_O, stroke: TINTA, "stroke-width": 2 });
+  const cuenta = letrero(H, s, "", 284, 30, "end");
+  H.ayuda("Spread the batter with the paddle in circles, from the middle out to the edge");
+  Object.assign(H.g, { tipo: "extender", cx: CX, cy: CY, r: R });
+  let previo = null;
+  let saltos = 0;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      previo = p;
+    },
+    mover: (p) => {
+      paleta.setAttribute("transform", `translate(${p[0].toFixed(1)} ${p[1].toFixed(1)})`);
+      const d = Math.hypot(p[0] - CX, p[1] - CY);
+      const i = Math.min(5, Math.floor((d / R) * 6));
+      const mov = Math.hypot(p[0] - previo[0], p[1] - previo[1]);
+      previo = p;
+      if (d > R + 6) return;
+      if (anillos[i].v < 1) {
+        if (i > 0 && anillos[i - 1].v < 1) {
+          saltos += mov * 0.002;
+          return;
+        }
+        anillos[i].v = Math.min(1, anillos[i].v + mov * 0.006);
+        anillos[i].e.setAttribute("opacity", anillos[i].v.toFixed(2));
+      }
+      const hecho = anillos.filter((a) => a.v >= 1).length;
+      cuenta.textContent = `${Math.round((hecho / 6) * 100)}%`;
+      H.g.anillo = hecho;
+      if (hecho >= 6) {
+        previo = null;
+        H.fin(Math.max(1, 3 - saltos));
+      }
+    },
+  });
+}
+
+// HELADO (salpicon): sacar una bola de helado arrastrando la cuchara en un arco: ni muy corto ni muy largo.
+function helado(s, paso, H) {
+  const { el, TINTA } = H;
+  const OBJ = 120;
+  const TOL = H.ancho(24, 0.35);
+  el(s, "rect", { x: 40, y: 90, width: 150, height: 90, rx: 8, fill: "rgb(250,240,246)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 48, y: 100, width: 134, height: 70, rx: 4, fill: "rgb(250,200,214)" });
+  const bola = el(s, "circle", { cx: 250, cy: 120, r: 0, fill: "rgb(250,200,214)", stroke: TINTA, "stroke-width": 2.5 });
+  el(s, "path", { d: "M220 130 L250 186 L280 130 Z", fill: "rgb(230,180,110)", stroke: TINTA, "stroke-width": 2.5 });
+  const traz = el(s, "path", { d: "", fill: "none", stroke: "rgb(214,150,170)", "stroke-width": 8, "stroke-linecap": "round" });
+  H.ayuda("Drag the scoop across the ice cream in one stroke · release for a round ball");
+  Object.assign(H.g, { tipo: "helado", obj: OBJ });
+  let pts = null;
+  let largo = 0;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      pts = [p];
+      largo = 0;
+    },
+    mover: (p) => {
+      if (!pts) return;
+      const q = pts[pts.length - 1];
+      if (p[0] > 40 && p[0] < 190 && p[1] > 90 && p[1] < 180) largo += Math.hypot(p[0] - q[0], p[1] - q[1]);
+      pts.push(p);
+      traz.setAttribute("d", pts.map((z, i) => `${i ? "L" : "M"}${z[0].toFixed(1)} ${z[1].toFixed(1)}`).join(" "));
+      bola.setAttribute("r", Math.min(34, largo / 5).toFixed(1));
+    },
+    arriba: () => {
+      if (!pts) return;
+      pts = null;
+      if (largo < 30) return;
+      H.fin(H.notaDe(largo - OBJ, TOL, 70));
+    },
+  });
+}
+
+// UNA DIRECCION (jiaozi): batir el relleno siempre hacia el mismo lado hasta que se ponga pegajoso.
+function unaDireccion(s, paso, H) {
+  const { el, TINTA } = H;
+  const CX = 140;
+  const CY = 116;
+  el(s, "path", { d: `M${CX - 76} ${CY - 26} Q${CX - 70} ${CY + 66} ${CX} ${CY + 68} Q${CX + 70} ${CY + 66} ${CX + 76} ${CY - 26} Z`, fill: "rgb(236,240,246)", stroke: TINTA, "stroke-width": 3 });
+  const relleno = el(s, "ellipse", { cx: CX, cy: CY - 18, rx: 66, ry: 16, fill: "rgb(214,150,130)" });
+  const motas = [];
+  for (let i = 0; i < 8; i++) motas.push(el(s, "circle", { cx: CX - 50 + i * 14, cy: CY - 18 + ((i % 3) - 1) * 6, r: 3, fill: "rgb(130,180,90)" }));
+  const palillos = el(s, "g", {});
+  el(palillos, "rect", { x: -4, y: -56, width: 3, height: 56, fill: MADERA, stroke: TINTA, "stroke-width": 1 });
+  el(palillos, "rect", { x: 2, y: -56, width: 3, height: 56, fill: MADERA, stroke: TINTA, "stroke-width": 1 });
+  const med = medidor(H, s, { x: 252, y: 40, w: 12, h: 140, a: 0.97, b: 1, vertical: true });
+  const aviso = letrero(H, s, "", 150, 24);
+  H.ayuda("Stir the filling in ONE direction only until it turns sticky");
+  Object.assign(H.g, { tipo: "una_direccion", cx: CX, cy: CY - 18, v: 0 });
+  let previo = null;
+  let sentido = 0;
+  let v = 0;
+  let cambios = 0;
+  let ang = 0;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      previo = Math.atan2(p[1] - (CY - 18), p[0] - CX);
+    },
+    mover: (p) => {
+      const a = Math.atan2(p[1] - (CY - 18), p[0] - CX);
+      let d = a - previo;
+      if (d > Math.PI) d -= 2 * Math.PI;
+      if (d < -Math.PI) d += 2 * Math.PI;
+      previo = a;
+      palillos.setAttribute("transform", `translate(${clamp(p[0], CX - 60, CX + 60).toFixed(1)} ${clamp(p[1], CY - 40, CY + 10).toFixed(1)})`);
+      if (Math.abs(d) < 0.01 || Math.hypot(p[0] - CX, p[1] - CY + 18) < 10) return;
+      if (!sentido) sentido = Math.sign(d);
+      if (Math.sign(d) !== sentido) {
+        if (Math.abs(d) > 0.08) {
+          cambios++;
+          v = Math.max(0, v - 0.15);
+          aviso.textContent = "Same direction!";
+          H.sonar("no");
+          sentido = Math.sign(d);
+        }
+        return;
+      }
+      aviso.textContent = "";
+      v = Math.min(1, v + Math.abs(d) * 0.02 * H.rapido(0.2));
+      ang += d;
+      H.g.v = v;
+      med.poner(v);
+      relleno.setAttribute("fill", mezcla("rgb(214,150,130)", "rgb(196,120,110)", v));
+      motas.forEach((m, i) => m.setAttribute("transform", `rotate(${((ang * 180) / Math.PI + i * 20).toFixed(0)} ${CX} ${CY - 18})`));
+      if (v >= 1) {
+        previo = null;
+        H.fin(Math.max(1, 3 - 0.35 * cambios));
+      }
+    },
+  });
+}
+
+// TOFU EN LA PALMA (mapo): cortar el tofu suave sobre la mano: cortes lentos (si vas rapido, se rompe).
+function tofuPalma(s, paso, H) {
+  const { el, TINTA } = H;
+  const N = H.mas(paso.n || 4, 1);
+  const VLIM = 0.22 * H.rapido(0.15);
+  el(s, "ellipse", { cx: 150, cy: 140, rx: 110, ry: 46, fill: "rgb(250,214,184)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 96, y: 86, width: 108, height: 62, rx: 6, fill: "rgb(252,250,240)", stroke: TINTA, "stroke-width": 3 });
+  const guias = [];
+  for (let i = 0; i < N; i++) {
+    const x = 96 + (108 * (i + 1)) / (N + 1);
+    guias.push({ x, e: el(s, "line", { x1: x, y1: 80, x2: x, y2: 154, stroke: VERDE_O, "stroke-width": 2, "stroke-dasharray": "4 4" }), hecho: false });
+  }
+  const cortes = el(s, "g", {});
+  const med = medidor(H, s, { x: 70, y: 18, w: 160, h: 10, a: 0, b: 1 / 1.6, rojo: 1 - 1 / 1.6 });
+  const cuenta = letrero(H, s, `0 / ${N}`, 284, 50, "end");
+  H.ayuda("Cut the soft tofu on your palm: slow, gentle strokes down each line");
+  Object.assign(H.g, { tipo: "tofu", guias: guias.map((g) => g.x), vlim: VLIM });
+  let ini = null;
+  const notas = [];
+  arrastrar(s, H, {
+    abajo: (p) => {
+      ini = { p, t: H.ahora() };
+    },
+    arriba: (p) => {
+      if (!ini) return;
+      const dy = p[1] - ini.p[1];
+      const v = Math.abs(dy) / Math.max(1, H.ahora() - ini.t);
+      const x = (p[0] + ini.p[0]) / 2;
+      ini = null;
+      if (Math.abs(dy) < 30) return;
+      const g = guias.find((q) => !q.hecho && Math.abs(q.x - x) < 14);
+      if (!g) return H.sonar("no");
+      g.hecho = true;
+      g.e.setAttribute("opacity", 0);
+      med.poner(v / VLIM / 1.6);
+      const roto = v > VLIM;
+      notas.push(roto ? H.notaDe(v / VLIM - 1, 0.01, 1) : H.notaDe(Math.abs(x - g.x), H.ancho(6, 0.35), 14));
+      el(cortes, "line", { x1: x, y1: 88, x2: x + (roto ? 8 : 0), y2: 146, stroke: TINTA, "stroke-width": roto ? 3 : 1.5 });
+      H.sonar(roto ? "no" : "tocar");
+      const n = guias.filter((q) => q.hecho).length;
+      cuenta.textContent = `${n} / ${N}`;
+      if (n >= N) H.fin(H.promedio(notas));
+    },
+  });
+}
+
+// PINTAR (pastel de luna): pintar con huevo solo el dibujo de arriba, sin salirse.
+function pintarHuevo(s, paso, H) {
+  const { el, TINTA } = H;
+  const CX = 150;
+  const CY = 110;
+  const R = 50;
+  el(s, "circle", { cx: CX, cy: CY, r: R + 14, fill: "rgb(222,170,100)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "circle", { cx: CX, cy: CY, r: R, fill: "rgb(236,196,130)", stroke: "rgb(190,140,80)", "stroke-width": 3 });
+  for (let i = 0; i < 8; i++) el(s, "line", { x1: CX, y1: CY, x2: CX + R * Math.cos((i * Math.PI) / 4), y2: CY + R * Math.sin((i * Math.PI) / 4), stroke: "rgb(200,150,90)", "stroke-width": 2 });
+  const pintado = el(s, "g", {});
+  const az = H.azarDe("pintar");
+  const pts = [];
+  for (let i = 0; i < 30; i++) {
+    const a = az() * Math.PI * 2;
+    const r = Math.sqrt(az()) * (R - 6);
+    pts.push({ x: CX + r * Math.cos(a), y: CY + r * Math.sin(a), ok: false });
+  }
+  const cuenta = letrero(H, s, "", 150, 24);
+  H.ayuda("Brush egg over the pattern only · don't paint the sides");
+  Object.assign(H.g, { tipo: "pintar", cx: CX, cy: CY, r: R });
+  let fuera = 0;
+  let previo = null;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      previo = p;
+    },
+    mover: (p) => {
+      const d = Math.hypot(p[0] - CX, p[1] - CY);
+      const m = Math.hypot(p[0] - previo[0], p[1] - previo[1]);
+      previo = p;
+      el(pintado, "circle", { cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: 6, fill: d > R + 4 ? "rgba(255,190,60,0.5)" : "rgba(255,210,90,0.55)" });
+      if (d > R + 4) fuera += m;
+      for (const q of pts) if (!q.ok && Math.hypot(q.x - p[0], q.y - p[1]) < 12) q.ok = true;
+      const n = pts.filter((q) => q.ok).length;
+      cuenta.textContent = `${Math.round((n / pts.length) * 100)}%`;
+      if (n >= pts.length) {
+        previo = null;
+        H.fin(H.notaDe(fuera, H.ancho(30, 0.35), 160));
+      }
+    },
+  });
+}
+
 export const GESTOS = {
   torcer: { nombre: "TWIST", texto: (p) => `Twist the top closed (${p.n || 18} pleats)`, crear: torcer },
   cuchilla: { nombre: "SMEAR", texto: () => "Smear the wrappers with the cleaver", crear: cuchilla },
@@ -3488,9 +3836,17 @@ export const GESTOS = {
   desmechar: { nombre: "SHRED", texto: () => "Shred the chicken with two forks", crear: desmechar },
   remojar: { nombre: "GARLIC DIP", texto: () => "Dip them in garlic salt water", crear: remojar },
   sin_abrir: { nombre: "DON'T PEEK", texto: () => "Bake without opening the oven", crear: sinAbrir },
-  armar: { nombre: "LAYER UP", texto: () => "Build the tamal in order", crear: armar },
+  armar: { nombre: "LAYER UP", texto: (p) => p.texto2 || "Build the tamal in order", crear: armar },
   queso: { nombre: "CHEESE", texto: () => "Drop in the cheese and pull it out stretchy", crear: quesoEstira },
   tostar: { nombre: "ROAST", texto: () => "Roast the coffee beans", crear: tostar },
   pelusa: { nombre: "RUB", texto: () => "Rub the fuzz off the lulo", crear: pelusa },
+  gota: { nombre: "SNAP TEST", texto: () => "Cook the syrup until a drop snaps in cold water", crear: gota },
+  pitillo: { nombre: "STRAW", texto: () => "Stab the straw through the sealed lid", crear: pitillo },
+  voltear: { nombre: "FLIP", texto: (p) => (p.que === "bol" ? "Press into a bowl and flip it onto the plate" : "Flip the pan onto the plate"), crear: voltear },
+  extender: { nombre: "SPREAD BATTER", texto: () => "Spread the batter in circles", crear: extender },
+  helado: { nombre: "SCOOP", texto: () => "Scoop the ice cream on top", crear: helado },
+  una_direccion: { nombre: "BEAT", texto: () => "Beat the filling in one direction", crear: unaDireccion },
+  tofu: { nombre: "PALM CUT", texto: () => "Cut the tofu on your palm", crear: tofuPalma },
+  pintar: { nombre: "EGG WASH", texto: () => "Brush egg over the pattern", crear: pintarHuevo },
   palillo: { nombre: "POACH", texto: () => "Poach it gently and test with a chopstick", crear: palillo },
 };
