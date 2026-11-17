@@ -2528,6 +2528,143 @@ function palillo(s, paso, H) {
   });
 }
 
+// ACEITE TIBIO (camarones longjing): en aceite tibio cada camaron pasa de gris a blanco; sacarlo justo al ponerse blanco.
+function aceiteTibio(s, paso, H) {
+  const { el, TINTA } = H;
+  const N = H.mas(paso.n || 5, 1);
+  const TOL = H.ancho(260, 0.35);
+  el(s, "ellipse", { cx: 150, cy: 112, rx: 130, ry: 76, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "ellipse", { cx: 150, cy: 108, rx: 116, ry: 64, fill: "rgb(236,200,110)" });
+  const az = H.azarDe("aceite_tibio");
+  const cams = [];
+  for (let i = 0; i < N; i++) {
+    const x = 70 + (i * 160) / Math.max(1, N - 1);
+    const y = 96 + (i % 2) * 26;
+    const g = el(s, "g", { transform: `translate(${x} ${y})` });
+    const cuerpo = el(g, "path", { d: "M10 -5 A10 10 0 1 0 4 9", fill: "none", stroke: "rgb(150,150,156)", "stroke-width": 8, "stroke-linecap": "round" });
+    cams.push({ x, y, g, cuerpo, listo: (1600 + az() * 2600 + i * 500) / H.rapido(0.2), hecho: false });
+  }
+  const cuenta = letrero(H, s, `0 / ${N}`);
+  H.ayuda("Each shrimp turns white when it's ready · tap it right then to take it out");
+  Object.assign(H.g, { tipo: "aceite_tibio", cams: [] });
+  const notas = [];
+  let tA = 0;
+  H.bucle((t) => {
+    tA = t;
+    const vivos = [];
+    for (const c of cams) {
+      if (c.hecho) continue;
+      const k = t / c.listo;
+      c.cuerpo.setAttribute("stroke", k < 1 ? mezcla("rgb(150,150,156)", "rgb(236,236,230)", k * k) : mezcla("rgb(250,246,240)", "rgb(240,140,100)", (k - 1) * 2.5));
+      vivos.push({ x: c.x, y: c.y, listo: c.listo });
+      if (k > 1.9) {
+        c.hecho = true;
+        notas.push(1);
+        c.g.setAttribute("opacity", 0.4);
+        H.sonar("no");
+      }
+    }
+    H.g.cams = vivos;
+    H.g.t = t;
+    if (notas.length >= N) H.fin(H.promedio(notas));
+  });
+  s.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!H.vivo()) return;
+    const [x, y] = H.aSvg(e);
+    const c = cams.find((q) => !q.hecho && Math.hypot(q.x - x, q.y - y) < 22);
+    if (!c) return;
+    c.hecho = true;
+    const nota = H.notaDe(tA - c.listo - 150, TOL, 900);
+    notas.push(nota);
+    c.g.setAttribute("transform", `translate(${c.x} 30)`);
+    H.sonar(nota >= 2.5 ? "tocar" : "no");
+    cuenta.textContent = `${notas.length} / ${N}`;
+  });
+}
+
+// RASPAR (cerdo dongpo): pasar el cuchillo por la piel para quitar los pelitos, en pocas pasadas largas.
+function raspar(s, paso, H) {
+  const { el, TINTA } = H;
+  el(s, "rect", { x: 40, y: 50, width: 220, height: 120, rx: 8, fill: "rgb(214,110,96)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 40, y: 50, width: 220, height: 34, rx: 8, fill: "rgb(240,200,170)", stroke: TINTA, "stroke-width": 3 });
+  for (let i = 0; i < 3; i++) el(s, "rect", { x: 44, y: 96 + i * 24, width: 212, height: 8, fill: "rgb(252,236,214)" });
+  const az = H.azarDe("raspar");
+  const pelos = [];
+  for (let i = 0; i < 26; i++) {
+    const x = 52 + az() * 196;
+    const y = 56 + az() * 22;
+    pelos.push({ x, y, e: el(s, "line", { x1: x, y1: y, x2: x + 2, y2: y - 7, stroke: "rgb(60,40,30)", "stroke-width": 1.5 }), hecho: false });
+  }
+  const hoja = el(s, "rect", { x: -20, y: -6, width: 40, height: 12, rx: 2, fill: METAL, stroke: TINTA, "stroke-width": 2, opacity: 0 });
+  const cuenta = letrero(H, s, "", 150, 24);
+  H.ayuda("Scrape the skin clean: long swipes along the top");
+  Object.assign(H.g, { tipo: "raspar", y: 67 });
+  let pasadas = 0;
+  let toco = 0;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      toco = 0;
+      hoja.setAttribute("opacity", 1);
+      hoja.setAttribute("transform", `translate(${p[0].toFixed(1)} ${p[1].toFixed(1)})`);
+    },
+    mover: (p) => {
+      hoja.setAttribute("transform", `translate(${p[0].toFixed(1)} ${p[1].toFixed(1)})`);
+      for (const q of pelos)
+        if (!q.hecho && Math.abs(q.x - p[0]) < 12 && Math.abs(q.y - p[1]) < 14) {
+          q.hecho = true;
+          q.e.remove();
+          toco++;
+        }
+    },
+    arriba: () => {
+      hoja.setAttribute("opacity", 0);
+      pasadas++;
+      if (toco) H.sonar("limpiar");
+      const quedan = pelos.filter((q) => !q.hecho).length;
+      cuenta.textContent = quedan ? `${quedan} left` : "";
+      if (!quedan) H.fin(Math.max(1, 3 - 0.25 * Math.max(0, pasadas - 2)));
+    },
+  });
+}
+
+// TAPITA (raiz de loto): volver a poner la tapa con palillos. La tapa se mueve un poco: clavar cuando esta alineada.
+function tapita(s, paso, H) {
+  const { el, TINTA } = H;
+  const N = paso.n || 3;
+  const TOL = H.ancho(4, 0.35);
+  const P = 1500 / H.rapido(0.25);
+  el(s, "rect", { x: 90, y: 70, width: 120, height: 112, rx: 10, fill: "rgb(240,214,200)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 90, y: 64, width: 120, height: 12, fill: "rgb(250,234,222)", stroke: TINTA, "stroke-width": 2 });
+  const tapa = el(s, "g", {});
+  el(tapa, "rect", { x: -60, y: -30, width: 120, height: 34, rx: 10, fill: "rgb(240,214,200)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "line", { x1: 150, y1: 22, x2: 150, y2: 62, stroke: VERDE_O, "stroke-width": 2, "stroke-dasharray": "4 4" });
+  const marca = el(tapa, "line", { x1: 0, y1: -30, x2: 0, y2: 4, stroke: ROJO, "stroke-width": 2 });
+  const listos = el(s, "g", {});
+  const cuenta = letrero(H, s, `0 / ${N}`, 14, 24, "start");
+  H.ayuda("Tap to pin the lid when its red line meets the green one");
+  Object.assign(H.g, { tipo: "tapita", P, t0: H.t0 });
+  let off = 0;
+  let n = 0;
+  const notas = [];
+  H.bucle((t) => {
+    off = 18 * Math.sin((2 * Math.PI * t) / P) * (1 - n * 0.25);
+    tapa.setAttribute("transform", `translate(${(150 + off).toFixed(1)} 62)`);
+    H.g.off = off;
+  });
+  s.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!H.vivo() || n >= N) return;
+    const nota = H.notaDe(off, TOL, 14);
+    notas.push(nota);
+    n++;
+    H.sonar(nota >= 2.5 ? "tocar" : "no");
+    el(listos, "line", { x1: 110 + n * 20 + off, y1: 30, x2: 110 + n * 20 + off, y2: 90, stroke: MADERA, "stroke-width": 3 });
+    cuenta.textContent = `${n} / ${N}`;
+    if (n >= N) H.fin(H.promedio(notas));
+  });
+}
+
 export const GESTOS = {
   torcer: { nombre: "TWIST", texto: (p) => `Twist the top closed (${p.n || 18} pleats)`, crear: torcer },
   cuchilla: { nombre: "SMEAR", texto: () => "Smear the wrappers with the cleaver", crear: cuchilla },
@@ -2562,5 +2699,8 @@ export const GESTOS = {
   limpiar: { nombre: "CLEAN", texto: () => "Clean the flowers", crear: limpiar },
   brotes: { nombre: "TEA TIPS", texto: () => "Pick the tea: one bud, one leaf", crear: brotes },
   red: { nombre: "NET", texto: () => "Net a fish from the tank", crear: red },
+  aceite_tibio: { nombre: "WARM OIL", texto: () => "Take each shrimp out the moment it turns white", crear: aceiteTibio },
+  raspar: { nombre: "SCRAPE", texto: () => "Scrape the pork skin clean", crear: raspar },
+  tapita: { nombre: "PIN LID", texto: () => "Pin the lid back on with toothpicks", crear: tapita },
   palillo: { nombre: "POACH", texto: () => "Poach it gently and test with a chopstick", crear: palillo },
 };
