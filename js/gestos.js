@@ -3135,6 +3135,309 @@ function gelatina(s, paso, H) {
   });
 }
 
+// v78: tanda 3 (Colombia).
+// DESMECHAR (ajiaco): deshilachar el pollo con dos tenedores: pasadas largas de un lado al otro.
+function desmechar(s, paso, H) {
+  const { el, TINTA } = H;
+  const N = H.mas(paso.n || 6, 2);
+  el(s, "ellipse", { cx: 150, cy: 112, rx: 120, ry: 70, fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+  const pechuga = el(s, "ellipse", { cx: 150, cy: 112, rx: 60, ry: 34, fill: "rgb(236,200,150)", stroke: TINTA, "stroke-width": 3 });
+  const hebras = el(s, "g", {});
+  el(s, "line", { x1: 80, y1: 112, x2: 220, y2: 112, stroke: VERDE_O, "stroke-width": 2, "stroke-dasharray": "5 6" });
+  const cuenta = letrero(H, s, `0 / ${N}`);
+  H.ayuda("Pull the chicken apart: long swipes across, end to end");
+  Object.assign(H.g, { tipo: "desmechar" });
+  let n = 0;
+  let cortas = 0;
+  let ini = null;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      ini = p;
+    },
+    arriba: (p) => {
+      if (!ini) return;
+      const L = Math.abs(p[0] - ini[0]);
+      ini = null;
+      if (L < 25) return;
+      if (L < 110) {
+        cortas++;
+        H.sonar("no");
+      } else H.sonar("tocar");
+      n++;
+      for (let j = 0; j < 4; j++) el(hebras, "path", { d: `M${100 + Math.random() * 100} ${86 + Math.random() * 52} q8 -4 18 2`, fill: "none", stroke: "rgb(236,200,150)", "stroke-width": 3, "stroke-linecap": "round" });
+      pechuga.setAttribute("rx", Math.max(10, 60 - n * 7));
+      pechuga.setAttribute("ry", Math.max(6, 34 - n * 4));
+      cuenta.textContent = `${n} / ${N}`;
+      if (n >= N) H.fin(Math.max(1, 3 - 0.3 * cortas));
+    },
+  });
+}
+
+// REMOJAR (patacones): meter el patacon aplastado en agua con ajo y sal un momento, y sacarlo.
+function remojar(s, paso, H) {
+  const { el, TINTA } = H;
+  const N = paso.n || 3;
+  const A = 0.8;
+  const B = 1.2;
+  const T = 1000 / H.rapido(0.2);
+  el(s, "path", { d: "M70 110 Q74 186 150 188 Q226 186 230 110 Z", fill: "rgb(236,240,246)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "ellipse", { cx: 150, cy: 112, rx: 80, ry: 14, fill: "rgb(200,220,226)", stroke: TINTA, "stroke-width": 2 });
+  for (const [x, y] of [[120, 112], [176, 110]]) el(s, "ellipse", { cx: x, cy: y, rx: 6, ry: 4, fill: "rgb(250,246,230)", stroke: TINTA, "stroke-width": 1 });
+  const pat = el(s, "ellipse", { cx: 0, cy: 0, rx: 24, ry: 9, fill: "rgb(232,190,90)", stroke: TINTA, "stroke-width": 2.5 });
+  const med = medidor(H, s, { x: 252, y: 40, w: 12, h: 140, a: A / 1.6, b: B / 1.6, vertical: true });
+  const cuenta = letrero(H, s, `0 / ${N}`, 14, 24, "start");
+  H.ayuda("Drag the patacón into the garlic water, hold it there a moment, then lift it out");
+  let dentro = false;
+  let tD = 0;
+  let tA = 0;
+  let n = 0;
+  const notas = [];
+  pat.setAttribute("transform", "translate(150 50)");
+  Object.assign(H.g, { tipo: "remojar", k: 0, a: A, b: B });
+  H.bucle((t) => {
+    tA = t;
+    const k = dentro ? (t - tD) / T : 0;
+    H.g.k = k;
+    med.poner(k / 1.6);
+  });
+  arrastrar(s, H, {
+    mover: (p) => {
+      pat.setAttribute("transform", `translate(${clamp(p[0], 80, 220).toFixed(1)} ${clamp(p[1], 30, 150).toFixed(1)})`);
+      const en = p[1] > 108;
+      if (en && !dentro) {
+        dentro = true;
+        tD = tA;
+        H.sonar("tocar");
+      } else if (!en && dentro) {
+        dentro = false;
+        const k = (tA - tD) / T;
+        const nota = H.notaDe(k - (A + B) / 2, (B - A) / 2 + H.ancho(0.15, 0.35) - 0.15, 0.6);
+        notas.push(nota);
+        n++;
+        cuenta.textContent = `${n} / ${N}`;
+        H.sonar(nota >= 2.5 ? "tocar" : "no");
+        if (n >= N) H.fin(H.promedio(notas));
+      }
+    },
+  });
+}
+
+// SIN ABRIR (pandebono): el horno no se abre hasta que se inflen. Si tocas antes, se desinflan.
+function sinAbrir(s, paso, H) {
+  const { el, TINTA } = H;
+  el(s, "rect", { x: 40, y: 30, width: 220, height: 156, rx: 10, fill: "rgb(80,80,90)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 62, y: 52, width: 176, height: 108, rx: 6, fill: "rgb(60,40,30)", stroke: TINTA, "stroke-width": 3 });
+  const panes = [0, 1, 2].map((i) => el(s, "ellipse", { cx: 100 + i * 50, cy: 128, rx: 18, ry: 8, fill: H.MASA_R, stroke: TINTA, "stroke-width": 2.5 }));
+  el(s, "rect", { x: 62, y: 52, width: 176, height: 108, rx: 6, fill: "rgba(255,170,60,0.12)" });
+  H.ayuda("Don't open the oven too soon! Tap when they've puffed up and turned golden");
+  vigilar(s, H, {
+    T: 4800 / H.rapido(0.2), a: 0.92, b: 1.08, g: { tipo: "sin_abrir" },
+    pintar: (k) => panes.forEach((p, i) => {
+      p.setAttribute("ry", (8 + 12 * clamp(k)).toFixed(1));
+      p.setAttribute("cy", (128 - 10 * clamp(k)).toFixed(1));
+      p.setAttribute("fill", k > 1.3 ? "rgb(170,110,50)" : mezcla(H.MASA_R, "rgb(222,160,70)", clamp(k - 0.5) * 2));
+      void i;
+    }),
+    alTocar: (nota, k) => {
+      if (k < 0.75) panes.forEach((p) => p.setAttribute("ry", 6));
+      H.fin(nota);
+    },
+  });
+}
+
+// ARMAR (tamal tolimense): poner los ingredientes sobre la hoja en el orden de la receta.
+function armar(s, paso, H) {
+  const { el, TINTA } = H;
+  const ORDEN = [["Corn dough", "rgb(250,226,140)"], ["Rice", "rgb(252,252,246)"], ["Chicken", "rgb(236,200,150)"], ["Pork", "rgb(214,110,96)"], ["Egg", "rgb(255,214,90)"], ["Carrot", "rgb(240,140,60)"], ["Peas", "rgb(110,170,70)"]];
+  el(s, "ellipse", { cx: 110, cy: 120, rx: 86, ry: 56, fill: "rgb(96,150,70)", stroke: TINTA, "stroke-width": 3 });
+  const capa = el(s, "g", {});
+  const az = H.azarDe("armar");
+  const pos = ORDEN.map((_, i) => i).sort(() => az() - 0.5);
+  const botones = ORDEN.map(([nombre, color], i) => {
+    const k = pos[i];
+    const x = 226 + (k % 2) * 40;
+    const y = 26 + Math.floor(k / 2) * 44;
+    el(s, "circle", { cx: x, cy: y, r: 13, fill: color, stroke: TINTA, "stroke-width": 2.5 });
+    el(s, "text", { x, y: y + 22, "text-anchor": "middle", "font-size": 7, class: "cocina-cuenta" }).textContent = nombre.split(" ")[0];
+    return { x, y, i, nombre };
+  });
+  const cartel = letrero(H, s, `Next: ${ORDEN[0][0]}`, 14, 24, "start");
+  H.ayuda("Add the fillings in the tamal's order: tap the one shown at the top");
+  let i = 0;
+  let malos = 0;
+  Object.assign(H.g, { tipo: "armar", sig: { x: botones[0].x, y: botones[0].y } });
+  s.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!H.vivo()) return;
+    const [x, y] = H.aSvg(e);
+    const b = botones.find((q) => Math.hypot(q.x - x, q.y - y) < 16);
+    if (!b) return;
+    if (b.i !== i) {
+      malos++;
+      return H.sonar("no");
+    }
+    H.sonar("tocar");
+    el(capa, "ellipse", { cx: 110, cy: 122 - i * 4, rx: 60 - i * 6, ry: 30 - i * 3, fill: ORDEN[i][1], stroke: TINTA, "stroke-width": 1.5 });
+    i++;
+    if (i >= ORDEN.length) return H.fin(Math.max(1, 3 - 0.3 * malos));
+    cartel.textContent = `Next: ${ORDEN[i][0]}`;
+    H.g.sig = { x: botones[i].x, y: botones[i].y };
+  });
+}
+
+// QUESO (chocolate santafereno): el queso se derrite en la taza; sacarlo con la cuchara despacito para que se estire.
+function quesoEstira(s, paso, H) {
+  const { el, TINTA } = H;
+  const META = 80;
+  const VLIM = 0.09 * H.rapido(0.2);
+  el(s, "path", { d: "M90 110 L100 186 L200 186 L210 110 Z", fill: "rgb(250,250,246)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "ellipse", { cx: 150, cy: 112, rx: 60, ry: 12, fill: "rgb(110,60,40)", stroke: TINTA, "stroke-width": 2 });
+  const hilo = el(s, "rect", { x: 146, y: 112, width: 8, height: 0, fill: "rgb(252,246,220)", stroke: "rgb(220,210,180)", "stroke-width": 1 });
+  const cuchara = el(s, "g", {});
+  el(cuchara, "ellipse", { cx: 0, cy: 0, rx: 14, ry: 8, fill: METAL, stroke: TINTA, "stroke-width": 2.5 });
+  el(cuchara, "ellipse", { cx: 0, cy: -2, rx: 9, ry: 5, fill: "rgb(252,246,220)" });
+  cuchara.setAttribute("transform", "translate(150 112)");
+  el(s, "line", { x1: 120, y1: 112 - META, x2: 180, y2: 112 - META, stroke: VERDE_O, "stroke-width": 2, "stroke-dasharray": "5 5" });
+  const med = medidor(H, s, { x: 252, y: 40, w: 12, h: 140, a: 0, b: 1 / 1.5, vertical: true, rojo: 1 - 1 / 1.5 });
+  H.ayuda("Pull the melted cheese up slowly so it stretches to the line");
+  Object.assign(H.g, { tipo: "queso", meta: META, vlim: VLIM });
+  let y0 = null;
+  let tP = 0;
+  let yP = 0;
+  let v = 0;
+  let largo = 0;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      y0 = p[1];
+      tP = H.ahora();
+      yP = p[1];
+    },
+    mover: (p) => {
+      if (y0 === null) return;
+      const ahora = H.ahora();
+      v = 0.7 * v + 0.3 * (Math.max(0, yP - p[1]) / Math.max(1, ahora - tP));
+      tP = ahora;
+      yP = p[1];
+      med.poner(v / VLIM / 1.5);
+      largo = Math.max(largo, y0 - p[1]);
+      cuchara.setAttribute("transform", `translate(150 ${(112 - largo).toFixed(1)})`);
+      hilo.setAttribute("y", (112 - largo).toFixed(1));
+      hilo.setAttribute("height", largo.toFixed(1));
+      if (v > VLIM * 1.5) {
+        y0 = null;
+        H.sonar("no");
+        hilo.setAttribute("height", 0);
+        return H.fin(Math.max(1, 1 + 2 * clamp(largo / META) - 0.6));
+      }
+      if (largo >= META) {
+        y0 = null;
+        H.fin(H.notaDe(Math.max(0, v / VLIM - 1), H.ancho(0.25, 0.35), 0.6));
+      }
+    },
+    arriba: () => {
+      y0 = null;
+    },
+  });
+}
+
+// TOSTAR (tinto): sacudir la sarten para que los granos se tuesten parejo; "Done" cuando esten cafe oscuro.
+function tostar(s, paso, H) {
+  const { el, TINTA } = H;
+  const A = 0.72;
+  const B = 0.86;
+  el(s, "rect", { x: 200, y: 100, width: 80, height: 12, rx: 5, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 2.5 });
+  const sarten = el(s, "g", {});
+  el(sarten, "ellipse", { cx: 0, cy: 0, rx: 70, ry: 28, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
+  const az = H.azarDe("tostar");
+  const granos = [];
+  for (let i = 0; i < 14; i++) granos.push({ e: el(sarten, "ellipse", { cx: (az() - 0.5) * 100, cy: (az() - 0.5) * 30, rx: 6, ry: 4, fill: "rgb(150,170,90)", stroke: TINTA, "stroke-width": 1.2 }), r: 0, sesgo: 0.7 + az() * 0.6 });
+  sarten.setAttribute("transform", "translate(140 110)");
+  const med = medidor(H, s, { x: 70, y: 20, w: 160, h: 10, a: A, b: B });
+  H.ayuda("Shake the pan side to side so they roast evenly · tap Done when they're dark brown");
+  Object.assign(H.g, { tipo: "tostar", r: 0, a: A, b: B, cx: 140 });
+  let x0 = null;
+  let off = 0;
+  let mov = 0;
+  let tU = 0;
+  H.bucle((t) => {
+    const dt = Math.min(40, t - tU);
+    tU = t;
+    mov *= Math.exp(-dt / 300);
+    const parejo = clamp(mov / 0.15);
+    let suma = 0;
+    granos.forEach((g) => {
+      const f = parejo + (1 - parejo) * g.sesgo * 1.5;
+      g.r += dt * 0.00011 * f * H.rapido(0.2);
+      suma += g.r;
+      g.e.setAttribute("fill", g.r < 0.5 ? mezcla("rgb(150,170,90)", "rgb(200,150,80)", g.r * 2) : mezcla("rgb(200,150,80)", "rgb(50,30,20)", (g.r - 0.5) * 2));
+    });
+    const r = suma / granos.length;
+    H.g.r = r;
+    med.poner(r);
+  });
+  arrastrar(s, H, {
+    abajo: (p) => {
+      x0 = p[0] - off;
+    },
+    mover: (p) => {
+      if (x0 === null) return;
+      const n = clamp(p[0] - x0, -40, 40);
+      mov = Math.min(1, mov + Math.abs(n - off) * 0.004);
+      off = n;
+      sarten.setAttribute("transform", `translate(${(140 + off).toFixed(1)} 110)`);
+    },
+    arriba: () => {
+      x0 = null;
+    },
+  });
+  H.boton("Done ✓", () => {
+    const rs = granos.map((g) => g.r);
+    const m = rs.reduce((a, b) => a + b, 0) / rs.length;
+    const desv = Math.sqrt(rs.reduce((a, b) => a + (b - m) ** 2, 0) / rs.length);
+    H.fin(H.notaDe(m - (A + B) / 2, (B - A) / 2, 0.3) - Math.max(0, desv - 0.05) * 6);
+  });
+}
+
+// PELUSA (lulada): el lulo tiene pelusita: frotarlo con el trapo hasta dejarlo brillante.
+function pelusa(s, paso, H) {
+  const { el, TINTA } = H;
+  el(s, "circle", { cx: 150, cy: 110, r: 56, fill: "rgb(240,170,40)", stroke: TINTA, "stroke-width": 3 });
+  el(s, "ellipse", { cx: 130, cy: 88, rx: 14, ry: 8, fill: "rgb(255,214,120)" });
+  const az = H.azarDe("pelusa");
+  const pelos = [];
+  for (let i = 0; i < 40; i++) {
+    const a = az() * Math.PI * 2;
+    const r = Math.sqrt(az()) * 50;
+    const x = 150 + r * Math.cos(a);
+    const y = 110 + r * Math.sin(a);
+    pelos.push({ x, y, e: el(s, "circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 2.2, fill: "rgb(250,240,214)" }), v: 2 });
+  }
+  const trapo = el(s, "rect", { x: -18, y: -12, width: 36, height: 24, rx: 5, fill: "rgb(200,220,240)", stroke: TINTA, "stroke-width": 2, opacity: 0 });
+  const cuenta = letrero(H, s, "", 150, 24);
+  H.ayuda("Rub the fuzz off the lulo with the cloth");
+  Object.assign(H.g, { tipo: "pelusa", cx: 150, cy: 110 });
+  let t0 = null;
+  arrastrar(s, H, {
+    abajo: (p) => {
+      if (t0 === null) t0 = H.ahora();
+      trapo.setAttribute("opacity", 1);
+      trapo.setAttribute("transform", `translate(${p[0].toFixed(1)} ${p[1].toFixed(1)})`);
+    },
+    mover: (p) => {
+      trapo.setAttribute("transform", `translate(${p[0].toFixed(1)} ${p[1].toFixed(1)})`);
+      for (const q of pelos)
+        if (q.v > 0 && Math.abs(q.x - p[0]) < 18 && Math.abs(q.y - p[1]) < 13) {
+          q.v--;
+          q.e.setAttribute("opacity", q.v ? 0.5 : 0);
+        }
+      const quedan = pelos.filter((q) => q.v > 0).length;
+      cuenta.textContent = quedan ? `${quedan} left` : "";
+      if (!quedan) H.fin(H.notaDe(Math.max(0, (H.ahora() - t0) / 1000 - 4), H.ancho(3, 0.35), 8));
+    },
+    arriba: () => trapo.setAttribute("opacity", 0),
+  });
+}
+
 export const GESTOS = {
   torcer: { nombre: "TWIST", texto: (p) => `Twist the top closed (${p.n || 18} pleats)`, crear: torcer },
   cuchilla: { nombre: "SMEAR", texto: () => "Smear the wrappers with the cleaver", crear: cuchilla },
@@ -3182,5 +3485,12 @@ export const GESTOS = {
   budare: { nombre: "BUDARE", texto: () => "Grill it: flip when golden, out when it puffs", crear: budare },
   bolsa: { nombre: "SEAL", texto: () => "Fold and seal with the plastic bag", crear: bolsa },
   gelatina: { nombre: "JELLY", texto: () => "Cut the soup jelly", crear: gelatina },
+  desmechar: { nombre: "SHRED", texto: () => "Shred the chicken with two forks", crear: desmechar },
+  remojar: { nombre: "GARLIC DIP", texto: () => "Dip them in garlic salt water", crear: remojar },
+  sin_abrir: { nombre: "DON'T PEEK", texto: () => "Bake without opening the oven", crear: sinAbrir },
+  armar: { nombre: "LAYER UP", texto: () => "Build the tamal in order", crear: armar },
+  queso: { nombre: "CHEESE", texto: () => "Drop in the cheese and pull it out stretchy", crear: quesoEstira },
+  tostar: { nombre: "ROAST", texto: () => "Roast the coffee beans", crear: tostar },
+  pelusa: { nombre: "RUB", texto: () => "Rub the fuzz off the lulo", crear: pelusa },
   palillo: { nombre: "POACH", texto: () => "Poach it gently and test with a chopstick", crear: palillo },
 };
