@@ -1677,12 +1677,12 @@ function cono(s, paso, H) {
   el(s, "path", { d: guia(OBJ - TOL * 2), fill: "none", stroke: "rgb(200,240,170)", "stroke-width": 2.5, "stroke-dasharray": "5 5" });
   const listos = el(s, "g", {});
   const cuenta = letrero(H, s, `0 / ${N}`);
-  H.ayuda("Drag around the tip to curl the leaf into a cone · let go between the green lines");
+  H.ayuda("Drag sideways to curl the leaf into a cone · let go between the green lines");
   let rot = 0;
   let previo = null;
   let n = 0;
   const notas = [];
-  const K_ROT = 0.62;
+  const K_ROT = 0.45; // grados de apertura por unidad arrastrada de lado: ~110 para llegar a la franja
   const apertura = () => clamp(84 - rot * K_ROT, 6, 84);
   Object.assign(H.g, { tipo: "cono", px: PX, py: PY, obj: OBJ, ap: apertura(), n: 0, k: K_ROT });
   const pintar = () => {
@@ -1697,19 +1697,15 @@ function cono(s, paso, H) {
   pintar();
   arrastrar(s, H, {
     abajo: (p) => {
-      previo = Math.atan2(p[1] - PY, p[0] - PX);
+      previo = p[0];
     },
     mover: (p) => {
-      const a = Math.atan2(p[1] - PY, p[0] - PX);
-      let d = a - previo;
-      if (d > Math.PI) d -= 2 * Math.PI;
-      if (d < -Math.PI) d += 2 * Math.PI;
-      previo = a;
-      rot = Math.max(0, rot + Math.abs(d) * (180 / Math.PI));
+      // v82 (rom: "comienza lento pero luego es demasiado rapido/sensible"): parejo, segun cuanto se arrastra de lado
+      rot = Math.abs(p[0] - previo);
       pintar();
     },
     arriba: () => {
-      if (rot < 20) return;
+      if (rot < 12) return;
       const ap = apertura();
       const nota = H.notaDe(ap - OBJ, TOL, 14);
       notas.push(nota);
@@ -4384,16 +4380,17 @@ function flor(s, paso, H) {
     return `M${x.toFixed(1)} 44 Q${(x + curva).toFixed(1)} 96 ${x.toFixed(1)} 148`;
   };
   let fase = 0;
+  let sitio = 0; // donde va el proximo corte, en el mango (angulo propio); cambia despues de cada corte
   const cortes = [];
   const notas = [];
-  Object.assign(H.g, { tipo: "flor", P, t0: H.t0, n: 0, N });
+  Object.assign(H.g, { tipo: "flor", P, t0: H.t0, n: 0, N, sitio: 0 });
   H.bucle((t) => {
     fase = ((t / P) % 1) * 2 * Math.PI;
     const pinta = (e, a, base) => {
       e.setAttribute("d", linea(a));
       e.setAttribute("opacity", Math.cos(a) > 0 ? base : 0);
     };
-    pinta(marca, fase, 1);
+    pinta(marca, fase - sitio, 1);
     vetas.forEach((v, i) => pinta(v, fase + 0.8 + (i * Math.PI) / 2, 0.8));
     cortes.forEach((c) => {
       pinta(c.e, fase - c.a, 1);
@@ -4403,14 +4400,16 @@ function flor(s, paso, H) {
   s.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     if (!H.vivo()) return;
-    const x = RX * Math.sin(fase);
-    const err = Math.cos(fase) > 0 ? x : 60;
+    const x = RX * Math.sin(fase - sitio);
+    const err = Math.cos(fase - sitio) > 0 ? x : 60;
     const nota = H.notaDe(err, TOL / 2.2, 18);
     notas.push(nota);
     // el corte queda donde estaba la superficie bajo el cuchillo (angulo -asin(x/RX) respecto a la marca)
-    const a = fase - Math.asin(clamp(0 / RX, -1, 1));
+    const a = fase;
     const c = { a, e: el(cortesG, "path", { d: "", fill: "none", stroke: "rgb(250,250,210)", "stroke-width": 4 }), e2: el(cortesG, "path", { d: "", fill: "none", stroke: TINTA, "stroke-width": 1 }) };
     cortes.push(c);
+    sitio = ((notas.length * 2 * Math.PI) / N) % (2 * Math.PI);
+    H.g.sitio = sitio;
     H.sonar(nota >= 2.5 ? "tocar" : "no");
     cuenta.textContent = `${notas.length} / ${N}`;
     H.g.n = notas.length;
