@@ -152,9 +152,20 @@ export const DECOR = [
   { id: "farolitos", nombre: "Red lanterns", precio: 80, arte: "tienda/deco_farolitos.png" },
   { id: "bonsai", nombre: "Bonsai", precio: 60, arte: "tienda/deco_bonsai.png" },
   { id: "orquidea", nombre: "Orchid", precio: 70, arte: "tienda/deco_orquidea.png" },
-  { id: "banderin", nombre: "Bunting", precio: 90, arte: "tienda/deco_banderin.png" },
+  { id: "banderin", nombre: "Bunting", precio: 90, arte: "restaurante/deco_banderin_local.png" }, // v84: mas corto (no tapa los farolitos)
   { id: "luces", nombre: "Fairy lights", precio: 100, arte: "tienda/deco_luces.png" },
   { id: "saco", nombre: "Coffee sack", precio: 60, arte: "tienda/deco_saco.png" },
+  // v84 (rom: "agregar varias decoraciones nuevas al restaurante")
+  { id: "coplas", nombre: "Spring couplets", precio: 70, arte: "restaurante/deco_fu.png" },
+  { id: "vaporeras", nombre: "Bamboo steamers", precio: 80, arte: "restaurante/deco_vaporeras.png" },
+  { id: "chiva", nombre: "Chiva bus", precio: 120, arte: "restaurante/deco_chiva_local.png" },
+  { id: "pizarra", nombre: "Menu board", precio: 60, arte: "restaurante/deco_pizarra.png" },
+  { id: "sombrero", nombre: "Sombrero vueltiao", precio: 90, arte: "restaurante/deco_sombrero.png" },
+  { id: "paraguas", nombre: "Oil-paper umbrella", precio: 110, arte: "restaurante/deco_paraguas.png" },
+  { id: "osmanto", nombre: "Osmanthus tree", precio: 100, arte: "restaurante/deco_osmanto.png" },
+  { id: "mesita", nombre: "Street tea table", precio: 130, arte: "restaurante/deco_mesita.png" },
+  { id: "aves", nombre: "Rooftop birds", precio: 150, arte: "restaurante/deco_aves.png" },
+  { id: "campanilla", nombre: "Wind chime", precio: 60, arte: "restaurante/deco_campanilla.png" },
 ];
 
 /**
@@ -620,7 +631,17 @@ export function abrirRestaurante(contenedor, opts) {
    * los clientes tambien": el cliente afuera, Baozi atendiendo detras del mostrador).
    */
   function frente(cliente = "", calle = "") {
-    const d = (id) => (reg.decor.has(id) && !reg.guardados.has(id) ? `<img class="rest-deco rest-deco-${id}" src="${arte(DECOR.find((x) => x.id === id).arte)}" alt="" draggable="false" />` : "");
+    const puesto = (id) => reg.decor.has(id) && !reg.guardados.has(id);
+    const img = (cl, src) => `<img class="rest-deco ${cl}" src="${arte(src)}" alt="" draggable="false" />`;
+    const d = (id) => (puesto(id) ? img(`rest-deco-${id}`, DECOR.find((x) => x.id === id).arte) : "");
+    // v84: las coplas son tres piezas (una tira a cada lado del mostrador y el 福 en la puerta)
+    // v84d: urracas y guacamaya se turnan en el techo; el desfase al azar hace que cada visita empiece distinto
+    const aves = () => {
+      if (!puesto("aves")) return "";
+      const fase = `animation-delay:-${Math.floor(Math.random() * 40)}s`;
+      return `<img class="rest-deco rest-deco-urracas" style="${fase}" src="${arte("restaurante/deco_urracas.png")}" alt="" draggable="false" /><img class="rest-deco rest-deco-guacamaya" style="${fase}" src="${arte("restaurante/deco_guacamaya.png")}" alt="" draggable="false" />`;
+    };
+    const coplas = () => (puesto("coplas") ? img("rest-deco-copla-izq", "restaurante/deco_copla.png") + img("rest-deco-copla-der", "restaurante/deco_copla.png") + img("rest-deco-fu", "restaurante/deco_fu.png") : "");
     return `
       <div class="rest-frente">
         <div class="rest-escena">
@@ -628,6 +649,7 @@ export function abrirRestaurante(contenedor, opts) {
           <div class="rest-ventana">${cliente}</div>
           ${calle}
           ${d("banderin")}${d("farolitos")}${d("luces")}${d("bonsai")}${d("orquidea")}${d("saco")}
+          ${coplas()}${d("vaporeras")}${d("chiva")}${d("pizarra")}${d("sombrero")}${d("paraguas")}${d("osmanto")}${d("mesita")}${aves()}${d("campanilla")}
           <div class="rest-letrero"><span lang="zh-CN">包子</span> ${esc(nombre).toUpperCase()}'S</div>
         </div>
       </div>`;
