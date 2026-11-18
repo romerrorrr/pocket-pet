@@ -6031,9 +6031,9 @@ button.nota-polaroid {
 .rest-letrero { position: absolute; z-index: 3; left: 39.2%; top: 42%; width: 21.6%; height: 7.1%; display: flex; align-items: center; justify-content: center; gap: 0.6cqw; color: rgb(250, 214, 130); font-family: var(--fuente-display); font-size: 1.45cqw; white-space: nowrap; overflow: hidden; }
 .rest-letrero span { font-family: var(--fuente-cuerpo); font-size: 1.9cqw; }
 .rest-deco { position: absolute; z-index: 2; }
-.rest-deco-banderin { left: 22.5%; width: 55%; top: 38.6%; }
+.rest-deco-banderin { left: 22.5%; width: 37.92%; top: 38.6%; }
 .rest-deco-farolitos { left: 61.5%; width: 24%; top: 39.5%; }
-.rest-deco-luces { left: 32.5%; width: 35%; top: 49.6%; z-index: 4; }
+.rest-deco-luces { left: 32.5%; width: 29.17%; top: 50%; z-index: 4; }
 .rest-deco-bonsai { left: 11.5%; width: 6.25%; bottom: 12.5%; }
 .rest-deco-orquidea { left: 2.5%; width: 6.7%; bottom: 12.5%; }
 .rest-deco-saco { left: 30%; width: 7.5%; bottom: 4%; z-index: 3; }
@@ -6474,3 +6474,39 @@ button.cal-dia:active { transform: translateY(1px); }
 .rest-probar-receta .rest-comida { width: 56px; height: 56px; image-rendering: pixelated; object-fit: contain; }
 .rest-probar-receta small { position: absolute; top: 4px; right: 6px; color: rgb(180, 120, 20); font-weight: bold; }
 .rest-probar-notas { display: block; font-size: 10px; line-height: 1.35; color: rgb(110, 70, 40); margin: 2px 0 6px; }
+
+/* v84: decoraciones nuevas del local (posiciones en pixeles de la fachada 240x112, sin solaparse) */
+.rest-deco-copla-izq { left: 30.00%; top: 50.89%; width: 2.08%; }
+.rest-deco-copla-der { left: 67.92%; top: 57.14%; width: 2.08%; }
+.rest-deco-fu { left: 22.50%; top: 64.29%; width: 5.42%; }
+.rest-deco-vaporeras { left: 33.33%; top: 63.39%; width: 6.67%; }
+.rest-deco-chiva { left: 58.33%; top: 66.07%; width: 7.50%; }
+.rest-deco-pizarra { left: 19.17%; top: 76.79%; width: 7.50%; }
+.rest-deco-sombrero { left: 86.67%; top: 62.50%; width: 10.83%; }
+.rest-deco-paraguas { left: 81.67%; top: 76.79%; width: 10.83%; }
+.rest-deco-osmanto { left: 92.50%; top: 75.00%; width: 7.50%; }
+.rest-deco-mesita { left: 65.83%; top: 83.93%; width: 14.17%; }
+.rest-deco-urracas { left: 58.33%; top: 20.54%; width: 17.08%; }
+.rest-deco-guacamaya { left: 67.92%; top: 19.64%; width: 5.00%; opacity: 0; }
+.rest-deco-campanilla { left: 15.00%; top: 37.50%; width: 3.75%; }
+.rest-deco-vaporeras, .rest-deco-chiva { z-index: 1; }
+.rest-deco-campanilla { transform-origin: 50% 0; animation: rest-campana 2.4s steps(4) infinite; }
+@keyframes rest-campana { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(5deg); } 75% { transform: rotate(-5deg); } }
+/* v84d: se turnan cada 20 s; al irse dan un saltito hacia arriba y se desvanecen */
+.rest-deco-urracas { animation: rest-ave-a 40s steps(1) infinite; }
+.rest-deco-guacamaya { animation: rest-ave-b 40s steps(1) infinite; }
+@keyframes rest-ave-a {
+  0% { opacity: 1; transform: none; } 46% { opacity: 1; transform: none; } 47% { opacity: 1; transform: translateY(-8%); }
+  48% { opacity: .5; transform: translateY(-40%); } 49%, 98% { opacity: 0; transform: translateY(-60%); }
+  99% { opacity: .5; transform: translateY(-20%); } 100% { opacity: 1; transform: none; }
+}
+@keyframes rest-ave-b {
+  0%, 48% { opacity: 0; transform: translateY(-40%); } 49% { opacity: .5; transform: translateY(-15%); }
+  50% { opacity: 1; transform: none; } 96% { opacity: 1; transform: none; } 97% { opacity: 1; transform: translateY(-6%); }
+  98% { opacity: .5; transform: translateY(-30%); } 99%, 100% { opacity: 0; transform: translateY(-40%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rest-deco-urracas { animation: none; }
+  .rest-deco-guacamaya { animation: none; display: none; }
+}
+.rest-deco { image-rendering: pixelated; }
