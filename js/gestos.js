@@ -1387,18 +1387,17 @@ function remolino(s, paso, H) {
 }
 
 // ====================================================================================
-// ESCURRIR (sopa de fideos): sacudir el colador arriba y abajo. Sacudidas largas escurren,
-// pero si se pasa de la linea roja, se caen fideos.
+// ESCURRIR (sopa de fideos): sacudir el colador arriba y abajo. v83 (rom: "lo movemos entre la linea pero
+// no sirve constantemente"): el colador se mueve con el dedo (relativo, no hay que apuntar a ningun lado) y cada
+// sacudida cuenta por su TAMANO: la barrita de la derecha muestra el tamano de la sacudida que estas haciendo.
+// Verde = escurre; rojo = demasiado fuerte, se caen fideos.
 function escurrir(s, paso, H) {
   const { el, TINTA } = H;
   const NEC = H.mas(6, 2);
   const YC = 104;
-  const LIM = 50;
-  const BUENA = 30;
-  el(s, "line", { x1: 30, y1: YC - LIM, x2: 270, y2: YC - LIM, stroke: ROJO, "stroke-width": 2, "stroke-dasharray": "6 6" });
-  el(s, "line", { x1: 30, y1: YC + LIM, x2: 270, y2: YC + LIM, stroke: ROJO, "stroke-width": 2, "stroke-dasharray": "6 6" });
-  el(s, "rect", { x: 30, y: YC - LIM + 4, width: 240, height: LIM - BUENA - 4, fill: ZONA, opacity: 0.3 });
-  el(s, "rect", { x: 30, y: YC + BUENA, width: 240, height: LIM - BUENA - 4, fill: ZONA, opacity: 0.3 });
+  const A = 34; // sacudida minima (de arriba a abajo, en unidades del dibujo)
+  const B = 90; // maxima
+  const MAXV = 120;
   const caidos = el(s, "g", {});
   const col = el(s, "g", {});
   el(col, "path", { d: "M-56 -14 Q-50 34 0 36 Q50 34 56 -14 Z", fill: METAL, stroke: TINTA, "stroke-width": 3 });
@@ -1407,55 +1406,72 @@ function escurrir(s, paso, H) {
   for (let i = 0; i < 5; i++) el(col, "path", { d: `M${-40 + i * 18} -14 q6 12 -2 22 q-6 8 4 14`, fill: "none", stroke: "rgb(250,232,170)", "stroke-width": 4, "stroke-linecap": "round" });
   const agua = el(col, "rect", { x: -44, y: -10, width: 88, height: 14, fill: "rgb(170,204,224)", opacity: 0.8 });
   const gotas = el(s, "g", {});
+  const med = medidor(H, s, { x: 268, y: 30, w: 14, h: 150, a: A / MAXV, b: B / MAXV, vertical: true, rojo: 1 - B / MAXV });
+  el(s, "text", { x: 286, y: 24, "text-anchor": "end", "font-size": 7, class: "cocina-cuenta" }).textContent = "shake";
   const cuenta = letrero(H, s, `0 / ${NEC}`);
-  H.ayuda("Drag up and down to shake the water out · into the green, not past the red");
-  Object.assign(H.g, { tipo: "escurrir", y: YC, yc: YC, lim: LIM, buena: BUENA, n: 0 });
+  H.ayuda("Drag up and down to shake the colander · each shake big enough to reach the green, not the red");
+  Object.assign(H.g, { tipo: "escurrir", a: A, b: B, n: 0 });
   let y = YC;
+  let y0 = null;
+  let base = YC;
   let dir = 0;
   let ext = YC;
   let tramo = YC;
-  let fuera = false;
   let n = 0;
   let caen = 0;
+  col.setAttribute("transform", `translate(140 ${YC})`);
+  const mostrar = (amp) => med.poner(amp / MAXV);
   arrastrar(s, H, {
+    abajo: (p) => {
+      y0 = p[1];
+      base = y;
+      dir = 0;
+      ext = y;
+      tramo = y;
+    },
     mover: (p) => {
-      const ny = clamp(p[1], YC - 80, YC + 80);
+      if (y0 === null) return;
+      const ny = clamp(base + (p[1] - y0), YC - 70, YC + 70);
       const d = ny - y;
       y = ny;
-      H.g.y = y;
       col.setAttribute("transform", `translate(140 ${y.toFixed(1)})`);
-      if (Math.abs(y - YC) > LIM && !fuera) {
-        fuera = true;
-        caen++;
-        H.sonar("no");
-        el(caidos, "path", { d: `M${120 + caen * 14} 186 q8 -8 16 0`, fill: "none", stroke: "rgb(250,232,170)", "stroke-width": 4, "stroke-linecap": "round" });
-      }
-      if (Math.abs(y - YC) < LIM - 6) fuera = false;
-      if (Math.abs(d) < 0.5) return;
+      if (Math.abs(d) < 0.3) return;
       const sd = Math.sign(d);
       if (dir === 0) dir = sd;
-      if (sd === dir) ext = dir > 0 ? Math.max(ext, y) : Math.min(ext, y);
-      else if (Math.abs(y - ext) > 8) {
-        // dio la vuelta: ¿fue una sacudida buena?
-        if (Math.abs(ext - YC) >= BUENA && Math.abs(tramo - YC) >= BUENA * 0.5 && Math.sign(ext - YC) !== Math.sign(tramo - YC)) {
-          n++;
-          H.g.n = n;
-          cuenta.textContent = `${Math.min(n, NEC)} / ${NEC}`;
-          agua.setAttribute("height", Math.max(0, 14 * (1 - n / NEC)).toFixed(1));
-          el(gotas, "circle", { cx: 120 + Math.random() * 40, cy: 170 + Math.random() * 16, r: 3, fill: "rgb(170,204,224)" });
-          H.sonar("tocar");
-          if (n >= NEC) H.fin(Math.max(1, 3 - 0.45 * caen));
-        }
-        tramo = ext;
-        dir = sd;
-        ext = y;
+      if (sd === dir) {
+        ext = dir > 0 ? Math.max(ext, y) : Math.min(ext, y);
+        mostrar(Math.abs(ext - tramo));
+        return;
       }
+      if (Math.abs(y - ext) < 5) return; // un temblor, no una vuelta
+      // dio la vuelta: la sacudida fue de tramo a ext
+      const amp = Math.abs(ext - tramo);
+      if (amp > B) {
+        caen++;
+        H.sonar("no");
+        el(caidos, "path", { d: `M${110 + caen * 14} 186 q8 -8 16 0`, fill: "none", stroke: "rgb(250,232,170)", "stroke-width": 4, "stroke-linecap": "round" });
+      } else if (amp >= A) {
+        n++;
+        H.g.n = n;
+        cuenta.textContent = `${Math.min(n, NEC)} / ${NEC}`;
+        agua.setAttribute("height", Math.max(0, 14 * (1 - n / NEC)).toFixed(1));
+        el(gotas, "circle", { cx: 120 + Math.random() * 40, cy: 170 + Math.random() * 16, r: 3, fill: "rgb(170,204,224)" });
+        H.sonar("tocar");
+        if (n >= NEC) {
+          y0 = null;
+          return H.fin(Math.max(1, 3 - 0.45 * caen));
+        }
+      }
+      tramo = ext;
+      dir = sd;
+      ext = y;
+    },
+    arriba: () => {
+      y0 = null;
     },
   });
-  col.setAttribute("transform", `translate(140 ${YC})`);
 }
 
-// ====================================================================================
 // MARCAR (pescado del lago): cortes en diagonal sobre el lomo, siguiendo las guias.
 function marcar(s, paso, H) {
   const { el, TINTA } = H;
@@ -2664,42 +2680,63 @@ function tapita(s, paso, H) {
 
 // ====================================================================================
 // v76: tanda 2 (las masas).
-// VOLAR (sopa de fideos): cortar tiras del bloque de masa directo a la olla (刀削面), cada pasada a la misma velocidad.
+// VOLAR (sopa de fideos): cortar tiras del bloque de masa directo a la olla (刀削面).
+// v83 (rom: "no he logrado hacerlo bien ni una vez"): ya no importa la velocidad. Cada pasada tiene que
+// cruzar el bloque entero (empezar en el bloque y salir por el otro lado) y seguir la guia hacia la olla.
 function volar(s, paso, H) {
   const { el, TINTA } = H;
   const N = H.mas(paso.n || 6, 2);
-  const V0 = 0.32 * H.rapido(0.15);
-  const TOL = H.ancho(0.3, 0.35);
-  el(s, "rect", { x: 120, y: 120, width: 150, height: 66, rx: 8, fill: OLLA, stroke: TINTA, "stroke-width": 3 });
-  el(s, "rect", { x: 126, y: 132, width: 138, height: 48, rx: 4, fill: "rgb(170,204,224)" });
+  const TOLA = H.ancho(14, 0.35);
+  const X0 = 40;
+  const X1 = 120;
+  const GUIA = Math.atan2(120 - 70, 200 - 50); // la direccion de la guia (hacia abajo a la derecha)
+  el(s, "rect", { x: 130, y: 120, width: 140, height: 66, rx: 8, fill: OLLA, stroke: TINTA, "stroke-width": 3 });
+  el(s, "rect", { x: 136, y: 132, width: 128, height: 48, rx: 4, fill: "rgb(170,204,224)" });
   const tiras = el(s, "g", {});
-  const bloque = el(s, "rect", { x: 40, y: 50, width: 80, height: 40, rx: 10, fill: H.MASA_R, stroke: TINTA, "stroke-width": 3 });
-  el(s, "line", { x1: 50, y1: 70, x2: 200, y2: 120, stroke: VERDE_O, "stroke-width": 2, "stroke-dasharray": "5 6" });
-  const med = medidor(H, s, { x: 70, y: 14, w: 160, h: 10, a: (1 - TOL) / 2, b: (1 + TOL) / 2 });
+  const bloque = el(s, "rect", { x: X0, y: 50, width: X1 - X0, height: 40, rx: 10, fill: H.MASA_R, stroke: TINTA, "stroke-width": 3 });
+  el(s, "line", { x1: 30, y1: 66, x2: 214, y2: 128, stroke: VERDE_O, "stroke-width": 3, "stroke-dasharray": "6 6" });
+  el(s, "path", { d: "M214 128 l-14 -1 l7 -11 Z", fill: VERDE_O });
+  const traz = el(s, "line", { x1: 0, y1: 0, x2: 0, y2: 0, stroke: "rgb(250,250,250)", "stroke-width": 3, opacity: 0 });
+  const aviso = letrero(H, s, "", 150, 24);
   const cuenta = letrero(H, s, `0 / ${N}`, 284, 40, "end");
-  H.ayuda("Swipe over the dough toward the pot · same speed every time (green)");
-  Object.assign(H.g, { tipo: "volar", v0: V0, n: 0 });
+  H.ayuda("Swipe along the green arrow: start on the dough and swipe all the way past it, toward the pot");
+  Object.assign(H.g, { tipo: "volar", n: 0, x0: X0, x1: X1 });
   let ini = null;
   let n = 0;
   const notas = [];
   arrastrar(s, H, {
     abajo: (p) => {
-      ini = { p, t: H.ahora() };
+      ini = p;
+      traz.setAttribute("x1", p[0].toFixed(1));
+      traz.setAttribute("y1", p[1].toFixed(1));
+    },
+    mover: (p) => {
+      if (!ini) return;
+      traz.setAttribute("x2", p[0].toFixed(1));
+      traz.setAttribute("y2", p[1].toFixed(1));
+      traz.setAttribute("opacity", 0.8);
     },
     arriba: (p) => {
+      traz.setAttribute("opacity", 0);
       if (!ini) return;
-      const d = Math.hypot(p[0] - ini.p[0], p[1] - ini.p[1]);
-      const v = d / Math.max(1, H.ahora() - ini.t);
+      const [x0, y0] = ini;
       ini = null;
-      if (d < 40 || p[0] < 60) return;
-      med.poner(v / V0 / 2);
-      const nota = H.notaDe(v / V0 - 1, TOL, 0.8);
+      if (Math.hypot(p[0] - x0, p[1] - y0) < 25) return;
+      // tiene que empezar sobre el bloque (o justo antes) y terminar pasado el bloque
+      const largo = x0 < X1 - 10 && y0 > 36 && y0 < 104 && p[0] > X1 + 10;
+      if (!largo) {
+        aviso.textContent = x0 >= X1 - 10 ? "Start on the dough!" : "All the way across!";
+        return H.sonar("no");
+      }
+      aviso.textContent = "";
+      let err = (Math.atan2(p[1] - y0, p[0] - x0) - GUIA) * (180 / Math.PI);
+      err = ((((err + 180) % 360) + 360) % 360) - 180;
+      const nota = H.notaDe(err, TOLA, 35);
       notas.push(nota);
       n++;
       H.g.n = n;
-      const grosor = clamp(6 / (v / V0), 2, 12);
-      el(tiras, "path", { d: `M${140 + (n % 6) * 20} ${150 + (n % 3) * 8} q12 -8 24 0`, fill: "none", stroke: H.MASA_R, "stroke-width": grosor.toFixed(1), "stroke-linecap": "round" });
-      bloque.setAttribute("width", Math.max(30, 80 - n * 5));
+      el(tiras, "path", { d: `M${146 + ((n * 23) % 100)} ${148 + (n % 3) * 9} q12 -8 24 0`, fill: "none", stroke: H.MASA_R, "stroke-width": 5, "stroke-linecap": "round" });
+      bloque.setAttribute("height", Math.max(18, 40 - n * 3));
       H.sonar(nota >= 2.5 ? "tocar" : "no");
       cuenta.textContent = `${n} / ${N}`;
       if (n >= N) H.fin(H.promedio(notas));
@@ -3883,61 +3920,103 @@ function pintarHuevo(s, paso, H) {
 }
 
 // v80: las 14 recetas que faltaban.
-// GLASEAR (bao de cerdo): el char siu gira en el asador; pintar con miel cada lado cuando el lado palido queda arriba.
+// GLASEAR (bao de cerdo): el char siu da vueltas en el asador. v83 (rom: "no se entiende"): se ve de frente;
+// la carne tiene franjas palidas y van pasando por debajo de la brocha. Tocar cuando una franja palida esta
+// justo en el recuadro de la brocha: queda pintada de miel (roja brillante). Las ya pintadas no se pintan otra vez.
 function glasear(s, paso, H) {
   const { el, TINTA } = H;
   const N = paso.n || 4;
-  const P = 2600 / H.rapido(0.25);
-  const TOL = H.ancho(22, 0.35);
-  el(s, "rect", { x: 30, y: 150, width: 240, height: 30, rx: 6, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
-  const brasas = [0, 1, 2, 3, 4].map((i) => el(s, "circle", { cx: 60 + i * 45, cy: 164, r: 8, fill: "rgb(240,110,50)" }));
-  el(s, "line", { x1: 30, y1: 100, x2: 270, y2: 100, stroke: METAL, "stroke-width": 4 });
-  const carne = el(s, "g", {});
-  el(carne, "rect", { x: -60, y: -26, width: 120, height: 52, rx: 14, fill: "rgb(196,80,60)", stroke: TINTA, "stroke-width": 3 });
-  const lados = [0, 1, 2, 3].map((i) => el(carne, "rect", { x: -54, y: -6, width: 108, height: 12, rx: 5, fill: "rgb(232,160,140)", transform: `rotate(${i * 90}) translate(0 -20)` }));
-  carne.setAttribute("transform", "translate(150 100)");
-  el(s, "path", { d: "M150 40 l-8 -14 h16 Z", fill: VERDE_O });
-  const brocha = el(s, "g", { opacity: 0 });
-  el(brocha, "rect", { x: -3, y: -40, width: 6, height: 30, fill: MADERA, stroke: TINTA, "stroke-width": 1.5 });
-  el(brocha, "rect", { x: -8, y: -12, width: 16, height: 12, rx: 3, fill: "rgb(220,150,60)", stroke: TINTA, "stroke-width": 1.5 });
+  const P = 3600 / H.rapido(0.25); // una vuelta entera
+  const TOL = H.ancho(7, 0.35);
+  const X0 = 60;
+  const X1 = 240;
+  const Y0 = 70;
+  const ALTO = 90;
+  const FR = ALTO / 2; // alto de una franja (se ven 2 a la vez; la vuelta tiene N*2 franjas)
+  const NF = N * 2;
+  el(s, "rect", { x: 30, y: 168, width: 240, height: 22, rx: 6, fill: "rgb(60,60,70)", stroke: TINTA, "stroke-width": 3 });
+  const brasas = [0, 1, 2, 3, 4].map((i) => el(s, "circle", { cx: 60 + i * 45, cy: 178, r: 6, fill: "rgb(240,110,50)" }));
+  el(s, "line", { x1: 20, y1: Y0 + ALTO / 2, x2: 280, y2: Y0 + ALTO / 2, stroke: METAL, "stroke-width": 5 });
+  // la carne: un rectangulo; adentro, franjas que suben (la carne gira)
+  el(s, "rect", { x: X0, y: Y0, width: X1 - X0, height: ALTO, rx: 14, fill: "rgb(196,80,60)" });
+  const franjasG = el(s, "g", {});
+  // franjas: las pares son palidas (hay que pintarlas), las impares ya son carne roja
+  const franjas = [];
+  for (let i = 0; i < NF; i++) franjas.push({ palida: i % 2 === 0, hecha: false, e: el(franjasG, "rect", { x: X0 + 4, y: 0, width: X1 - X0 - 8, height: FR - 4, rx: 4, fill: i % 2 === 0 ? "rgb(240,190,170)" : "rgb(196,80,60)" }) });
+  el(s, "rect", { x: X0, y: Y0, width: X1 - X0, height: ALTO, rx: 14, fill: "none", stroke: TINTA, "stroke-width": 3 });
+  // la zona de la brocha: en el medio de la carne
+  const ZY = Y0 + ALTO / 2;
+  el(s, "rect", { x: X0 - 6, y: ZY - FR / 2, width: X1 - X0 + 12, height: FR, fill: "none", stroke: VERDE, "stroke-width": 3, "stroke-dasharray": "6 5" });
+  const brocha = el(s, "g", { transform: `translate(${X1 + 22} ${ZY})` });
+  el(brocha, "rect", { x: 0, y: -4, width: 30, height: 8, fill: MADERA, stroke: TINTA, "stroke-width": 2 });
+  el(brocha, "rect", { x: -12, y: -10, width: 14, height: 20, rx: 3, fill: "rgb(220,150,60)", stroke: TINTA, "stroke-width": 2 });
   const cuenta = letrero(H, s, `0 / ${N}`, 14, 24, "start");
-  H.ayuda("Brush on honey (tap) each time a pale side turns to the top (green arrow)");
-  let ang = 0;
-  const hechos = [false, false, false, false];
+  const aviso = letrero(H, s, "", 150, 24);
+  H.ayuda("Tap when a PALE stripe is inside the green box to brush it with honey");
+  let off = 0;
+  let hechas = 0;
   const notas = [];
-  Object.assign(H.g, { tipo: "glasear", P, t0: H.t0, n: 0, N });
+  Object.assign(H.g, { tipo: "glasear", P, t0: H.t0, n: 0, N, nf: NF, fr: FR });
+  // posicion vertical (centro) de la franja i en el tiempo t: suben y vuelven a aparecer abajo
+  const centro = (i) => {
+    const total = NF * FR;
+    let y = (i * FR - off) % total;
+    if (y < 0) y += total;
+    return Y0 + y - total / 2 + ALTO / 2 + FR / 2;
+  };
   H.bucle((t) => {
-    ang = ((t / P) * 360) % 360;
-    carne.setAttribute("transform", `translate(150 100) rotate(${ang.toFixed(1)})`);
-    brasas.forEach((b, i) => b.setAttribute("r", (7 + Math.sin(t / 150 + i) * 1.5).toFixed(1)));
+    off = ((t / P) * NF * FR) % (NF * FR);
+    // cada franja se recorta a mano al rectangulo de la carne (el pixelado no respeta clip-path)
+    franjas.forEach((f, i) => {
+      const y1 = Math.max(Y0 + 4, centro(i) - FR / 2 + 2);
+      const y2 = Math.min(Y0 + ALTO - 4, centro(i) + FR / 2 - 2);
+      if (y2 <= y1) return f.e.setAttribute("opacity", 0);
+      f.e.setAttribute("opacity", 1);
+      f.e.setAttribute("y", y1.toFixed(1));
+      f.e.setAttribute("height", (y2 - y1).toFixed(1));
+    });
+    brasas.forEach((b, i) => b.setAttribute("r", (6 + Math.sin(t / 150 + i) * 1.5).toFixed(1)));
+    // para el bot: cuanto falta para que la proxima franja palida sin pintar llegue al centro
+    let mejor = null;
+    franjas.forEach((f, i) => {
+      if (!f.palida || f.hecha) return;
+      const dy = centro(i) - ZY; // positivo = todavia abajo
+      if (dy > -FR / 2 && (mejor === null || dy < mejor)) mejor = dy;
+    });
+    H.g.dy = mejor;
+    H.g.vel = (NF * FR) / P; // unidades por ms (hacia arriba)
   });
   s.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     if (!H.vivo()) return;
-    // el lado i esta arriba cuando ang + i*90 ≡ 0 (mod 360)
+    brocha.setAttribute("transform", `translate(${X1 - 10} ${ZY})`);
+    setTimeout(() => brocha.setAttribute("transform", `translate(${X1 + 22} ${ZY})`), 160);
+    // la franja mas cerca del centro
     let mej = -1;
-    let err = 999;
-    for (let i = 0; i < 4; i++) {
-      if (hechos[i]) continue;
-      let d = (((ang + i * 90) % 360) + 360) % 360;
-      if (d > 180) d -= 360;
-      if (Math.abs(d) < Math.abs(err)) {
-        err = d;
+    let dm = 1e9;
+    franjas.forEach((f, i) => {
+      const d = Math.abs(centro(i) - ZY);
+      if (d < dm) {
+        dm = d;
         mej = i;
       }
+    });
+    const f = franjas[mej];
+    if (!f.palida || f.hecha || dm > FR / 2) {
+      aviso.textContent = f.hecha ? "Already glazed" : "Wait for a pale one";
+      notas.push(1.6);
+      H.sonar("no");
+    } else {
+      f.hecha = true;
+      f.e.setAttribute("fill", "rgb(222,130,40)");
+      hechas++;
+      aviso.textContent = "";
+      notas.push(H.notaDe(dm, TOL, FR / 2));
+      H.sonar("tocar");
     }
-    brocha.setAttribute("opacity", 1);
-    brocha.setAttribute("transform", "translate(150 74)");
-    setTimeout(() => brocha.setAttribute("opacity", 0), 200);
-    if (mej < 0 || Math.abs(err) > 60) return H.sonar("no");
-    hechos[mej] = true;
-    lados[mej].setAttribute("fill", "rgb(150,40,40)");
-    const nota = H.notaDe(err, TOL, 40);
-    notas.push(nota);
-    H.sonar(nota >= 2.5 ? "tocar" : "no");
-    cuenta.textContent = `${notas.length} / ${N}`;
-    H.g.n = notas.length;
-    if (notas.length >= N) H.fin(H.promedio(notas));
+    H.g.n = hechas;
+    cuenta.textContent = `${hechas} / ${N}`;
+    if (hechas >= N) H.fin(H.promedio(notas));
   });
 }
 
