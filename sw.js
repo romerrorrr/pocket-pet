@@ -1,4 +1,4 @@
-const VERSION = "baozi-16cc06f7be";
+const VERSION = "baozi-0ba4e8a376";
 
 const HASHES = {
     "./": "a0acc45b0c88",
@@ -640,7 +640,7 @@ const HASHES = {
     "./assets/ui/g_tenedor@4.png": "3fad0fb76f92",
     "./assets/ui/pestanas.png": "c417e1918c06",
     "./css/glifos.css": "b22fdbd2fd0e",
-    "./css/style.css": "9ca23242baff",
+    "./css/style.css": "a63412f5835a",
     "./icons/mochi-192.png": "19f765341adb",
     "./icons/mochi-512.png": "1e1fb890608c",
     "./index.html": "a0acc45b0c88",
@@ -694,7 +694,7 @@ const HASHES = {
     "./js/pregunta.js": "a39e66283462",
     "./js/recortes.js": "0203f715627d",
     "./js/render.js": "7ed14ca028cf",
-    "./js/restaurante.js": "349ba4c853b0",
+    "./js/restaurante.js": "7c9fad2489e0",
     "./js/ritmo.js": "e548fa67634f",
     "./js/sensores.js": "496f7bdc6088",
     "./js/sonido.js": "05691906f5b6",
