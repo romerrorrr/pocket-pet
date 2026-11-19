@@ -6160,3 +6160,37 @@ button.cal-dia:active { transform: translateY(1px); }
 
 .avatar-npc.silueta { filter: brightness(0); opacity: 0.22; }
 .pista-amigo { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; }
+
+.rest-escena { width: 100%; }
+
+.rest-fama.con-barra { display: inline-grid; grid-template-columns: auto; gap: 2px; padding-top: 4px; padding-bottom: 4px; justify-items: stretch; }
+.rest-fama.con-barra .rest-barra-fama { height: 5px; margin: 1px 0 0; box-shadow: 0 0 0 1px var(--tinta); }
+.rest-fama-txt { font-family: var(--fuente-cuerpo); font-size: 9px; letter-spacing: 0; color: var(--tinta); white-space: nowrap; }
+.rest-fama-txt .rest-practica { display: inline; margin: 0; padding: 0; background: none; box-shadow: none; color: rgb(170, 90, 40); font-size: 9px; }
+.rest-fama-txt .rest-cuenta { color: rgb(60, 130, 70); }
+
+.rest-ojo { cursor: pointer; padding: 4px 8px; border: none; color: var(--tinta); }
+.rest-ojo-svg { width: 20px; height: 12px; display: block; }
+.pantalla-rest.mirando .rest-col,
+.pantalla-rest.mirando .rest-hud > :not(.rest-ojo),
+.pantalla-rest.mirando .rest-ultima,
+.pantalla-rest.mirando .rest-volver,
+.pantalla-rest.mirando .juego-volver { visibility: hidden; }
+.pantalla-rest.mirando .rest-ojo { background: var(--rosa-oscuro); color: #fff; }
+
+.rest-col.izq.compacta { width: auto; max-width: min(200px, 28vw); }
+.rest-especial-mini.papel { padding: 4px 8px; }
+.rest-especial-mini .rest-sub { font-size: 7px; }
+.rest-especial-mini .rest-especial .rest-comida { width: 30px; height: 30px; }
+.rest-especial-mini .rest-especial span { font-size: 12px; }
+
+.rest-ultima { position: absolute; z-index: 5; left: 50%; top: calc(var(--arr) + 52px); transform: translateX(-50%); max-width: min(360px, 46vw); padding: 4px 10px; background: var(--papel); box-shadow: 0 0 0 2px var(--tinta), 3px 3px 0 1px rgba(0, 0, 0, 0.3); font-family: var(--fuente-cuerpo); font-size: 12px; text-align: center; pointer-events: none; animation: rest-ultima 6s steps(6) forwards; }
+.rest-ultima small { display: block; font-size: 11px; opacity: 0.75; margin-top: 2px; }
+@keyframes rest-ultima { 0%, 75% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+
+.rest-col.der.compacta { width: 168px; top: auto; }
+.rest-col.der.compacta .rest-abrir { min-height: 40px; font-size: 14px; }
+.rest-col.der.compacta .rest-fila-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.rest-col.der.compacta .rest-fila-botones .boton,
+.rest-col.der.compacta .rest-relajado { min-height: 30px; font-size: 11px; padding: 3px 4px; }
+.rest-col.der.compacta .rest-cuantas { display: none; }
