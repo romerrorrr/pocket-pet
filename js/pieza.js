@@ -4,6 +4,8 @@ import { PIEZA } from "./pieza_datos.js";
 
 import * as Personaje from "./personaje.js";
 
+import * as Tele from "./tele.js";
+
 const [MW, MH] = PIEZA.mundo;
 
 const [SX0, SY0, SX1, SY1] = PIEZA.segura;
@@ -140,7 +142,7 @@ const LUCES = PIEZA.luces || {};
 
 const PANTALLA_TELE = (() => {
     const [tx0, ty0, tx1] = PIEZA.objetos.tele;
-    return [ tx0 + 8, ty0 + 11, tx1 - 16, ty0 + 34 ];
+    return [ tx0 + 8, ty0 + 11, tx1 - 15, ty0 + 34 ];
 })();
 
 function dentroHaz(x, y) {
@@ -1729,11 +1731,12 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         const tv = offsetGolpe("tele", ahora);
         const [px0, py0, px1, py1] = PANTALLA_TELE;
         if (teleViva) {
-            const fase = Math.floor(ahora / 120) % 22;
-            m.fillStyle = "rgb(230,110,100)";
-            m.fillRect(tx0 + 20, ty0 + 12 + fase + tv, 2, 2);
-            m.fillStyle = "rgb(170,230,200)";
-            m.fillRect(tx0 + 14 + Math.floor(ahora / 500) % 3 * 2, ty0 + 32 + tv, 10, 1);
+            Tele.dibujar(m, px0, py0 + tv, ahora, {
+                clima: e.clima,
+                temperatura: e.temperatura,
+                noche: e.momento === "noche",
+                especial: !!e.diaEspecial
+            });
             m.fillStyle = "rgba(255,255,255,0.12)";
             for (let yy = py0; yy <= py1; yy += 2) m.fillRect(px0, yy + tv, px1 - px0 + 1, 1);
             if (Math.floor(ahora / 83) % 9 === 0) {

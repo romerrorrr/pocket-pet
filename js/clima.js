@@ -40,6 +40,11 @@ export function tipo() {
     return dato.tipo;
 }
 
+export function temperatura() {
+    if (!dato || Date.now() - dato.t > VIGENCIA_MS || !Number.isFinite(dato.temp)) return null;
+    return dato.temp;
+}
+
 export const FRASES = {
     llovizna: "Oh! It's drizzling outside…",
     lluvia: "It's raining!! Good day to stay in.",
@@ -56,7 +61,7 @@ export async function actualizar(pos = null) {
     };
     const lat = pos && pos.lat || HANGZHOU.lat;
     const lon = pos && pos.lon || HANGZHOU.lon;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}&current=weather_code&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}&current=weather_code,temperature_2m&timezone=auto`;
     try {
         const ctrl = typeof AbortController !== "undefined" ? new AbortController : null;
         const reloj = ctrl ? setTimeout((() => ctrl.abort()), 8e3) : null;
@@ -76,9 +81,11 @@ export async function actualizar(pos = null) {
             antes: antes,
             ahora: antes
         };
+        const temp = j.current && Number.isFinite(j.current.temperature_2m) ? j.current.temperature_2m : null;
         dato = {
             tipo: t,
             codigo: codigo,
+            temp: temp,
             t: Date.now()
         };
         try {
@@ -100,6 +107,7 @@ export function forzar(t) {
     dato = t ? {
         tipo: t,
         codigo: null,
+        temp: dato && Number.isFinite(dato.temp) ? dato.temp : null,
         t: Date.now()
     } : null;
 }

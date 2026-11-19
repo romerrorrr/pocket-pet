@@ -407,6 +407,17 @@ let lugarDescubierto = null;
 
 let fotoDelDescubrimiento = false;
 
+function diaEspecialHoy(ahora = new Date) {
+    try {
+        const p = proximaFecha(ahora);
+        if (p && p.dias === 0) return true;
+        const si = Final.dijoQueSi() && Final.fechaDelSi();
+        return !!si && claveDelDia(new Date(si)) === claveDelDia(ahora);
+    } catch (e) {
+        return false;
+    }
+}
+
 function proximaFecha(ahora = new Date) {
     return Fechas.proxima(todasLasFechas(), ahora);
 }
@@ -1192,6 +1203,8 @@ function estadoPieza() {
         globoCompanero: globoCompanero,
         fotoAnillo: Final.dijoQueSi() ? fotoDelAnillo() : null,
         clima: Clima.tipo(),
+        temperatura: Clima.temperatura(),
+        diaEspecial: diaEspecialHoy(),
         velitas: esNocheDeVelitas(),
         jardin: jardin.estados(claveDelDia()),
         globo: globo.texto,
