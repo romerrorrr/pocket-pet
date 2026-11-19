@@ -1,1229 +1,2678 @@
-/**
- * restaurante.js
- * ==============
- * v54/v55: Baozi's Dumpling Shop, un juego propio que se abre desde el
- * cartelito rojo del cuarto. Ella lo pidio ("uno de cocina") y rom pidio
- * que se pueda "preparar cada item, que se sienta como un juego en si".
- *
- *   - El local (antes de abrir): el especial del dia (paga el doble), como
- *     le fue la ultima vez, la fama (1 a 5 estrellas), el libro de recetas
- *     y la decoracion del frente.
- *   - El dia: llegan clientes de a uno con su ticket (plato y extras). Cada
- *     plato se prepara paso a paso (cocina.js): amasar, estirar, rellenar,
- *     plegar, cocinar en el punto, verter, emplatar. Cada paso da 1-3
- *     estrellas y el plato sale con el promedio. Sin reloj: ritmo tranquilo.
- *   - Servir: monedas segun la calidad (+ propina con 3 estrellas), una
- *     resena del cliente, y fama.
- *   - Recetas: 18 (dim sum, platos y postres chinos, comida colombiana). Se
- *     desbloquean con los dias del local, sellando lugares o comprandolas.
- *   - Monedas: el primer dia del local de cada dia real paga todo; los
- *     siguientes, un tercio (que no se "farmee").
- *
- * La logica (Restaurante, recetas, pagos) no toca el DOM: test/unit_v55.mjs.
- */
-
 import { HTML_VOLVER, cablearVolver, crearPausa, blindarToques } from "./juegoComun.js";
+
 import { crearPaso, capaAdiciones, RELLENOS, LIQUIDOS, COCCIONES, INGREDIENTES } from "./cocina.js";
+
 import { GESTOS } from "./gestos.js";
 
-// ------------------------------------------------------------------
-// Los datos
-// ------------------------------------------------------------------
-
-/** Lo que se puede poner al emplatar (el ticket pide 0 a 2). */
 export const EXTRAS = {
-  vinagre: { nombre: "Vinegar", color: "rgb(90,60,50)" },
-  chile: { nombre: "Chili oil", color: "rgb(214,60,50)" },
-  jengibre: { nombre: "Ginger", color: "rgb(240,210,140)" },
-  cebollin: { nombre: "Scallions", color: "rgb(110,180,90)" },
-  sesamo: { nombre: "Sesame", color: "rgb(240,226,190)" },
-  soya: { nombre: "Soy sauce", color: "rgb(70,40,30)" },
-  azucar: { nombre: "Sugar", color: "rgb(255,255,255)" },
-  perlas: { nombre: "Pearls", color: "rgb(60,40,40)" },
-  hielo: { nombre: "Ice", color: "rgb(200,230,250)" },
-  limon: { nombre: "Lime", color: "rgb(150,200,80)" },
-  aji: { nombre: "Ají", color: "rgb(120,170,60)" },
-  queso: { nombre: "Extra cheese", color: "rgb(250,230,150)" },
-  panela: { nombre: "Panela", color: "rgb(190,130,60)" },
-  huevo: { nombre: "Egg", color: "rgb(255,214,90)" },
-  bokchoy: { nombre: "Bok choy", color: "rgb(90,160,80)" },
-  osmanto: { nombre: "Osmanthus", color: "rgb(250,190,70)" },
-  fresa: { nombre: "Strawberry", color: "rgb(220,60,70)" },
-  espino: { nombre: "Hawthorn", color: "rgb(180,40,40)" },
-  uva: { nombre: "Grape", color: "rgb(120,60,140)" },
-  mandarina: { nombre: "Mandarin", color: "rgb(250,150,40)" },
-  // v58
-  cilantro: { nombre: "Cilantro", color: "rgb(90,170,80)" },
-  crema: { nombre: "Cream", color: "rgb(255,252,240)" },
-  alcaparras: { nombre: "Capers", color: "rgb(110,130,60)" },
-  aguacate: { nombre: "Avocado", color: "rgb(160,200,90)" },
-  hogao: { nombre: "Hogao", color: "rgb(214,80,50)" },
-  guacamole: { nombre: "Guacamole", color: "rgb(130,180,80)" },
-  arequipe: { nombre: "Extra arequipe", color: "rgb(170,100,50)" },
-  coco: { nombre: "Coconut", color: "rgb(250,250,246)" },
-  sal: { nombre: "Salt", color: "rgb(240,240,240)" },
-  // v61
-  canela: { nombre: "Cinnamon", color: "rgb(170,110,60)" },
-  pasas: { nombre: "Raisins", color: "rgb(110,50,70)" },
-  bocadillo: { nombre: "Guava paste", color: "rgb(160,40,60)" },
-  pimienta: { nombre: "Pepper", color: "rgb(60,40,30)" },
-  helado: { nombre: "Ice cream", color: "rgb(255,240,220)" },
-  almojabana: { nombre: "Almojábana", color: "rgb(240,200,120)" },
-  salsa_dulce: { nombre: "Sweet sauce", color: "rgb(150,70,40)" },
-  mani: { nombre: "Peanuts", color: "rgb(214,170,110)" },
-  // v68: las frutas del salpicon
-  banano: { nombre: "Banana", color: "rgb(250,236,170)" },
-  sandia: { nombre: "Watermelon", color: "rgb(240,80,90)" },
-  pina: { nombre: "Pineapple", color: "rgb(250,210,70)" },
+    vinagre: {
+        nombre: "Vinegar",
+        color: "rgb(90,60,50)"
+    },
+    chile: {
+        nombre: "Chili oil",
+        color: "rgb(214,60,50)"
+    },
+    jengibre: {
+        nombre: "Ginger",
+        color: "rgb(240,210,140)"
+    },
+    cebollin: {
+        nombre: "Scallions",
+        color: "rgb(110,180,90)"
+    },
+    sesamo: {
+        nombre: "Sesame",
+        color: "rgb(240,226,190)"
+    },
+    soya: {
+        nombre: "Soy sauce",
+        color: "rgb(70,40,30)"
+    },
+    azucar: {
+        nombre: "Sugar",
+        color: "rgb(255,255,255)"
+    },
+    perlas: {
+        nombre: "Pearls",
+        color: "rgb(60,40,40)"
+    },
+    hielo: {
+        nombre: "Ice",
+        color: "rgb(200,230,250)"
+    },
+    limon: {
+        nombre: "Lime",
+        color: "rgb(150,200,80)"
+    },
+    aji: {
+        nombre: "Ají",
+        color: "rgb(120,170,60)"
+    },
+    queso: {
+        nombre: "Extra cheese",
+        color: "rgb(250,230,150)"
+    },
+    panela: {
+        nombre: "Panela",
+        color: "rgb(190,130,60)"
+    },
+    huevo: {
+        nombre: "Egg",
+        color: "rgb(255,214,90)"
+    },
+    bokchoy: {
+        nombre: "Bok choy",
+        color: "rgb(90,160,80)"
+    },
+    osmanto: {
+        nombre: "Osmanthus",
+        color: "rgb(250,190,70)"
+    },
+    fresa: {
+        nombre: "Strawberry",
+        color: "rgb(220,60,70)"
+    },
+    espino: {
+        nombre: "Hawthorn",
+        color: "rgb(180,40,40)"
+    },
+    uva: {
+        nombre: "Grape",
+        color: "rgb(120,60,140)"
+    },
+    mandarina: {
+        nombre: "Mandarin",
+        color: "rgb(250,150,40)"
+    },
+    cilantro: {
+        nombre: "Cilantro",
+        color: "rgb(90,170,80)"
+    },
+    crema: {
+        nombre: "Cream",
+        color: "rgb(255,252,240)"
+    },
+    alcaparras: {
+        nombre: "Capers",
+        color: "rgb(110,130,60)"
+    },
+    aguacate: {
+        nombre: "Avocado",
+        color: "rgb(160,200,90)"
+    },
+    hogao: {
+        nombre: "Hogao",
+        color: "rgb(214,80,50)"
+    },
+    guacamole: {
+        nombre: "Guacamole",
+        color: "rgb(130,180,80)"
+    },
+    arequipe: {
+        nombre: "Extra arequipe",
+        color: "rgb(170,100,50)"
+    },
+    coco: {
+        nombre: "Coconut",
+        color: "rgb(250,250,246)"
+    },
+    sal: {
+        nombre: "Salt",
+        color: "rgb(240,240,240)"
+    },
+    canela: {
+        nombre: "Cinnamon",
+        color: "rgb(170,110,60)"
+    },
+    pasas: {
+        nombre: "Raisins",
+        color: "rgb(110,50,70)"
+    },
+    bocadillo: {
+        nombre: "Guava paste",
+        color: "rgb(160,40,60)"
+    },
+    pimienta: {
+        nombre: "Pepper",
+        color: "rgb(60,40,30)"
+    },
+    helado: {
+        nombre: "Ice cream",
+        color: "rgb(255,240,220)"
+    },
+    almojabana: {
+        nombre: "Almojábana",
+        color: "rgb(240,200,120)"
+    },
+    salsa_dulce: {
+        nombre: "Sweet sauce",
+        color: "rgb(150,70,40)"
+    },
+    mani: {
+        nombre: "Peanuts",
+        color: "rgb(214,170,110)"
+    },
+    banano: {
+        nombre: "Banana",
+        color: "rgb(250,236,170)"
+    },
+    sandia: {
+        nombre: "Watermelon",
+        color: "rgb(240,80,90)"
+    },
+    pina: {
+        nombre: "Pineapple",
+        color: "rgb(250,210,70)"
+    }
 };
 
-const BAO = (relleno) => [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno }, { t: "plegar", n: 9, relleno }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }];
+const BAO = relleno => [ {
+    t: "amasar"
+}, {
+    t: "estirar"
+}, {
+    t: "rellenar",
+    relleno: relleno
+}, {
+    t: "plegar",
+    n: 9,
+    relleno: relleno
+}, {
+    t: "cocinar",
+    como: "vapor"
+}, {
+    t: "emplatar"
+} ];
 
-/**
- * Las recetas. desbloqueo: { fama } (v59: se compran con monedas desde esa estrella), { lugar } (sellarlo)
- * o nada (desde el principio).
- * precio: lo que paga un plato de 3 estrellas. compra: lo que cuesta desbloquearla antes de tiempo.
- */
-export const RECETAS = [
-  { id: "bao_cerdo", nombre: "Roubao", grupo: "dimsum", precio: 8, pasos: [{ t: "cortar", que: "cerdo", n: 4 }, { t: "glasear", n: 4 }, { t: "leudar" }, ...BAO("carne").slice(1)], extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Soft and round, like you know who." },
-  { id: "jiaozi", nombre: "Jiaozi", grupo: "dimsum", precio: 8, pasos: [{ t: "cortar", que: "repollo", n: 4 }, { t: "una_direccion" }, { t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "carne_repollo" }, { t: "plegar", n: 7, forma: "media", relleno: "carne_repollo" }, { t: "agua_fria", n: 3 }, { t: "emplatar" }], extras: ["vinagre", "chile", "jengibre"], amigo: "mimi", nota: "On my planet these are called ‘moon pockets’." },
-  { id: "te_leche", nombre: "Naicha", grupo: "chino", precio: 6, pasos: [{ t: "cocinar", como: "calentar" }, { t: "verter", liquido: "te_negro", meta: 0.42 }, { t: "verter", liquido: "leche", previo: { liquido: "te_negro", nivel: 0.42 } }, { t: "agitar", color: "rgb(214,170,120)" }, { t: "cocinar", como: "hervir", texto: "Boil the pearls until they float" }, { t: "apilar", que: "perlas", n: 3, color: "rgb(214,170,120)" }, { t: "pitillo" }, { t: "emplatar" }], extras: ["perlas", "hielo", "azucar"], amigo: "chagee", nota: "Extra pearls, darling. Always." },
-  { id: "arepa", nombre: "Arepa with cheese", grupo: "colombia", precio: 8, pasos: [{ t: "amasar" }, { t: "palmear", n: 8 }, { t: "budare" }, { t: "untar" }, { t: "rallar", que: "queso", n: 4 }, { t: "emplatar" }], extras: ["queso", "huevo"], nota: "Breakfast in Bogotá, lunch in Hangzhou." },
-  { id: "guotie", nombre: "Guotie", grupo: "dimsum", precio: 9, desbloqueo: { fama: 1 }, compra: 60, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "carne" }, { t: "plegar", n: 6, forma: "media", relleno: "carne" }, { t: "verter", liquido: "agua", en: "plancha", tapar: true }, { t: "cocinar", como: "tapar" }, { t: "voltear" }, { t: "emplatar" }], extras: ["vinagre", "chile", "sesamo"], nota: "Crispy bottom, soft top." },
-  { id: "bao_verdura", nombre: "Caibao", grupo: "dimsum", precio: 8, desbloqueo: { fama: 1 }, compra: 50, pasos: [{ t: "blanquear" }, { t: "cortar", que: "bokchoy", n: 4 }, { t: "exprimir", que: "verdura", n: 2 }, { t: "amasar" }, { t: "rellenar", relleno: "verdura" }, { t: "plegar", n: 9, relleno: "verdura" }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["vinagre", "chile", "soya"], amigo: "usagi", nota: "Usagi's favorite. Lots of greens." },
-  { id: "tinto", nombre: "Tinto", grupo: "colombia", precio: 5, desbloqueo: { fama: 1 }, compra: 40, pasos: [{ t: "tostar" }, { t: "moler" }, { t: "verter", liquido: "cafe", colar: true }, { t: "revolver", color: "rgb(90,56,40)" }, { t: "emplatar" }], extras: ["panela", "azucar"], nota: "A little black coffee. Wakes you right up." },
-  { id: "xiaolongbao", nombre: "Xiaolongbao", grupo: "dimsum", precio: 12, desbloqueo: { fama: 2 }, compra: 90, pasos: [{ t: "gelatina", n: 4 }, { t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "caldo" }, { t: "torcer", n: 18 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["vinagre", "jengibre"], amigo: "ruchong", nota: "Careful… the soup inside is hot!" },
-  { id: "fideos", nombre: "Daoxiao Mian", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "amasar" }, { t: "volar", n: 6 }, { t: "cocinar", como: "hervir" }, { t: "escurrir" }, { t: "verter", liquido: "caldo", en: "tazon" }, { t: "elegir", topping: true }, { t: "emplatar" }], toppings: ["huevo", "bokchoy", "cebollin"], extras: ["chile", "soya", "sesamo"], nota: "Long noodles, long life." },
-  { id: "empanada", nombre: "Empanadas", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "rellenar", relleno: "pollo" }, { t: "bolsa", n: 3 }, { t: "aceite" }, { t: "emplatar" }], extras: ["aji", "limon"], nota: "With ají and a squeeze of lime." },
-  { id: "bao_frijol", nombre: "Dousha Bao", grupo: "dimsum", precio: 9, desbloqueo: { fama: 2 }, compra: 60, pasos: [{ t: "mortero", que: "frijol", n: 8 }, { t: "despegar" }, { t: "amasar" }, { t: "rellenar", relleno: "frijol" }, { t: "plegar", n: 9, relleno: "frijol" }, { t: "cocinar", como: "vapor" }, { t: "manga", n: 3, color: "rgb(214,60,60)", fondo: "rgb(252,250,244)", punto: true }, { t: "emplatar" }], extras: ["sesamo", "azucar"], nota: "Sweet bao with a red dot on top." },
-  { id: "jugo", nombre: "Passion fruit juice", grupo: "colombia", precio: 6, desbloqueo: { fama: 1 }, compra: 50, pasos: [{ t: "cortar", que: "fruta", n: 3 }, { t: "pulpa" }, { t: "verter", liquido: "agua_fria", previo: { liquido: "pulpa", nivel: 0.18 } }, { t: "espolvorear", color: "rgb(255,255,255)" }, { t: "licuar", color: "rgb(255,196,60)" }, { t: "emplatar" }], extras: ["hielo", "azucar"], nota: "Maracuyá! Sour and sunny." },
-  { id: "hargow", nombre: "Xiajiao", grupo: "dimsum", precio: 12, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "lavar", que: "camaron" }, { t: "escaldar" }, { t: "cuchilla", n: 3 }, { t: "rellenar", relleno: "camaron" }, { t: "plegar", n: 10, relleno: "camaron" }, { t: "transparente" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "See-through skin, a whole shrimp inside." },
-  { id: "bunuelos", nombre: "Buñuelos", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 70, pasos: [{ t: "rallar", que: "queso", n: 5 }, { t: "amasar" }, { t: "bolitas", n: 3, color: "rgb(250,230,170)" }, { t: "solos" }, { t: "emplatar" }], extras: ["azucar", "panela"], nota: "Golden cheese balls, like at Christmas." },
-  // v58: mas recetas, con los pasos nuevos (cortar, revolver, saltear, lamian, lavar, espolvorear, dibujar, aplastar, agitar)
-  { id: "arroz_frito", nombre: "Dan Chaofan", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 90, pasos: [{ t: "cortar", que: "cebollin", n: 5 }, { t: "verter", liquido: "huevo", en: "plancha" }, { t: "desgranar", n: 5 }, { t: "saltear", n: 4 }, { t: "voltear", que: "bol" }, { t: "emplatar" }], extras: ["huevo", "soya", "chile"], nota: "Day-old rice makes the best fried rice!" },
-  { id: "patacones", nombre: "Patacones", grupo: "colombia", precio: 11, desbloqueo: { fama: 2 }, compra: 80, pasos: [{ t: "cortar", que: "platano", n: 3 }, { t: "cocinar", como: "freir" }, { t: "aplastar", que: "platano", n: 2 }, { t: "remojar", n: 3 }, { t: "cocinar", como: "freir", segunda: true }, { t: "emplatar" }], extras: ["hogao", "guacamole", "sal"], nota: "Smashed green plantain, fried twice. Crunchy!" },
-  { id: "camarones_longjing", nombre: "Longjing Xiaren", grupo: "chino", precio: 15, desbloqueo: { fama: 4 }, compra: 120, pasos: [{ t: "descascarar" }, { t: "aceite_tibio", n: 5 }, { t: "verter", liquido: "te", en: "wok" }, { t: "espolvorear", color: "rgb(110,160,80)", hojas: true }, { t: "emplatar" }], extras: ["jengibre"], nota: "龙井虾仁 · Shrimp with Dragon Well tea leaves. Pure Hangzhou." },
-  { id: "lamian", nombre: "Lamian", grupo: "chino", precio: 13, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "amasar" }, { t: "lamian", n: 4 }, { t: "cocinar", como: "hervir" }, { t: "cortar", que: "res", n: 4 }, { t: "verter", liquido: "caldo", en: "tazon" }, { t: "chile" }, { t: "emplatar" }], extras: ["chile", "vinagre", "sesamo"], nota: "Pull, fold, pull, fold… sixteen strands!" },
-  { id: "ajiaco", nombre: "Ajiaco", grupo: "colombia", precio: 13, desbloqueo: { fama: 3 }, compra: 100, pasos: [{ t: "cortar", que: "papa", n: 4 }, { t: "cortar", que: "mazorca", n: 2 }, { t: "desmechar" }, { t: "cocinar", como: "hervir" }, { t: "espesar" }, { t: "espolvorear", color: "rgb(90,150,60)", hojas: true }, { t: "emplatar" }], extras: ["crema", "alcaparras", "aguacate"], nota: "Bogotá's chicken and potato soup. Warms you up." },
-  { id: "pescado_vinagre", nombre: "Xihu Cuyu", grupo: "chino", precio: 16, desbloqueo: { fama: 4 }, compra: 130, pasos: [{ t: "red" }, { t: "marcar", n: 4 }, { t: "palillo" }, { t: "revolver", color: "rgb(130,60,36)" }, { t: "verter", liquido: "vinagre_dulce", en: "plato" }, { t: "emplatar" }], extras: ["jengibre", "cebollin"], nota: "西湖醋鱼 · Fish in sweet vinegar sauce, from the lake itself." },
-  { id: "dongpo", nombre: "Dongpo Rou", grupo: "chino", precio: 16, desbloqueo: { fama: 5 }, compra: 130, pasos: [{ t: "raspar" }, { t: "dibujar", forma: "lazo", fondo: "rgb(214,110,96)", capas: "rgb(252,236,214)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "banar", n: 4 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["bokchoy", "soya"], nota: "东坡肉 · The poet Su Dongpo's slow pork. Melts in your mouth." },
-  { id: "obleas", nombre: "Obleas", grupo: "colombia", precio: 10, desbloqueo: { fama: 3 }, compra: 80, pasos: [{ t: "arequipe" }, { t: "untar", sobre: "oblea", color: "rgb(170,96,46)" }, { t: "espolvorear", color: "rgb(250,250,246)" }, { t: "apilar", que: "oblea", n: 1 }, { t: "emplatar" }], extras: ["arequipe", "queso", "fresa", "coco"], nota: "Two thin wafers and arequipe. A Colombian street treat." },
-  // v61: 20 recetas mas (rom: "agregar unas 20 recetas mas, con mas pasos nuevos"), con los pasos
-  // nuevos: enrollar, rallar, pelar, manga, apilar, bolitas
-  { id: "arroz_con_leche", nombre: "Arroz con leche", grupo: "colombia", precio: 9, desbloqueo: { fama: 1 }, compra: 70, pasos: [{ t: "lavar", que: "arroz" }, { t: "cocinar", como: "hervir", texto: "Boil the rice until soft" }, { t: "verter", liquido: "leche", en: "olla", previo: { liquido: "arroz_cocido", nivel: 0.3 } }, { t: "balanza", g: 120, nombre: "sugar", color: "rgb(250,250,246)" }, { t: "revolver", color: "rgb(250,244,228)" }, { t: "dibujar", forma: "corazon", fondo: "rgb(250,244,228)", tinta: "rgb(170,110,60)", texto: "Draw a cinnamon heart on top" }, { t: "emplatar" }], extras: ["canela", "pasas"], nota: "Grandma's recipe: slow, sweet and creamy." },
-  { id: "chocolate", nombre: "Chocolate with cheese", lleva: ["queso"], grupo: "colombia", precio: 8, desbloqueo: { fama: 1 }, compra: 70, pasos: [{ t: "cocinar", como: "calentar" }, { t: "rallar", que: "chocolate", n: 5 }, { t: "verter", liquido: "chocolate" }, { t: "agitar", color: "rgb(110,62,40)" }, { t: "queso" }, { t: "emplatar" }], extras: ["queso", "almojabana"], nota: "Santafereño style: drop the cheese in the cup!" },
-  { id: "mango_biche", nombre: "Green mango", grupo: "colombia", precio: 7, desbloqueo: { fama: 1 }, compra: 60, pasos: [{ t: "pelar", que: "mango" }, { t: "flor", n: 6 }, { t: "exprimir", que: "limon", n: 2 }, { t: "espolvorear", color: "rgb(240,240,240)" }, { t: "emplatar" }], extras: ["sal", "limon", "pimienta"], nota: "Sour, salty and crunchy, like at the park." },
-  { id: "chunjuan", nombre: "Chunjuan", grupo: "dimsum", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "hojas", n: 3 }, { t: "cortar", que: "repollo", n: 4 }, { t: "rellenar", relleno: "repollo" }, { t: "enrollar", n: 3, relleno: "repollo" }, { t: "aceite", forma: "rollo" }, { t: "emplatar" }], extras: ["vinagre", "chile"], nota: "Thin, crispy and golden. Spring in a roll." },
-  { id: "tangyuan", nombre: "Tangyuan", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "sesamo" }, { t: "rodar", n: 3 }, { t: "flotar" }, { t: "emplatar" }], extras: ["osmanto"], nota: "Round like a family reunion. Black sesame inside." },
-  { id: "congyoubing", nombre: "Congyoubing", grupo: "chino", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "amasar" }, { t: "estirar" }, { t: "cortar", que: "cebollin", n: 5 }, { t: "enrollar", cebollin: true }, { t: "enroscar" }, { t: "cocinar", como: "plancha" }, { t: "aplaudir", n: 6 }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "Flaky layers and lots of scallions." },
-  { id: "dan_ta", nombre: "Danta", grupo: "dimsum", precio: 11, desbloqueo: { fama: 2 }, compra: 110, pasos: [{ t: "laminar" }, { t: "huevo", n: 3 }, { t: "manga", n: 4, color: "rgb(255,214,90)" }, { t: "ventanita" }, { t: "emplatar" }], extras: [], nota: "Wobbly custard, flaky crust, little burnt spots." },
-  { id: "pandebono", nombre: "Pandebono", grupo: "colombia", precio: 9, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "rallar", que: "queso", n: 6 }, { t: "balanza", g: 250, nombre: "yuca starch" }, { t: "amasar" }, { t: "bolitas", n: 3, color: "rgb(250,226,160)" }, { t: "sin_abrir" }, { t: "emplatar" }], extras: [], nota: "Cheesy bread rolls, best warm with coffee." },
-  { id: "lulada", nombre: "Lulada", grupo: "colombia", precio: 8, desbloqueo: { fama: 2 }, compra: 90, pasos: [{ t: "pelusa" }, { t: "cortar", que: "lulo", n: 3 }, { t: "aplastar", que: "lulo", n: 1 }, { t: "verter", liquido: "agua_fria", previo: { liquido: "pulpa_lulo", nivel: 0.2 } }, { t: "agitar", color: "rgb(200,220,110)" }, { t: "emplatar" }], extras: ["hielo", "azucar"], nota: "From Cali: smashed lulo, ice and a lot of love." },
-  { id: "salpicon", nombre: "Salpicón", grupo: "colombia", precio: 10, desbloqueo: { fama: 2 }, compra: 100, pasos: [{ t: "pelar", que: "papaya" }, { t: "cortar", que: "papaya", n: 5 }, { t: "elegir", topping: true, fruta: true }, { t: "verter", liquido: "jugo_sandia", trozos: "pedido" }, { t: "helado" }, { t: "emplatar" }], toppings: ["banano", "sandia", "fresa", "pina", "uva"], extras: ["helado", "crema"], nota: "A cup of chopped fruit, cream and grated cheese." },
-  { id: "jianbing", nombre: "Jianbing", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 130, pasos: [{ t: "extender" }, { t: "huevo", sobre: "crepe" }, { t: "untar", sobre: "crepe", color: "rgb(255,200,60)", texto: "Spread the egg all over" }, { t: "espolvorear", color: "rgb(110,180,80)" }, { t: "enrollar", color: "rgb(250,222,150)" }, { t: "emplatar" }], extras: ["chile", "cilantro", "salsa_dulce"], nota: "The street crepe of every Chinese morning." },
-  { id: "mapo", nombre: "Mapo Doufu", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 130, pasos: [{ t: "tofu", n: 4 }, { t: "saltear", n: 3 }, { t: "revolver", color: "rgb(200,60,40)" }, { t: "mortero", que: "pimienta", n: 8 }, { t: "emplatar" }], extras: ["cebollin", "chile"], nota: "Soft tofu, spicy and numbing. Careful!" },
-  { id: "ouzi", nombre: "Guihua Tang'ou", grupo: "chino", precio: 13, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "pelar", que: "loto" }, { t: "huecos" }, { t: "tapita", n: 3 }, { t: "cocinar", como: "hervir" }, { t: "verter", liquido: "jarabe", en: "plato" }, { t: "emplatar" }], extras: ["osmanto"], nota: "桂花糖藕 · Lotus root stuffed with sticky rice. Very Hangzhou." },
-  { id: "zongzi", nombre: "Zongzi", grupo: "chino", precio: 12, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "lavar", que: "arroz" }, { t: "soya" }, { t: "cono", n: 2 }, { t: "rellenar", relleno: "arroz", base: "hoja" }, { t: "dibujar", forma: "lazo", fondo: "rgb(110,160,80)", vetas: "rgb(150,200,110)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["azucar", "soya"], nota: "Sticky rice wrapped in bamboo leaves for the Dragon Boat Festival." },
-  { id: "siumai", nombre: "Shaomai", grupo: "dimsum", precio: 13, desbloqueo: { fama: 3 }, compra: 140, pasos: [{ t: "rizar" }, { t: "rellenar", relleno: "carne" }, { t: "plegar", n: 6, forma: "canasta" }, { t: "manga", n: 4, color: "rgb(250,130,40)" }, { t: "apilar", n: 3 }, { t: "cocinar", como: "vapor" }, { t: "emplatar" }], extras: ["soya", "chile"], nota: "Open on top, with a little orange dot." },
-  { id: "aborrajados", nombre: "Aborrajados", grupo: "colombia", precio: 11, desbloqueo: { fama: 3 }, compra: 120, pasos: [{ t: "pelar", que: "maduro" }, { t: "cortar", que: "maduro", n: 2 }, { t: "armar", orden: [["Plantain", "rgb(240,190,90)"], ["Cheese", "rgb(252,250,240)"], ["Guava", "rgb(170,40,60)"], ["Plantain", "rgb(240,190,90)"]], base: "rgb(250,250,246)", ayuda: "Build the sandwich: plantain, cheese, guava paste, plantain", texto2: "Build the plantain sandwich" }, { t: "cocinar", como: "rebozar" }, { t: "cocinar", como: "freir" }, { t: "emplatar" }], extras: ["bocadillo"], nota: "Sweet plantain, cheese inside, fried in batter." },
-  { id: "pollo_mendigo", nombre: "Jiaohua Ji", grupo: "chino", precio: 17, desbloqueo: { fama: 4 }, compra: 180, pasos: [{ t: "masaje" }, { t: "enrollar", hoja: true, relleno: "pollo" }, { t: "untar", sobre: "hoja", color: "rgb(160,110,70)" }, { t: "cocinar", como: "horno" }, { t: "romper" }, { t: "emplatar" }], extras: ["soya"], nota: "叫化鸡 · Wrapped in lotus leaf and clay, a Hangzhou legend." },
-  { id: "sopa_ternera", nombre: "Xihu Niurou Geng", grupo: "chino", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "picar" }, { t: "cocinar", como: "hervir" }, { t: "espumar" }, { t: "revolver", color: "rgb(214,170,110)", texto: "Thicken the broth, stirring" }, { t: "remolino", n: 2 }, { t: "emplatar" }], extras: ["cilantro", "pimienta"], nota: "西湖牛肉羹 · Silky soup with egg ribbons, like ripples on the lake." },
-  { id: "liusha", nombre: "Liusha Bao", grupo: "dimsum", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "yemas", n: 4 }, { t: "amasar" }, { t: "rellenar", relleno: "natilla" }, { t: "bolitas", n: 2 }, { t: "apilar", n: 3 }, { t: "cocinar", como: "vapor" }, { t: "abrir" }, { t: "emplatar" }], extras: [], nota: "流沙包 · Break it open: the custard flows like gold." },
-  { id: "tamal", nombre: "Tamal", grupo: "colombia", precio: 15, desbloqueo: { fama: 4 }, compra: 170, pasos: [{ t: "soasar" }, { t: "cortar", que: "papa", n: 3 }, { t: "armar" }, { t: "enrollar", hoja: true, relleno: "pollo" }, { t: "dibujar", forma: "lazo", fondo: "rgb(110,160,80)", vetas: "rgb(150,200,110)", tinta: "rgb(236,220,170)" }, { t: "cocinar", como: "hervir" }, { t: "emplatar" }], extras: ["almojabana", "canela"], nota: "Tolima style, wrapped in banana leaves. Sunday breakfast!" },
-  { id: "longjing", nombre: "Longjing Cha", grupo: "chino", precio: 7, desbloqueo: { lugar: "longjing" }, pasos: [{ t: "brotes" }, { t: "termometro" }, { t: "espolvorear", color: "rgb(110,160,80)", hojas: true }, { t: "verter", liquido: "te", hojas: true }, { t: "emplatar" }], extras: [], nota: "Dragon Well green tea. Not too hot!" },
-  { id: "tanghulu", nombre: "Tanghulu", grupo: "chino", precio: 8, desbloqueo: { lugar: "hefang" }, pasos: [{ t: "elegir", frutas: true }, { t: "gota" }, { t: "cocinar", como: "caramelo" }, { t: "cocinar", como: "enfriar", texto: "Let the sugar harden" }, { t: "emplatar" }], frutas: ["espino", "fresa", "uva", "mandarina"], extras: ["sesamo"], nota: "Candied fruit on a stick from Hefang Street." },
-  { id: "luna", nombre: "Yuebing", grupo: "chino", precio: 11, desbloqueo: { lugar: "santan" }, pasos: [{ t: "amasar" }, { t: "rellenar", relleno: "loto" }, { t: "prensar", n: 2 }, { t: "pintar" }, { t: "cocinar", como: "horno" }, { t: "emplatar" }], extras: [], nota: "Round like the moon over Three Pools." },
-  { id: "osmanto", nombre: "Guihua Gao", grupo: "chino", precio: 10, desbloqueo: { lugar: "botanico" }, pasos: [{ t: "sacudir" }, { t: "limpiar" }, { t: "verter", liquido: "jarabe", en: "olla" }, { t: "revolver", color: "rgb(250,210,110)" }, { t: "elegir", flores: true }, { t: "cocinar", como: "enfriar" }, { t: "emplatar" }], extras: ["osmanto"], nota: "Hangzhou's sweet flower, in a jelly." },
-];
-// v71 (rom: "el egg tart al final te da la opcion de agregar extras, pero no hay extras disponibles"):
-// una receta sin extras no tiene el paso de emplatar: se sirve directo despues del ultimo paso
-for (const r of RECETAS) if (!(r.extras || []).length) r.pasos = r.pasos.filter((p) => p.t !== "emplatar");
-export const recetaPorId = (id) => RECETAS.find((r) => r.id === id) || null;
-/** v62: las 20 de v61 (solo se pudieron conseguir comprandolas con el sistema de estrellas). */
-const RECETAS_V61 = new Set(["arroz_con_leche", "chocolate", "mango_biche", "chunjuan", "tangyuan", "congyoubing", "dan_ta", "pandebono", "lulada", "salpicon", "jianbing", "mapo", "ouzi", "zongzi", "siumai", "aborrajados", "pollo_mendigo", "sopa_ternera", "liusha", "tamal"]);
-export const GRUPOS = [
-  ["dimsum", "DIM SUM"],
-  ["chino", "CHINESE"],
-  ["colombia", "COLOMBIA"],
-];
+export const RECETAS = [ {
+    id: "bao_cerdo",
+    nombre: "Roubao",
+    grupo: "dimsum",
+    precio: 8,
+    pasos: [ {
+        t: "cortar",
+        que: "cerdo",
+        n: 4
+    }, {
+        t: "glasear",
+        n: 4
+    }, {
+        t: "leudar"
+    }, ...BAO("carne").slice(1) ],
+    extras: [ "vinagre", "chile", "soya" ],
+    amigo: "usagi",
+    nota: "Soft and round, like you know who."
+}, {
+    id: "jiaozi",
+    nombre: "Jiaozi",
+    grupo: "dimsum",
+    precio: 8,
+    pasos: [ {
+        t: "cortar",
+        que: "repollo",
+        n: 4
+    }, {
+        t: "una_direccion"
+    }, {
+        t: "amasar"
+    }, {
+        t: "estirar"
+    }, {
+        t: "rellenar",
+        relleno: "carne_repollo"
+    }, {
+        t: "plegar",
+        n: 7,
+        forma: "media",
+        relleno: "carne_repollo"
+    }, {
+        t: "agua_fria",
+        n: 3
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "vinagre", "chile", "jengibre" ],
+    amigo: "mimi",
+    nota: "On my planet these are called ‘moon pockets’."
+}, {
+    id: "te_leche",
+    nombre: "Naicha",
+    grupo: "chino",
+    precio: 6,
+    pasos: [ {
+        t: "cocinar",
+        como: "calentar"
+    }, {
+        t: "verter",
+        liquido: "te_negro",
+        meta: .42
+    }, {
+        t: "verter",
+        liquido: "leche",
+        previo: {
+            liquido: "te_negro",
+            nivel: .42
+        }
+    }, {
+        t: "agitar",
+        color: "rgb(214,170,120)"
+    }, {
+        t: "cocinar",
+        como: "hervir",
+        texto: "Boil the pearls until they float"
+    }, {
+        t: "apilar",
+        que: "perlas",
+        n: 3,
+        color: "rgb(214,170,120)"
+    }, {
+        t: "pitillo"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "perlas", "hielo", "azucar" ],
+    amigo: "chagee",
+    nota: "Extra pearls, darling. Always."
+}, {
+    id: "arepa",
+    nombre: "Arepa with cheese",
+    grupo: "colombia",
+    precio: 8,
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "palmear",
+        n: 8
+    }, {
+        t: "budare"
+    }, {
+        t: "untar"
+    }, {
+        t: "rallar",
+        que: "queso",
+        n: 4
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "queso", "huevo" ],
+    nota: "Breakfast in Bogotá, lunch in Hangzhou."
+}, {
+    id: "guotie",
+    nombre: "Guotie",
+    grupo: "dimsum",
+    precio: 9,
+    desbloqueo: {
+        fama: 1
+    },
+    compra: 60,
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "estirar"
+    }, {
+        t: "rellenar",
+        relleno: "carne"
+    }, {
+        t: "plegar",
+        n: 6,
+        forma: "media",
+        relleno: "carne"
+    }, {
+        t: "verter",
+        liquido: "agua",
+        en: "plancha",
+        tapar: true
+    }, {
+        t: "cocinar",
+        como: "tapar"
+    }, {
+        t: "voltear"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "vinagre", "chile", "sesamo" ],
+    nota: "Crispy bottom, soft top."
+}, {
+    id: "bao_verdura",
+    nombre: "Caibao",
+    grupo: "dimsum",
+    precio: 8,
+    desbloqueo: {
+        fama: 1
+    },
+    compra: 50,
+    pasos: [ {
+        t: "blanquear"
+    }, {
+        t: "cortar",
+        que: "bokchoy",
+        n: 4
+    }, {
+        t: "exprimir",
+        que: "verdura",
+        n: 2
+    }, {
+        t: "amasar"
+    }, {
+        t: "rellenar",
+        relleno: "verdura"
+    }, {
+        t: "plegar",
+        n: 9,
+        relleno: "verdura"
+    }, {
+        t: "cocinar",
+        como: "vapor"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "vinagre", "chile", "soya" ],
+    amigo: "usagi",
+    nota: "Usagi's favorite. Lots of greens."
+}, {
+    id: "tinto",
+    nombre: "Tinto",
+    grupo: "colombia",
+    precio: 5,
+    desbloqueo: {
+        fama: 1
+    },
+    compra: 40,
+    pasos: [ {
+        t: "tostar"
+    }, {
+        t: "moler"
+    }, {
+        t: "verter",
+        liquido: "cafe",
+        colar: true
+    }, {
+        t: "revolver",
+        color: "rgb(90,56,40)"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "panela", "azucar" ],
+    nota: "A little black coffee. Wakes you right up."
+}, {
+    id: "xiaolongbao",
+    nombre: "Xiaolongbao",
+    grupo: "dimsum",
+    precio: 12,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 90,
+    pasos: [ {
+        t: "gelatina",
+        n: 4
+    }, {
+        t: "amasar"
+    }, {
+        t: "estirar"
+    }, {
+        t: "rellenar",
+        relleno: "caldo"
+    }, {
+        t: "torcer",
+        n: 18
+    }, {
+        t: "cocinar",
+        como: "vapor"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "vinagre", "jengibre" ],
+    amigo: "ruchong",
+    nota: "Careful… the soup inside is hot!"
+}, {
+    id: "fideos",
+    nombre: "Daoxiao Mian",
+    grupo: "chino",
+    precio: 10,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 70,
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "volar",
+        n: 6
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "escurrir"
+    }, {
+        t: "verter",
+        liquido: "caldo",
+        en: "tazon"
+    }, {
+        t: "elegir",
+        topping: true
+    }, {
+        t: "emplatar"
+    } ],
+    toppings: [ "huevo", "bokchoy", "cebollin" ],
+    extras: [ "chile", "soya", "sesamo" ],
+    nota: "Long noodles, long life."
+}, {
+    id: "empanada",
+    nombre: "Empanadas",
+    grupo: "colombia",
+    precio: 9,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 70,
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "estirar"
+    }, {
+        t: "rellenar",
+        relleno: "pollo"
+    }, {
+        t: "bolsa",
+        n: 3
+    }, {
+        t: "aceite"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "aji", "limon" ],
+    nota: "With ají and a squeeze of lime."
+}, {
+    id: "bao_frijol",
+    nombre: "Dousha Bao",
+    grupo: "dimsum",
+    precio: 9,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 60,
+    pasos: [ {
+        t: "mortero",
+        que: "frijol",
+        n: 8
+    }, {
+        t: "despegar"
+    }, {
+        t: "amasar"
+    }, {
+        t: "rellenar",
+        relleno: "frijol"
+    }, {
+        t: "plegar",
+        n: 9,
+        relleno: "frijol"
+    }, {
+        t: "cocinar",
+        como: "vapor"
+    }, {
+        t: "manga",
+        n: 3,
+        color: "rgb(214,60,60)",
+        fondo: "rgb(252,250,244)",
+        punto: true
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "sesamo", "azucar" ],
+    nota: "Sweet bao with a red dot on top."
+}, {
+    id: "jugo",
+    nombre: "Passion fruit juice",
+    grupo: "colombia",
+    precio: 6,
+    desbloqueo: {
+        fama: 1
+    },
+    compra: 50,
+    pasos: [ {
+        t: "cortar",
+        que: "fruta",
+        n: 3
+    }, {
+        t: "pulpa"
+    }, {
+        t: "verter",
+        liquido: "agua_fria",
+        previo: {
+            liquido: "pulpa",
+            nivel: .18
+        }
+    }, {
+        t: "espolvorear",
+        color: "rgb(255,255,255)"
+    }, {
+        t: "licuar",
+        color: "rgb(255,196,60)"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "hielo", "azucar" ],
+    nota: "Maracuyá! Sour and sunny."
+}, {
+    id: "hargow",
+    nombre: "Xiajiao",
+    grupo: "dimsum",
+    precio: 12,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 100,
+    pasos: [ {
+        t: "lavar",
+        que: "camaron"
+    }, {
+        t: "escaldar"
+    }, {
+        t: "cuchilla",
+        n: 3
+    }, {
+        t: "rellenar",
+        relleno: "camaron"
+    }, {
+        t: "plegar",
+        n: 10,
+        relleno: "camaron"
+    }, {
+        t: "transparente"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "soya", "chile" ],
+    nota: "See-through skin, a whole shrimp inside."
+}, {
+    id: "bunuelos",
+    nombre: "Buñuelos",
+    grupo: "colombia",
+    precio: 9,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 70,
+    pasos: [ {
+        t: "rallar",
+        que: "queso",
+        n: 5
+    }, {
+        t: "amasar"
+    }, {
+        t: "bolitas",
+        n: 3,
+        color: "rgb(250,230,170)"
+    }, {
+        t: "solos"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "azucar", "panela" ],
+    nota: "Golden cheese balls, like at Christmas."
+}, {
+    id: "arroz_frito",
+    nombre: "Dan Chaofan",
+    grupo: "chino",
+    precio: 12,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 90,
+    pasos: [ {
+        t: "cortar",
+        que: "cebollin",
+        n: 5
+    }, {
+        t: "verter",
+        liquido: "huevo",
+        en: "plancha"
+    }, {
+        t: "desgranar",
+        n: 5
+    }, {
+        t: "saltear",
+        n: 4
+    }, {
+        t: "voltear",
+        que: "bol"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "huevo", "soya", "chile" ],
+    nota: "Day-old rice makes the best fried rice!"
+}, {
+    id: "patacones",
+    nombre: "Patacones",
+    grupo: "colombia",
+    precio: 11,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 80,
+    pasos: [ {
+        t: "cortar",
+        que: "platano",
+        n: 3
+    }, {
+        t: "cocinar",
+        como: "freir"
+    }, {
+        t: "aplastar",
+        que: "platano",
+        n: 2
+    }, {
+        t: "remojar",
+        n: 3
+    }, {
+        t: "cocinar",
+        como: "freir",
+        segunda: true
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "hogao", "guacamole", "sal" ],
+    nota: "Smashed green plantain, fried twice. Crunchy!"
+}, {
+    id: "camarones_longjing",
+    nombre: "Longjing Xiaren",
+    grupo: "chino",
+    precio: 15,
+    desbloqueo: {
+        fama: 4
+    },
+    compra: 120,
+    pasos: [ {
+        t: "descascarar"
+    }, {
+        t: "aceite_tibio",
+        n: 5
+    }, {
+        t: "verter",
+        liquido: "te",
+        en: "wok"
+    }, {
+        t: "espolvorear",
+        color: "rgb(110,160,80)",
+        hojas: true
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "jengibre" ],
+    nota: "龙井虾仁 · Shrimp with Dragon Well tea leaves. Pure Hangzhou."
+}, {
+    id: "lamian",
+    nombre: "Lamian",
+    grupo: "chino",
+    precio: 13,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 100,
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "lamian",
+        n: 4
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "cortar",
+        que: "res",
+        n: 4
+    }, {
+        t: "verter",
+        liquido: "caldo",
+        en: "tazon"
+    }, {
+        t: "chile"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "chile", "vinagre", "sesamo" ],
+    nota: "Pull, fold, pull, fold… sixteen strands!"
+}, {
+    id: "ajiaco",
+    nombre: "Ajiaco",
+    grupo: "colombia",
+    precio: 13,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 100,
+    pasos: [ {
+        t: "cortar",
+        que: "papa",
+        n: 4
+    }, {
+        t: "cortar",
+        que: "mazorca",
+        n: 2
+    }, {
+        t: "desmechar"
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "espesar"
+    }, {
+        t: "espolvorear",
+        color: "rgb(90,150,60)",
+        hojas: true
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "crema", "alcaparras", "aguacate" ],
+    nota: "Bogotá's chicken and potato soup. Warms you up."
+}, {
+    id: "pescado_vinagre",
+    nombre: "Xihu Cuyu",
+    grupo: "chino",
+    precio: 16,
+    desbloqueo: {
+        fama: 4
+    },
+    compra: 130,
+    pasos: [ {
+        t: "red"
+    }, {
+        t: "marcar",
+        n: 4
+    }, {
+        t: "palillo"
+    }, {
+        t: "revolver",
+        color: "rgb(130,60,36)"
+    }, {
+        t: "verter",
+        liquido: "vinagre_dulce",
+        en: "plato"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "jengibre", "cebollin" ],
+    nota: "西湖醋鱼 · Fish in sweet vinegar sauce, from the lake itself."
+}, {
+    id: "dongpo",
+    nombre: "Dongpo Rou",
+    grupo: "chino",
+    precio: 16,
+    desbloqueo: {
+        fama: 5
+    },
+    compra: 130,
+    pasos: [ {
+        t: "raspar"
+    }, {
+        t: "dibujar",
+        forma: "lazo",
+        fondo: "rgb(214,110,96)",
+        capas: "rgb(252,236,214)",
+        tinta: "rgb(236,220,170)"
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "banar",
+        n: 4
+    }, {
+        t: "cocinar",
+        como: "vapor"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "bokchoy", "soya" ],
+    nota: "东坡肉 · The poet Su Dongpo's slow pork. Melts in your mouth."
+}, {
+    id: "obleas",
+    nombre: "Obleas",
+    grupo: "colombia",
+    precio: 10,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 80,
+    pasos: [ {
+        t: "arequipe"
+    }, {
+        t: "untar",
+        sobre: "oblea",
+        color: "rgb(170,96,46)"
+    }, {
+        t: "espolvorear",
+        color: "rgb(250,250,246)"
+    }, {
+        t: "apilar",
+        que: "oblea",
+        n: 1
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "arequipe", "queso", "fresa", "coco" ],
+    nota: "Two thin wafers and arequipe. A Colombian street treat."
+}, {
+    id: "arroz_con_leche",
+    nombre: "Arroz con leche",
+    grupo: "colombia",
+    precio: 9,
+    desbloqueo: {
+        fama: 1
+    },
+    compra: 70,
+    pasos: [ {
+        t: "lavar",
+        que: "arroz"
+    }, {
+        t: "cocinar",
+        como: "hervir",
+        texto: "Boil the rice until soft"
+    }, {
+        t: "verter",
+        liquido: "leche",
+        en: "olla",
+        previo: {
+            liquido: "arroz_cocido",
+            nivel: .3
+        }
+    }, {
+        t: "balanza",
+        g: 120,
+        nombre: "sugar",
+        color: "rgb(250,250,246)"
+    }, {
+        t: "revolver",
+        color: "rgb(250,244,228)"
+    }, {
+        t: "dibujar",
+        forma: "corazon",
+        fondo: "rgb(250,244,228)",
+        tinta: "rgb(170,110,60)",
+        texto: "Draw a cinnamon heart on top"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "canela", "pasas" ],
+    nota: "Grandma's recipe: slow, sweet and creamy."
+}, {
+    id: "chocolate",
+    nombre: "Chocolate with cheese",
+    lleva: [ "queso" ],
+    grupo: "colombia",
+    precio: 8,
+    desbloqueo: {
+        fama: 1
+    },
+    compra: 70,
+    pasos: [ {
+        t: "cocinar",
+        como: "calentar"
+    }, {
+        t: "rallar",
+        que: "chocolate",
+        n: 5
+    }, {
+        t: "verter",
+        liquido: "chocolate"
+    }, {
+        t: "agitar",
+        color: "rgb(110,62,40)"
+    }, {
+        t: "queso"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "queso", "almojabana" ],
+    nota: "Santafereño style: drop the cheese in the cup!"
+}, {
+    id: "mango_biche",
+    nombre: "Green mango",
+    grupo: "colombia",
+    precio: 7,
+    desbloqueo: {
+        fama: 1
+    },
+    compra: 60,
+    pasos: [ {
+        t: "pelar",
+        que: "mango"
+    }, {
+        t: "flor",
+        n: 6
+    }, {
+        t: "exprimir",
+        que: "limon",
+        n: 2
+    }, {
+        t: "espolvorear",
+        color: "rgb(240,240,240)"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "sal", "limon", "pimienta" ],
+    nota: "Sour, salty and crunchy, like at the park."
+}, {
+    id: "chunjuan",
+    nombre: "Chunjuan",
+    grupo: "dimsum",
+    precio: 10,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 100,
+    pasos: [ {
+        t: "hojas",
+        n: 3
+    }, {
+        t: "cortar",
+        que: "repollo",
+        n: 4
+    }, {
+        t: "rellenar",
+        relleno: "repollo"
+    }, {
+        t: "enrollar",
+        n: 3,
+        relleno: "repollo"
+    }, {
+        t: "aceite",
+        forma: "rollo"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "vinagre", "chile" ],
+    nota: "Thin, crispy and golden. Spring in a roll."
+}, {
+    id: "tangyuan",
+    nombre: "Tangyuan",
+    grupo: "chino",
+    precio: 10,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 100,
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "rellenar",
+        relleno: "sesamo"
+    }, {
+        t: "rodar",
+        n: 3
+    }, {
+        t: "flotar"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "osmanto" ],
+    nota: "Round like a family reunion. Black sesame inside."
+}, {
+    id: "congyoubing",
+    nombre: "Congyoubing",
+    grupo: "chino",
+    precio: 10,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 100,
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "estirar"
+    }, {
+        t: "cortar",
+        que: "cebollin",
+        n: 5
+    }, {
+        t: "enrollar",
+        cebollin: true
+    }, {
+        t: "enroscar"
+    }, {
+        t: "cocinar",
+        como: "plancha"
+    }, {
+        t: "aplaudir",
+        n: 6
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "soya", "chile" ],
+    nota: "Flaky layers and lots of scallions."
+}, {
+    id: "dan_ta",
+    nombre: "Danta",
+    grupo: "dimsum",
+    precio: 11,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 110,
+    pasos: [ {
+        t: "laminar"
+    }, {
+        t: "huevo",
+        n: 3
+    }, {
+        t: "manga",
+        n: 4,
+        color: "rgb(255,214,90)"
+    }, {
+        t: "ventanita"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [],
+    nota: "Wobbly custard, flaky crust, little burnt spots."
+}, {
+    id: "pandebono",
+    nombre: "Pandebono",
+    grupo: "colombia",
+    precio: 9,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 100,
+    pasos: [ {
+        t: "rallar",
+        que: "queso",
+        n: 6
+    }, {
+        t: "balanza",
+        g: 250,
+        nombre: "yuca starch"
+    }, {
+        t: "amasar"
+    }, {
+        t: "bolitas",
+        n: 3,
+        color: "rgb(250,226,160)"
+    }, {
+        t: "sin_abrir"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [],
+    nota: "Cheesy bread rolls, best warm with coffee."
+}, {
+    id: "lulada",
+    nombre: "Lulada",
+    grupo: "colombia",
+    precio: 8,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 90,
+    pasos: [ {
+        t: "pelusa"
+    }, {
+        t: "cortar",
+        que: "lulo",
+        n: 3
+    }, {
+        t: "aplastar",
+        que: "lulo",
+        n: 1
+    }, {
+        t: "verter",
+        liquido: "agua_fria",
+        previo: {
+            liquido: "pulpa_lulo",
+            nivel: .2
+        }
+    }, {
+        t: "agitar",
+        color: "rgb(200,220,110)"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "hielo", "azucar" ],
+    nota: "From Cali: smashed lulo, ice and a lot of love."
+}, {
+    id: "salpicon",
+    nombre: "Salpicón",
+    grupo: "colombia",
+    precio: 10,
+    desbloqueo: {
+        fama: 2
+    },
+    compra: 100,
+    pasos: [ {
+        t: "pelar",
+        que: "papaya"
+    }, {
+        t: "cortar",
+        que: "papaya",
+        n: 5
+    }, {
+        t: "elegir",
+        topping: true,
+        fruta: true
+    }, {
+        t: "verter",
+        liquido: "jugo_sandia",
+        trozos: "pedido"
+    }, {
+        t: "helado"
+    }, {
+        t: "emplatar"
+    } ],
+    toppings: [ "banano", "sandia", "fresa", "pina", "uva" ],
+    extras: [ "helado", "crema" ],
+    nota: "A cup of chopped fruit, cream and grated cheese."
+}, {
+    id: "jianbing",
+    nombre: "Jianbing",
+    grupo: "chino",
+    precio: 12,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 130,
+    pasos: [ {
+        t: "extender"
+    }, {
+        t: "huevo",
+        sobre: "crepe"
+    }, {
+        t: "untar",
+        sobre: "crepe",
+        color: "rgb(255,200,60)",
+        texto: "Spread the egg all over"
+    }, {
+        t: "espolvorear",
+        color: "rgb(110,180,80)"
+    }, {
+        t: "enrollar",
+        color: "rgb(250,222,150)"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "chile", "cilantro", "salsa_dulce" ],
+    nota: "The street crepe of every Chinese morning."
+}, {
+    id: "mapo",
+    nombre: "Mapo Doufu",
+    grupo: "chino",
+    precio: 12,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 130,
+    pasos: [ {
+        t: "tofu",
+        n: 4
+    }, {
+        t: "saltear",
+        n: 3
+    }, {
+        t: "revolver",
+        color: "rgb(200,60,40)"
+    }, {
+        t: "mortero",
+        que: "pimienta",
+        n: 8
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "cebollin", "chile" ],
+    nota: "Soft tofu, spicy and numbing. Careful!"
+}, {
+    id: "ouzi",
+    nombre: "Guihua Tang'ou",
+    grupo: "chino",
+    precio: 13,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 140,
+    pasos: [ {
+        t: "pelar",
+        que: "loto"
+    }, {
+        t: "huecos"
+    }, {
+        t: "tapita",
+        n: 3
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "verter",
+        liquido: "jarabe",
+        en: "plato"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "osmanto" ],
+    nota: "桂花糖藕 · Lotus root stuffed with sticky rice. Very Hangzhou."
+}, {
+    id: "zongzi",
+    nombre: "Zongzi",
+    grupo: "chino",
+    precio: 12,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 140,
+    pasos: [ {
+        t: "lavar",
+        que: "arroz"
+    }, {
+        t: "soya"
+    }, {
+        t: "cono",
+        n: 2
+    }, {
+        t: "rellenar",
+        relleno: "arroz",
+        base: "hoja"
+    }, {
+        t: "dibujar",
+        forma: "lazo",
+        fondo: "rgb(110,160,80)",
+        vetas: "rgb(150,200,110)",
+        tinta: "rgb(236,220,170)"
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "azucar", "soya" ],
+    nota: "Sticky rice wrapped in bamboo leaves for the Dragon Boat Festival."
+}, {
+    id: "siumai",
+    nombre: "Shaomai",
+    grupo: "dimsum",
+    precio: 13,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 140,
+    pasos: [ {
+        t: "rizar"
+    }, {
+        t: "rellenar",
+        relleno: "carne"
+    }, {
+        t: "plegar",
+        n: 6,
+        forma: "canasta"
+    }, {
+        t: "manga",
+        n: 4,
+        color: "rgb(250,130,40)"
+    }, {
+        t: "apilar",
+        n: 3
+    }, {
+        t: "cocinar",
+        como: "vapor"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "soya", "chile" ],
+    nota: "Open on top, with a little orange dot."
+}, {
+    id: "aborrajados",
+    nombre: "Aborrajados",
+    grupo: "colombia",
+    precio: 11,
+    desbloqueo: {
+        fama: 3
+    },
+    compra: 120,
+    pasos: [ {
+        t: "pelar",
+        que: "maduro"
+    }, {
+        t: "cortar",
+        que: "maduro",
+        n: 2
+    }, {
+        t: "armar",
+        orden: [ [ "Plantain", "rgb(240,190,90)" ], [ "Cheese", "rgb(252,250,240)" ], [ "Guava", "rgb(170,40,60)" ], [ "Plantain", "rgb(240,190,90)" ] ],
+        base: "rgb(250,250,246)",
+        ayuda: "Build the sandwich: plantain, cheese, guava paste, plantain",
+        texto2: "Build the plantain sandwich"
+    }, {
+        t: "cocinar",
+        como: "rebozar"
+    }, {
+        t: "cocinar",
+        como: "freir"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "bocadillo" ],
+    nota: "Sweet plantain, cheese inside, fried in batter."
+}, {
+    id: "pollo_mendigo",
+    nombre: "Jiaohua Ji",
+    grupo: "chino",
+    precio: 17,
+    desbloqueo: {
+        fama: 4
+    },
+    compra: 180,
+    pasos: [ {
+        t: "masaje"
+    }, {
+        t: "enrollar",
+        hoja: true,
+        relleno: "pollo"
+    }, {
+        t: "untar",
+        sobre: "hoja",
+        color: "rgb(160,110,70)"
+    }, {
+        t: "cocinar",
+        como: "horno"
+    }, {
+        t: "romper"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "soya" ],
+    nota: "叫化鸡 · Wrapped in lotus leaf and clay, a Hangzhou legend."
+}, {
+    id: "sopa_ternera",
+    nombre: "Xihu Niurou Geng",
+    grupo: "chino",
+    precio: 15,
+    desbloqueo: {
+        fama: 4
+    },
+    compra: 170,
+    pasos: [ {
+        t: "picar"
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "espumar"
+    }, {
+        t: "revolver",
+        color: "rgb(214,170,110)",
+        texto: "Thicken the broth, stirring"
+    }, {
+        t: "remolino",
+        n: 2
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "cilantro", "pimienta" ],
+    nota: "西湖牛肉羹 · Silky soup with egg ribbons, like ripples on the lake."
+}, {
+    id: "liusha",
+    nombre: "Liusha Bao",
+    grupo: "dimsum",
+    precio: 15,
+    desbloqueo: {
+        fama: 4
+    },
+    compra: 170,
+    pasos: [ {
+        t: "yemas",
+        n: 4
+    }, {
+        t: "amasar"
+    }, {
+        t: "rellenar",
+        relleno: "natilla"
+    }, {
+        t: "bolitas",
+        n: 2
+    }, {
+        t: "apilar",
+        n: 3
+    }, {
+        t: "cocinar",
+        como: "vapor"
+    }, {
+        t: "abrir"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [],
+    nota: "流沙包 · Break it open: the custard flows like gold."
+}, {
+    id: "tamal",
+    nombre: "Tamal",
+    grupo: "colombia",
+    precio: 15,
+    desbloqueo: {
+        fama: 4
+    },
+    compra: 170,
+    pasos: [ {
+        t: "soasar"
+    }, {
+        t: "cortar",
+        que: "papa",
+        n: 3
+    }, {
+        t: "armar"
+    }, {
+        t: "enrollar",
+        hoja: true,
+        relleno: "pollo"
+    }, {
+        t: "dibujar",
+        forma: "lazo",
+        fondo: "rgb(110,160,80)",
+        vetas: "rgb(150,200,110)",
+        tinta: "rgb(236,220,170)"
+    }, {
+        t: "cocinar",
+        como: "hervir"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "almojabana", "canela" ],
+    nota: "Tolima style, wrapped in banana leaves. Sunday breakfast!"
+}, {
+    id: "longjing",
+    nombre: "Longjing Cha",
+    grupo: "chino",
+    precio: 7,
+    desbloqueo: {
+        lugar: "longjing"
+    },
+    pasos: [ {
+        t: "brotes"
+    }, {
+        t: "termometro"
+    }, {
+        t: "espolvorear",
+        color: "rgb(110,160,80)",
+        hojas: true
+    }, {
+        t: "verter",
+        liquido: "te",
+        hojas: true
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [],
+    nota: "Dragon Well green tea. Not too hot!"
+}, {
+    id: "tanghulu",
+    nombre: "Tanghulu",
+    grupo: "chino",
+    precio: 8,
+    desbloqueo: {
+        lugar: "hefang"
+    },
+    pasos: [ {
+        t: "elegir",
+        frutas: true
+    }, {
+        t: "gota"
+    }, {
+        t: "cocinar",
+        como: "caramelo"
+    }, {
+        t: "cocinar",
+        como: "enfriar",
+        texto: "Let the sugar harden"
+    }, {
+        t: "emplatar"
+    } ],
+    frutas: [ "espino", "fresa", "uva", "mandarina" ],
+    extras: [ "sesamo" ],
+    nota: "Candied fruit on a stick from Hefang Street."
+}, {
+    id: "luna",
+    nombre: "Yuebing",
+    grupo: "chino",
+    precio: 11,
+    desbloqueo: {
+        lugar: "santan"
+    },
+    pasos: [ {
+        t: "amasar"
+    }, {
+        t: "rellenar",
+        relleno: "loto"
+    }, {
+        t: "prensar",
+        n: 2
+    }, {
+        t: "pintar"
+    }, {
+        t: "cocinar",
+        como: "horno"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [],
+    nota: "Round like the moon over Three Pools."
+}, {
+    id: "osmanto",
+    nombre: "Guihua Gao",
+    grupo: "chino",
+    precio: 10,
+    desbloqueo: {
+        lugar: "botanico"
+    },
+    pasos: [ {
+        t: "sacudir"
+    }, {
+        t: "limpiar"
+    }, {
+        t: "verter",
+        liquido: "jarabe",
+        en: "olla"
+    }, {
+        t: "revolver",
+        color: "rgb(250,210,110)"
+    }, {
+        t: "elegir",
+        flores: true
+    }, {
+        t: "cocinar",
+        como: "enfriar"
+    }, {
+        t: "emplatar"
+    } ],
+    extras: [ "osmanto" ],
+    nota: "Hangzhou's sweet flower, in a jelly."
+} ];
 
-/** Lo que se puede poner en el frente del local (arte de la tienda). */
-export const DECOR = [
-  { id: "farolitos", nombre: "Red lanterns", precio: 80, arte: "tienda/deco_farolitos.png" },
-  { id: "bonsai", nombre: "Bonsai", precio: 60, arte: "tienda/deco_bonsai.png" },
-  { id: "orquidea", nombre: "Orchid", precio: 70, arte: "tienda/deco_orquidea.png" },
-  { id: "banderin", nombre: "Bunting", precio: 90, arte: "restaurante/deco_banderin_local.png" }, // v84: mas corto (no tapa los farolitos)
-  { id: "luces", nombre: "Fairy lights", precio: 100, arte: "tienda/deco_luces.png" },
-  { id: "saco", nombre: "Coffee sack", precio: 60, arte: "tienda/deco_saco.png" },
-  // v84 (rom: "agregar varias decoraciones nuevas al restaurante")
-  { id: "coplas", nombre: "Spring couplets", precio: 70, arte: "restaurante/deco_fu.png" },
-  { id: "vaporeras", nombre: "Bamboo steamers", precio: 80, arte: "restaurante/deco_vaporeras.png" },
-  { id: "chiva", nombre: "Chiva bus", precio: 120, arte: "restaurante/deco_chiva_local.png" },
-  { id: "pizarra", nombre: "Menu board", precio: 60, arte: "restaurante/deco_pizarra.png" },
-  { id: "sombrero", nombre: "Sombrero vueltiao", precio: 90, arte: "restaurante/deco_sombrero.png" },
-  { id: "paraguas", nombre: "Oil-paper umbrella", precio: 110, arte: "restaurante/deco_paraguas.png" },
-  { id: "osmanto", nombre: "Osmanthus tree", precio: 100, arte: "restaurante/deco_osmanto.png" },
-  { id: "mesita", nombre: "Street tea table", precio: 130, arte: "restaurante/deco_mesita.png" },
-  { id: "aves", nombre: "Rooftop birds", precio: 150, arte: "restaurante/deco_aves.png" },
-  { id: "campanilla", nombre: "Wind chime", precio: 60, arte: "restaurante/deco_campanilla.png" },
-];
+for (const r of RECETAS) if (!(r.extras || []).length) r.pasos = r.pasos.filter((p => p.t !== "emplatar"));
 
-/**
- * Los clientes que no son amigos (assets/restaurante/cliente_<id>.png y _saludo.png).
- * Vacio por ahora: rom los va a dibujar. Mientras, comen los amigos de Baozi.
- * Formato: { id, nombre, gracias: ["...", "..."] }
- */
+export const recetaPorId = id => RECETAS.find((r => r.id === id)) || null;
+
+const RECETAS_V61 = new Set([ "arroz_con_leche", "chocolate", "mango_biche", "chunjuan", "tangyuan", "congyoubing", "dan_ta", "pandebono", "lulada", "salpicon", "jianbing", "mapo", "ouzi", "zongzi", "siumai", "aborrajados", "pollo_mendigo", "sopa_ternera", "liusha", "tamal" ]);
+
+export const GRUPOS = [ [ "dimsum", "DIM SUM" ], [ "chino", "CHINESE" ], [ "colombia", "COLOMBIA" ] ];
+
+export const DECOR = [ {
+    id: "farolitos",
+    nombre: "Red lanterns",
+    precio: 80,
+    arte: "tienda/deco_farolitos.png"
+}, {
+    id: "bonsai",
+    nombre: "Bonsai",
+    precio: 60,
+    arte: "tienda/deco_bonsai.png"
+}, {
+    id: "orquidea",
+    nombre: "Orchid",
+    precio: 70,
+    arte: "tienda/deco_orquidea.png"
+}, {
+    id: "banderin",
+    nombre: "Bunting",
+    precio: 90,
+    arte: "restaurante/deco_banderin_local.png"
+}, {
+    id: "luces",
+    nombre: "Fairy lights",
+    precio: 100,
+    arte: "tienda/deco_luces.png"
+}, {
+    id: "saco",
+    nombre: "Coffee sack",
+    precio: 60,
+    arte: "tienda/deco_saco.png"
+}, {
+    id: "coplas",
+    nombre: "Spring couplets",
+    precio: 70,
+    arte: "restaurante/deco_fu.png"
+}, {
+    id: "vaporeras",
+    nombre: "Bamboo steamers",
+    precio: 80,
+    arte: "restaurante/deco_vaporeras.png"
+}, {
+    id: "chiva",
+    nombre: "Chiva bus",
+    precio: 120,
+    arte: "restaurante/deco_chiva_local.png"
+}, {
+    id: "pizarra",
+    nombre: "Menu board",
+    precio: 60,
+    arte: "restaurante/deco_pizarra.png"
+}, {
+    id: "sombrero",
+    nombre: "Sombrero vueltiao",
+    precio: 90,
+    arte: "restaurante/deco_sombrero.png"
+}, {
+    id: "paraguas",
+    nombre: "Oil-paper umbrella",
+    precio: 110,
+    arte: "restaurante/deco_paraguas.png"
+}, {
+    id: "osmanto",
+    nombre: "Osmanthus tree",
+    precio: 100,
+    arte: "restaurante/deco_osmanto.png"
+}, {
+    id: "mesita",
+    nombre: "Street tea table",
+    precio: 130,
+    arte: "restaurante/deco_mesita.png"
+}, {
+    id: "aves",
+    nombre: "Rooftop birds",
+    precio: 150,
+    arte: "restaurante/deco_aves.png"
+}, {
+    id: "campanilla",
+    nombre: "Wind chime",
+    precio: 60,
+    arte: "restaurante/deco_campanilla.png"
+} ];
+
 export const CLIENTES = [];
+
 export const GRACIAS_AMIGOS = {
-  usagi: "Quiet, warm, perfect. Thank you.",
-  mimi: "Earth food is the best food. Photo for my album!",
-  ruchong: "It's… it's so good. Can I paint it?",
-  chagee: "Bravo, chef! Bravo!",
+    usagi: "Quiet, warm, perfect. Thank you.",
+    mimi: "Earth food is the best food. Photo for my album!",
+    ruchong: "It's… it's so good. Can I paint it?",
+    chagee: "Bravo, chef! Bravo!"
 };
-const PIDE = ["Something warm, please.", "I'm sooo hungry!", "The usual, chef!", "Surprise me… no wait, this one!", "Can I have…", "Your best one, please."];
+
+const PIDE = [ "Something warm, please.", "I'm sooo hungry!", "The usual, chef!", "Surprise me… no wait, this one!", "Can I have…", "Your best one, please." ];
+
 const RESENAS = {
-  3: ["Best on Hefang!", "Perfect. Coming back tomorrow!", "Chef's kiss!", "I'd marry this dish."],
-  2: ["Really good!", "Yummy, thank you!", "Nice and warm."],
-  1: ["Hmm… it's okay.", "A little odd, but thanks!", "Interesting…"],
+    3: [ "Best on Hefang!", "Perfect. Coming back tomorrow!", "Chef's kiss!", "I'd marry this dish." ],
+    2: [ "Really good!", "Yummy, thank you!", "Nice and warm." ],
+    1: [ "Hmm… it's okay.", "A little odd, but thanks!", "Interesting…" ]
 };
 
-/**
- * Fama (v59, rom: "que se sienta mucho mas progresivo"): puntos acumulados; cada
- * estrella pide mas que la anterior. Solo suma el primer dia del local de cada dia
- * real (los otros son de practica), asi ★5 llega en ~1 mes jugando seguido.
- */
-export const UMBRALES_FAMA = [0, 20, 60, 140, 280]; // puntos para ★1..★5
-export const famaDe = (puntos) => Math.max(1, UMBRALES_FAMA.filter((u) => Math.max(0, puntos) >= u).length);
-/** Cuanto lleva y cuanto falta para la proxima estrella (null en ★5). */
+export const UMBRALES_FAMA = [ 0, 20, 60, 140, 280 ];
+
+export const famaDe = puntos => Math.max(1, UMBRALES_FAMA.filter((u => Math.max(0, puntos) >= u)).length);
+
 export function progresoFama(puntos) {
-  const e = famaDe(puntos);
-  if (e >= 5) return null;
-  const desde = UMBRALES_FAMA[e - 1];
-  const hasta = UMBRALES_FAMA[e];
-  return { estrella: e, puntos, desde, hasta, f: (puntos - desde) / (hasta - desde) };
+    const e = famaDe(puntos);
+    if (e >= 5) return null;
+    const desde = UMBRALES_FAMA[e - 1];
+    const hasta = UMBRALES_FAMA[e];
+    return {
+        estrella: e,
+        puntos: puntos,
+        desde: desde,
+        hasta: hasta,
+        f: (puntos - desde) / (hasta - desde)
+    };
 }
-/** Puntos de fama de un plato. */
-export const famaPorPlato = (estrellas) => {
-  const n = nivelDe(estrellas);
-  return n === 3 ? 2 : n === 2 ? 1 : estrellas >= 1.8 ? 0 : -1;
+
+export const famaPorPlato = estrellas => {
+    const n = nivelDe(estrellas);
+    return n === 3 ? 2 : n === 2 ? 1 : estrellas >= 1.8 ? 0 : -1;
 };
-/**
- * v73 (rom: "la valoracion de estrellas… mas exacto, tal vez por decimas, porque es demasiado facil
- * siempre sacar 3 estrellas"): la nota del plato es un numero con una decima (1.0 .. 3.0).
- * Para premios y caras se usa el nivel: 3 = perfecto (2.9+), 2 = bien (2.3+), 1 = flojo.
- */
-export const nivelDe = (nota) => (nota >= 2.9 ? 3 : nota >= 2.3 ? 2 : 1);
-export const clientesPorDia = (fama, asientos = 0) => 2 + fama + asientos; // 3 a 7 (+3 con asientos)
 
-/**
- * Las mejoras de la cocina (v59: se compran, rom: "los upgrades deberian poder comprarse").
- * costos[i] y estrella[i]: lo que cuesta y la estrella que pide el nivel i+1.
- */
-export const MEJORAS_COCINA = [
-  { id: "cuchillo", nombre: "Sharp knife", texto: "Chopping is more forgiving", costos: [60, 150], estrella: [1, 2] },
-  { id: "ollas", nombre: "Good pots & steamers", texto: "Wider green zone when cooking", costos: [80, 180, 320], estrella: [1, 2, 3] },
-  { id: "wok", nombre: "Cast-iron wok", texto: "Longer flames, easier catches", costos: [120, 260], estrella: [2, 3] },
-  { id: "asientos", nombre: "More seats", texto: "+1 customer every day", costos: [100, 220, 400], estrella: [1, 2, 4] },
-  { id: "propinas", nombre: "Tip jar", texto: "Bigger tips for perfect dishes", costos: [70, 180], estrella: [1, 3] },
-  { id: "letrero", nombre: "Glowing sign", texto: "+3 fame every day that counts", costos: [300], estrella: [4] },
-];
-export const mejoraPorId = (id) => MEJORAS_COCINA.find((m) => m.id === id) || null;
+export const nivelDe = nota => nota >= 2.9 ? 3 : nota >= 2.3 ? 2 : 1;
 
-/** Lo que paga un plato: el precio segun la calidad, propina con 3 estrellas, el especial el doble. */
+export const clientesPorDia = (fama, asientos = 0) => 2 + fama + asientos;
+
+export const MEJORAS_COCINA = [ {
+    id: "cuchillo",
+    nombre: "Sharp knife",
+    texto: "Chopping is more forgiving",
+    costos: [ 60, 150 ],
+    estrella: [ 1, 2 ]
+}, {
+    id: "ollas",
+    nombre: "Good pots & steamers",
+    texto: "Wider green zone when cooking",
+    costos: [ 80, 180, 320 ],
+    estrella: [ 1, 2, 3 ]
+}, {
+    id: "wok",
+    nombre: "Cast-iron wok",
+    texto: "Longer flames, easier catches",
+    costos: [ 120, 260 ],
+    estrella: [ 2, 3 ]
+}, {
+    id: "asientos",
+    nombre: "More seats",
+    texto: "+1 customer every day",
+    costos: [ 100, 220, 400 ],
+    estrella: [ 1, 2, 4 ]
+}, {
+    id: "propinas",
+    nombre: "Tip jar",
+    texto: "Bigger tips for perfect dishes",
+    costos: [ 70, 180 ],
+    estrella: [ 1, 3 ]
+}, {
+    id: "letrero",
+    nombre: "Glowing sign",
+    texto: "+3 fame every day that counts",
+    costos: [ 300 ],
+    estrella: [ 4 ]
+} ];
+
+export const mejoraPorId = id => MEJORAS_COCINA.find((m => m.id === id)) || null;
+
 export function pagoDe(receta, estrellas, especial = false, propina = 3) {
-  // v73: el pago sube parejo con la nota (1.0 = 40% del precio, 3.0 = el precio entero); propina solo perfecto
-  const nota = Math.max(1, Math.min(3, estrellas));
-  const base = Math.round(receta.precio * (0.4 + 0.6 * ((nota - 1) / 2)));
-  const extra = nivelDe(nota) === 3 ? propina : 0;
-  return (base + extra) * (especial ? 2 : 1);
+    const nota = Math.max(1, Math.min(3, estrellas));
+    const base = Math.round(receta.precio * (.4 + .6 * ((nota - 1) / 2)));
+    const extra = nivelDe(nota) === 3 ? propina : 0;
+    return (base + extra) * (especial ? 2 : 1);
 }
-/** Las estrellas del plato: el promedio de los pasos, con una decima (v73). */
-export const estrellasDelPlato = (pasos) => (pasos.length ? Math.max(1, Math.min(3, Math.round((pasos.reduce((s, x) => s + x, 0) / pasos.length) * 10) / 10)) : 3);
 
-const claveDia = (t) => {
-  const d = new Date(t);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export const estrellasDelPlato = pasos => pasos.length ? Math.max(1, Math.min(3, Math.round(pasos.reduce(((s, x) => s + x), 0) / pasos.length * 10) / 10)) : 3;
+
+const claveDia = t => {
+    const d = new Date(t);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+
 function semilla(str) {
-  let h = 2166136261;
-  for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
-  return h >>> 0;
+    let h = 2166136261;
+    for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    return h >>> 0;
 }
 
 export class Restaurante {
-  constructor() {
-    this.turnos = 0; // cuantos dias abrio el local en total
-    this.mejoras = new Set(); // (v54; ya no se usan: ver desdeObjeto)
-    this.reembolso = 0; // monedas a devolver por las mejoras de v54 (no se guarda)
-    this.mejorTurno = 0;
-    this.hoy = { dia: null, turnos: 0, felices: 0, ganado: 0 };
-    this.fama = 0; // puntos de fama
-    this.compradas = new Set(); // recetas desbloqueadas comprandolas
-    this.libro = {}; // id -> { mejor, vendidos }
-    this.decor = new Set(); // lo que compro para el frente
-    this.ultimo = null; // { felices, ganado, resenas: [{ quien, texto, estrellas }] }
-    this.niveles = {}; // v59: mejora -> nivel comprado
-    this.relajado = false; // v59: modo relajado (facil, sin fama)
-    this.carta = 0; // v59: la carta del critico pendiente (la estrella nueva), 0 = ninguna
-    this.guardados = new Set(); // v60: adornos comprados que saco del frente
-    this.recientes = []; // v62: lo que se pidio en los ultimos dias del local (sale menos)
-    this.nuevas = {}; // v62: receta -> cuando la compro (los primeros dias sale mas)
-  }
-
-  /** v62: las recetas compradas hace menos de 3 dias. */
-  recetasNuevas(ahora = Date.now()) {
-    return Object.entries(this.nuevas).filter(([, t]) => ahora - t < 3 * 864e5).map(([id]) => id);
-  }
-
-  /** v62: anota lo que se pidio hoy (se recuerdan los ultimos ~2 dias del local). */
-  anotarPedidos(ids) {
-    this.recientes = [...ids, ...this.recientes].slice(0, 12);
-  }
-
-  nivel(id) {
-    return this.niveles[id] || 0;
-  }
-
-  /** v59: compra el proximo nivel de una mejora. Devuelve "ok" | "max" | "estrella" | "monedas". */
-  comprarMejora(id, tienda) {
-    const m = mejoraPorId(id);
-    if (!m) return "max";
-    const n = this.nivel(id);
-    if (n >= m.costos.length) return "max";
-    if (this.estrellasFama() < m.estrella[n]) return "estrella";
-    if (!tienda || tienda.monedas < m.costos[n]) return "monedas";
-    tienda.monedas -= m.costos[n];
-    this.niveles[id] = n + 1;
-    return "ok";
-  }
-
-  /** v59: ¿hoy todavia cuenta para la fama? (el primer dia del local de cada dia real, sin modo relajado) */
-  cuentaHoy(ahora = Date.now()) {
-    this._alDia(ahora);
-    return !this.relajado && !this.hoy.contado;
-  }
-
-  /** ¿Esta receta ya se puede cocinar? sellados: Set de lugares. */
-  desbloqueada(id, sellados = new Set()) {
-    const r = recetaPorId(id);
-    if (!r) return false;
-    if (!r.desbloqueo || this.compradas.has(id)) return true;
-    if (r.desbloqueo.lugar) return sellados.has(r.desbloqueo.lugar);
-    return false; // las de { fama } se compran
-  }
-
-  /** v59: ¿ya se puede comprar? (tiene la estrella que pide) */
-  sePuedeComprar(id) {
-    const r = recetaPorId(id);
-    return !!(r && r.compra && r.desbloqueo && r.desbloqueo.fama && !this.compradas.has(id) && this.estrellasFama() >= r.desbloqueo.fama);
-  }
-
-  menu(sellados = new Set()) {
-    return RECETAS.filter((r) => this.desbloqueada(r.id, sellados)).map((r) => r.id);
-  }
-
-  comprarReceta(id, tienda) {
-    const r = recetaPorId(id);
-    if (!this.sePuedeComprar(id) || !tienda || tienda.monedas < r.compra) return false;
-    tienda.monedas -= r.compra;
-    this.compradas.add(id);
-    this.nuevas[id] = Date.now();
-    return true;
-  }
-
-  comprarDecor(id, tienda) {
-    const d = DECOR.find((x) => x.id === id);
-    if (!d || this.decor.has(id) || !tienda || tienda.monedas < d.precio) return false;
-    tienda.monedas -= d.precio;
-    this.decor.add(id);
-    return true;
-  }
-
-  estrellasFama() {
-    return famaDe(this.fama);
-  }
-
-  /** El especial del dia: una receta del menu, la misma todo el dia. */
-  especial(sellados = new Set(), ahora = Date.now()) {
-    const m = this.menu(sellados);
-    return m.length ? m[semilla(claveDia(ahora)) % m.length] : null;
-  }
-
-  /** Anota un plato servido: libro y, si el dia cuenta, fama (nunca baja de la estrella que ya tiene). */
-  anotarPlato(id, estrellas, cuenta = true) {
-    if (cuenta) this.sumarFama(famaPorPlato(estrellas));
-    const l = this.libro[id] || { mejor: 0, vendidos: 0 };
-    l.mejor = Math.max(l.mejor, estrellas);
-    l.vendidos += 1;
-    this.libro[id] = l;
-  }
-
-  /** Suma (o resta) fama; si sube de estrella, deja la carta del critico pendiente. */
-  sumarFama(n) {
-    const antes = this.estrellasFama();
-    const piso = UMBRALES_FAMA[antes - 1];
-    this.fama = Math.max(piso, this.fama + n);
-    const despues = this.estrellasFama();
-    if (despues > antes) this.carta = despues;
-    return despues > antes;
-  }
-
-  _alDia(ahora) {
-    const d = claveDia(ahora);
-    if (this.hoy.dia !== d) this.hoy = { dia: d, turnos: 0, felices: 0, ganado: 0, contado: false, esp: 0, espServido: false };
-  }
-
-  primeroDeHoy(ahora = Date.now()) {
-    this._alDia(ahora);
-    return this.hoy.turnos === 0;
-  }
-
-  /** Cierra un dia del local: el primero de cada dia real paga todo; los siguientes, un tercio. */
-  cerrarTurno({ ganado = 0, felices = 0, resenas = [], cuenta = false } = {}, ahora = Date.now()) {
-    this._alDia(ahora);
-    // v59: el dia que cuenta suma un dia al local (y el letrero, su fama extra)
-    let famaExtra = 0;
-    if (cuenta && !this.hoy.contado) {
-      this.hoy.contado = true;
-      this.turnos += 1;
-      if (this.nivel("letrero")) {
-        famaExtra = 3;
-        this.sumarFama(famaExtra);
-      }
+    constructor() {
+        this.turnos = 0;
+        this.mejoras = new Set;
+        this.reembolso = 0;
+        this.mejorTurno = 0;
+        this.hoy = {
+            dia: null,
+            turnos: 0,
+            felices: 0,
+            ganado: 0
+        };
+        this.fama = 0;
+        this.compradas = new Set;
+        this.libro = {};
+        this.decor = new Set;
+        this.ultimo = null;
+        this.niveles = {};
+        this.relajado = false;
+        this.carta = 0;
+        this.guardados = new Set;
+        this.recientes = [];
+        this.nuevas = {};
     }
-    const g = Math.max(0, Math.floor(ganado));
-    const paga = this.hoy.turnos === 0 ? g : Math.floor(g / 3);
-    this.hoy.turnos += 1;
-    this.hoy.felices += Math.max(0, felices);
-    this.hoy.ganado += paga;
-    const record = g > this.mejorTurno;
-    if (record) this.mejorTurno = g;
-    this.ultimo = { felices, ganado: paga, resenas: resenas.slice(0, 3) };
-    return { paga, record, famaExtra };
-  }
-
-  aObjeto() {
-    return { version: 3, turnos: this.turnos, mejoras: [...this.mejoras], mejorTurno: this.mejorTurno, hoy: { ...this.hoy }, fama: this.fama, compradas: [...this.compradas], libro: this.libro, decor: [...this.decor], ultimo: this.ultimo, niveles: this.niveles, relajado: this.relajado, carta: this.carta, guardados: [...this.guardados], recientes: this.recientes, nuevas: this.nuevas };
-  }
-
-  static desdeObjeto(d) {
-    const r = new Restaurante();
-    if (!d || typeof d !== "object") return r;
-    const ent = (x) => (Number.isFinite(x) && x > 0 ? Math.floor(x) : 0);
-    r.turnos = ent(d.turnos);
-    // v54 -> v55: las mejoras viejas ya no existen. Los farolitos pasan al frente
-    // y lo demas se devuelve en monedas (main.js lo suma a la tienda una vez).
-    const viejas = (Array.isArray(d.mejoras) ? d.mejoras : []).filter((x) => typeof x === "string");
-    r.reembolso = viejas.reduce((s, m) => s + ({ vapor2: 120, fuego: 150, lugar4: 200 }[m] || 0), 0);
-    r.mejorTurno = ent(d.mejorTurno);
-    const h = d.hoy || {};
-    if (typeof h.dia === "string") r.hoy = { dia: h.dia, turnos: ent(h.turnos), felices: ent(h.felices), ganado: ent(h.ganado), contado: h.contado === true, esp: ent(h.esp), espServido: h.espServido === true };
-    r.fama = ent(d.fama);
-    r.compradas = new Set((Array.isArray(d.compradas) ? d.compradas : []).filter((id) => recetaPorId(id)));
-    if (d.libro && typeof d.libro === "object") {
-      for (const [id, l] of Object.entries(d.libro)) if (recetaPorId(id) && l) r.libro[id] = { mejor: Math.max(0, Math.min(3, Number.isFinite(l.mejor) ? Math.round(l.mejor * 10) / 10 : 0)), vendidos: ent(l.vendidos) };
+    recetasNuevas(ahora = Date.now()) {
+        return Object.entries(this.nuevas).filter((([, t]) => ahora - t < 3 * 864e5)).map((([id]) => id));
     }
-    r.decor = new Set((Array.isArray(d.decor) ? d.decor : []).filter((id) => DECOR.some((x) => x.id === id)));
-    if (viejas.includes("faroles")) r.decor.add("farolitos");
-    // v59
-    for (const m of MEJORAS_COCINA) if (d.niveles && Number.isFinite(d.niveles[m.id])) r.niveles[m.id] = Math.max(0, Math.min(m.costos.length, Math.floor(d.niveles[m.id])));
-    r.relajado = d.relajado === true;
-    r.guardados = new Set((Array.isArray(d.guardados) ? d.guardados : []).filter((id) => r.decor.has(id)));
-    r.carta = Number.isInteger(d.carta) && d.carta >= 2 && d.carta <= 5 ? d.carta : 0;
-    r.recientes = (Array.isArray(d.recientes) ? d.recientes : []).filter((id) => recetaPorId(id)).slice(0, 12);
-    if (d.nuevas && typeof d.nuevas === "object") for (const [id, t] of Object.entries(d.nuevas)) if (recetaPorId(id) && Number.isFinite(t)) r.nuevas[id] = t;
-    const version = Number.isInteger(d.version) ? d.version : 1;
-    if (version < 2) {
-      // v58 -> v59 (rom: "empezar la fama de cero"): fama y dias de cero
-      r.fama = 0;
-      r.turnos = 0;
-      r.carta = 0;
-      if (r.hoy) r.hoy.contado = false;
+    anotarPedidos(ids) {
+        this.recientes = [ ...ids, ...this.recientes ].slice(0, 12);
     }
-    if (version < 3) {
-      // v62 (rom: "reseteemos el progreso de recetas, para que no tenga las 23 desde ya sino solo
-      // las que deberia"): las recetas que v59 dejo abiertas por los dias viejos (y las compradas
-      // antes de v59) se cierran; quedan las 4 de siempre, las de los lugares sellados, y las de
-      // v61 (esas solo se pudieron comprar con monedas, en el sistema de ahora)
-      r.compradas = new Set([...r.compradas].filter((id) => RECETAS_V61.has(id)));
+    nivel(id) {
+        return this.niveles[id] || 0;
     }
-    if (d.ultimo && typeof d.ultimo === "object") r.ultimo = { felices: ent(d.ultimo.felices), ganado: ent(d.ultimo.ganado), resenas: (Array.isArray(d.ultimo.resenas) ? d.ultimo.resenas : []).filter((x) => x && typeof x.texto === "string").slice(0, 3) };
-    return r;
-  }
+    comprarMejora(id, tienda) {
+        const m = mejoraPorId(id);
+        if (!m) return "max";
+        const n = this.nivel(id);
+        if (n >= m.costos.length) return "max";
+        if (this.estrellasFama() < m.estrella[n]) return "estrella";
+        if (!tienda || tienda.monedas < m.costos[n]) return "monedas";
+        tienda.monedas -= m.costos[n];
+        this.niveles[id] = n + 1;
+        return "ok";
+    }
+    cuentaHoy(ahora = Date.now()) {
+        this._alDia(ahora);
+        return !this.relajado && !this.hoy.contado;
+    }
+    desbloqueada(id, sellados = new Set) {
+        const r = recetaPorId(id);
+        if (!r) return false;
+        if (!r.desbloqueo || this.compradas.has(id)) return true;
+        if (r.desbloqueo.lugar) return sellados.has(r.desbloqueo.lugar);
+        return false;
+    }
+    sePuedeComprar(id) {
+        const r = recetaPorId(id);
+        return !!(r && r.compra && r.desbloqueo && r.desbloqueo.fama && !this.compradas.has(id) && this.estrellasFama() >= r.desbloqueo.fama);
+    }
+    menu(sellados = new Set) {
+        return RECETAS.filter((r => this.desbloqueada(r.id, sellados))).map((r => r.id));
+    }
+    comprarReceta(id, tienda) {
+        const r = recetaPorId(id);
+        if (!this.sePuedeComprar(id) || !tienda || tienda.monedas < r.compra) return false;
+        tienda.monedas -= r.compra;
+        this.compradas.add(id);
+        this.nuevas[id] = Date.now();
+        return true;
+    }
+    comprarDecor(id, tienda) {
+        const d = DECOR.find((x => x.id === id));
+        if (!d || this.decor.has(id) || !tienda || tienda.monedas < d.precio) return false;
+        tienda.monedas -= d.precio;
+        this.decor.add(id);
+        return true;
+    }
+    estrellasFama() {
+        return famaDe(this.fama);
+    }
+    especial(sellados = new Set, ahora = Date.now()) {
+        const m = this.menu(sellados);
+        return m.length ? m[semilla(claveDia(ahora)) % m.length] : null;
+    }
+    anotarPlato(id, estrellas, cuenta = true) {
+        if (cuenta) this.sumarFama(famaPorPlato(estrellas));
+        const l = this.libro[id] || {
+            mejor: 0,
+            vendidos: 0
+        };
+        l.mejor = Math.max(l.mejor, estrellas);
+        l.vendidos += 1;
+        this.libro[id] = l;
+    }
+    sumarFama(n) {
+        const antes = this.estrellasFama();
+        const piso = UMBRALES_FAMA[antes - 1];
+        this.fama = Math.max(piso, this.fama + n);
+        const despues = this.estrellasFama();
+        if (despues > antes) this.carta = despues;
+        return despues > antes;
+    }
+    _alDia(ahora) {
+        const d = claveDia(ahora);
+        if (this.hoy.dia !== d) this.hoy = {
+            dia: d,
+            turnos: 0,
+            felices: 0,
+            ganado: 0,
+            contado: false,
+            esp: 0,
+            espServido: false
+        };
+    }
+    primeroDeHoy(ahora = Date.now()) {
+        this._alDia(ahora);
+        return this.hoy.turnos === 0;
+    }
+    cerrarTurno({ganado: ganado = 0, felices: felices = 0, resenas: resenas = [], cuenta: cuenta = false} = {}, ahora = Date.now()) {
+        this._alDia(ahora);
+        let famaExtra = 0;
+        if (cuenta && !this.hoy.contado) {
+            this.hoy.contado = true;
+            this.turnos += 1;
+            if (this.nivel("letrero")) {
+                famaExtra = 3;
+                this.sumarFama(famaExtra);
+            }
+        }
+        const g = Math.max(0, Math.floor(ganado));
+        const paga = this.hoy.turnos === 0 ? g : Math.floor(g / 3);
+        this.hoy.turnos += 1;
+        this.hoy.felices += Math.max(0, felices);
+        this.hoy.ganado += paga;
+        const record = g > this.mejorTurno;
+        if (record) this.mejorTurno = g;
+        this.ultimo = {
+            felices: felices,
+            ganado: paga,
+            resenas: resenas.slice(0, 3)
+        };
+        return {
+            paga: paga,
+            record: record,
+            famaExtra: famaExtra
+        };
+    }
+    aObjeto() {
+        return {
+            version: 3,
+            turnos: this.turnos,
+            mejoras: [ ...this.mejoras ],
+            mejorTurno: this.mejorTurno,
+            hoy: {
+                ...this.hoy
+            },
+            fama: this.fama,
+            compradas: [ ...this.compradas ],
+            libro: this.libro,
+            decor: [ ...this.decor ],
+            ultimo: this.ultimo,
+            niveles: this.niveles,
+            relajado: this.relajado,
+            carta: this.carta,
+            guardados: [ ...this.guardados ],
+            recientes: this.recientes,
+            nuevas: this.nuevas
+        };
+    }
+    static desdeObjeto(d) {
+        const r = new Restaurante;
+        if (!d || typeof d !== "object") return r;
+        const ent = x => Number.isFinite(x) && x > 0 ? Math.floor(x) : 0;
+        r.turnos = ent(d.turnos);
+        const viejas = (Array.isArray(d.mejoras) ? d.mejoras : []).filter((x => typeof x === "string"));
+        r.reembolso = viejas.reduce(((s, m) => s + ({
+            vapor2: 120,
+            fuego: 150,
+            lugar4: 200
+        }[m] || 0)), 0);
+        r.mejorTurno = ent(d.mejorTurno);
+        const h = d.hoy || {};
+        if (typeof h.dia === "string") r.hoy = {
+            dia: h.dia,
+            turnos: ent(h.turnos),
+            felices: ent(h.felices),
+            ganado: ent(h.ganado),
+            contado: h.contado === true,
+            esp: ent(h.esp),
+            espServido: h.espServido === true
+        };
+        r.fama = ent(d.fama);
+        r.compradas = new Set((Array.isArray(d.compradas) ? d.compradas : []).filter((id => recetaPorId(id))));
+        if (d.libro && typeof d.libro === "object") {
+            for (const [id, l] of Object.entries(d.libro)) if (recetaPorId(id) && l) r.libro[id] = {
+                mejor: Math.max(0, Math.min(3, Number.isFinite(l.mejor) ? Math.round(l.mejor * 10) / 10 : 0)),
+                vendidos: ent(l.vendidos)
+            };
+        }
+        r.decor = new Set((Array.isArray(d.decor) ? d.decor : []).filter((id => DECOR.some((x => x.id === id)))));
+        if (viejas.includes("faroles")) r.decor.add("farolitos");
+        for (const m of MEJORAS_COCINA) if (d.niveles && Number.isFinite(d.niveles[m.id])) r.niveles[m.id] = Math.max(0, Math.min(m.costos.length, Math.floor(d.niveles[m.id])));
+        r.relajado = d.relajado === true;
+        r.guardados = new Set((Array.isArray(d.guardados) ? d.guardados : []).filter((id => r.decor.has(id))));
+        r.carta = Number.isInteger(d.carta) && d.carta >= 2 && d.carta <= 5 ? d.carta : 0;
+        r.recientes = (Array.isArray(d.recientes) ? d.recientes : []).filter((id => recetaPorId(id))).slice(0, 12);
+        if (d.nuevas && typeof d.nuevas === "object") for (const [id, t] of Object.entries(d.nuevas)) if (recetaPorId(id) && Number.isFinite(t)) r.nuevas[id] = t;
+        const version = Number.isInteger(d.version) ? d.version : 1;
+        if (version < 2) {
+            r.fama = 0;
+            r.turnos = 0;
+            r.carta = 0;
+            if (r.hoy) r.hoy.contado = false;
+        }
+        if (version < 3) {
+            r.compradas = new Set([ ...r.compradas ].filter((id => RECETAS_V61.has(id))));
+        }
+        if (d.ultimo && typeof d.ultimo === "object") r.ultimo = {
+            felices: ent(d.ultimo.felices),
+            ganado: ent(d.ultimo.ganado),
+            resenas: (Array.isArray(d.ultimo.resenas) ? d.ultimo.resenas : []).filter((x => x && typeof x.texto === "string")).slice(0, 3)
+        };
+        return r;
+    }
 }
 
-/** Arma los pedidos del dia. azar: para las pruebas. */
-/**
- * Que pide cada cliente (v62, rom: "se estan repitiendo demasiado los mismos pedidos").
- * Antes cada pedido era un sorteo suelto (y el especial salia en el 30%): con varios
- * dias del local en el mismo dia real, el especial salia una y otra vez. Ahora:
- *  - una "bolsa": ninguna receta se repite en el dia hasta que salieron todas
- *  - nunca el mismo plato dos veces seguidas
- *  - v72 (rom: "que si o si aparezca en la primera ronda del dia, y luego ya sea random y tenga la
- *    misma probabilidad que los demas"): vecesEspecial = cuantas veces sale SEGURO en esta ronda
- *    (1 hasta que se sirva el del dia); con 0, el especial va en la bolsa como cualquier otro
- *  - lo que se pidio hace poco (recientes) sale menos; lo recien comprado (nuevas), mas
- */
-export function elegirPedidos(menu, n, { especial = null, recientes = [], nuevas = [], azar = Math.random, vecesEspecial = null } = {}) {
-  if (!menu.length || n <= 0) return [];
-  if (menu.length === 1) return Array(n).fill(menu[0]);
-  const veces = especial && menu.includes(especial) ? Math.min(n, vecesEspecial ?? 1) : 0;
-  const conEsp = veces > 0;
-  const resto = conEsp ? menu.filter((x) => x !== especial) : [...menu];
-  // donde va el especial (si son dos, no pegados)
-  const posEsp = new Set();
-  while (posEsp.size < veces) {
-    const k = Math.floor(azar() * n);
-    if (![...posEsp].some((q) => Math.abs(q - k) <= 1) || n < 3) posEsp.add(k);
-  }
-  // lo mas reciente pesa menos todavia (recientes[0] es lo ultimo que se pidio)
-  const hace = (id) => recientes.indexOf(id);
-  const nueva = new Set(nuevas);
-  const peso = (id) => {
-    const h = hace(id);
-    return (h < 0 ? 1 : h < 4 ? 0.08 : h < 8 ? 0.25 : 0.5) * (nueva.has(id) ? 2.5 : 1);
-  };
-  let bolsa = [...resto];
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    if (posEsp.has(i)) {
-      out.push(especial);
-      continue;
+export function elegirPedidos(menu, n, {especial: especial = null, recientes: recientes = [], nuevas: nuevas = [], azar: azar = Math.random, vecesEspecial: vecesEspecial = null} = {}) {
+    if (!menu.length || n <= 0) return [];
+    if (menu.length === 1) return Array(n).fill(menu[0]);
+    const veces = especial && menu.includes(especial) ? Math.min(n, vecesEspecial ?? 1) : 0;
+    const conEsp = veces > 0;
+    const resto = conEsp ? menu.filter((x => x !== especial)) : [ ...menu ];
+    const posEsp = new Set;
+    while (posEsp.size < veces) {
+        const k = Math.floor(azar() * n);
+        if (![ ...posEsp ].some((q => Math.abs(q - k) <= 1)) || n < 3) posEsp.add(k);
     }
-    if (!bolsa.length) bolsa = [...resto];
-    const prev = out[i - 1];
-    let cand = bolsa.filter((x) => x !== prev);
-    if (!cand.length) cand = resto.filter((x) => x !== prev); // la bolsa solo tenia el anterior
-    if (!cand.length) cand = bolsa;
-    const total = cand.reduce((t, x) => t + peso(x), 0);
-    let r = azar() * total;
-    let id = cand[cand.length - 1];
-    for (const x of cand) {
-      r -= peso(x);
-      if (r < 0) {
-        id = x;
-        break;
-      }
+    const hace = id => recientes.indexOf(id);
+    const nueva = new Set(nuevas);
+    const peso = id => {
+        const h = hace(id);
+        return (h < 0 ? 1 : h < 4 ? .08 : h < 8 ? .25 : .5) * (nueva.has(id) ? 2.5 : 1);
+    };
+    let bolsa = [ ...resto ];
+    const out = [];
+    for (let i = 0; i < n; i++) {
+        if (posEsp.has(i)) {
+            out.push(especial);
+            continue;
+        }
+        if (!bolsa.length) bolsa = [ ...resto ];
+        const prev = out[i - 1];
+        let cand = bolsa.filter((x => x !== prev));
+        if (!cand.length) cand = resto.filter((x => x !== prev));
+        if (!cand.length) cand = bolsa;
+        const total = cand.reduce(((t, x) => t + peso(x)), 0);
+        let r = azar() * total;
+        let id = cand[cand.length - 1];
+        for (const x of cand) {
+            r -= peso(x);
+            if (r < 0) {
+                id = x;
+                break;
+            }
+        }
+        bolsa = bolsa.filter((x => x !== id));
+        out.push(id);
     }
-    bolsa = bolsa.filter((x) => x !== id);
-    out.push(id);
-  }
-  return out;
+    return out;
 }
 
-export function armarDia(menu, { fama = 1, especial = null, amigos = [], azar = Math.random, asientos = 0, recientes = [], nuevas = [], especialGarantizado = true } = {}) {
-  const n = clientesPorDia(fama, asientos);
-  const pool = [...amigos.map((a) => ({ ...a, amigo: true })), ...CLIENTES.map((c) => ({ ...c, amigo: false }))];
-  const ids = elegirPedidos(menu, n, { especial, recientes, nuevas, azar, vecesEspecial: especialGarantizado ? 1 : 0 });
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const quien = pool.length ? pool[Math.floor(azar() * pool.length)] : { id: "usagi", nombre: "Usagi", amigo: true };
-    const id = ids[i];
-    const r = recetaPorId(id);
-    const nExtras = r.extras.length ? Math.min(r.extras.length, Math.floor(azar() * Math.min(3, fama + 1))) : 0;
-    const extras = [...r.extras].sort(() => azar() - 0.5).slice(0, nExtras);
-    const extra2 = {};
-    if (r.toppings) extra2.toppings = [...r.toppings].sort(() => azar() - 0.5).slice(0, 1 + Math.floor(azar() * 2));
-    if (r.frutas) extra2.frutas = [...r.frutas].sort(() => azar() - 0.5).slice(0, 2);
-    if (r.id === "osmanto") extra2.flores = ["osmanto"];
-    // v58: con fama 3+, a veces el ticket se esconde despues del primer paso (hay que acordarse)
-    const algo = extras.length + (extra2.toppings || []).length + (extra2.frutas || []).length;
-    const recordar = fama >= 3 && algo > 0 && azar() < 0.35;
-    out.push({ quien, receta: id, extras, ...extra2, frase: PIDE[Math.floor(azar() * PIDE.length)], recordar });
-  }
-  return out;
+export function armarDia(menu, {fama: fama = 1, especial: especial = null, amigos: amigos = [], azar: azar = Math.random, asientos: asientos = 0, recientes: recientes = [], nuevas: nuevas = [], especialGarantizado: especialGarantizado = true} = {}) {
+    const n = clientesPorDia(fama, asientos);
+    const pool = [ ...amigos.map((a => ({
+        ...a,
+        amigo: true
+    }))), ...CLIENTES.map((c => ({
+        ...c,
+        amigo: false
+    }))) ];
+    const ids = elegirPedidos(menu, n, {
+        especial: especial,
+        recientes: recientes,
+        nuevas: nuevas,
+        azar: azar,
+        vecesEspecial: especialGarantizado ? 1 : 0
+    });
+    const out = [];
+    for (let i = 0; i < n; i++) {
+        const quien = pool.length ? pool[Math.floor(azar() * pool.length)] : {
+            id: "usagi",
+            nombre: "Usagi",
+            amigo: true
+        };
+        const id = ids[i];
+        const r = recetaPorId(id);
+        const nExtras = r.extras.length ? Math.min(r.extras.length, Math.floor(azar() * Math.min(3, fama + 1))) : 0;
+        const extras = [ ...r.extras ].sort((() => azar() - .5)).slice(0, nExtras);
+        const extra2 = {};
+        if (r.toppings) extra2.toppings = [ ...r.toppings ].sort((() => azar() - .5)).slice(0, 1 + Math.floor(azar() * 2));
+        if (r.frutas) extra2.frutas = [ ...r.frutas ].sort((() => azar() - .5)).slice(0, 2);
+        if (r.id === "osmanto") extra2.flores = [ "osmanto" ];
+        const algo = extras.length + (extra2.toppings || []).length + (extra2.frutas || []).length;
+        const recordar = fama >= 3 && algo > 0 && azar() < .35;
+        out.push({
+            quien: quien,
+            receta: id,
+            extras: extras,
+            ...extra2,
+            frase: PIDE[Math.floor(azar() * PIDE.length)],
+            recordar: recordar
+        });
+    }
+    return out;
 }
 
-// ------------------------------------------------------------------
-// La pantalla
-// ------------------------------------------------------------------
+const esc = s => String(s).replace(/[&<>"']/g, (c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+}[c])));
 
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const estrellas = (n, de = 3) => "★".repeat(n) + "☆".repeat(Math.max(0, de - n));
-/** v73: la nota con decimales: tres estrellas llenas en parte y el numero ("★★★ 2.6"). */
-const estrellasNota = (nota) => {
-  const n = Math.max(0, Math.min(3, nota || 0));
-  let h = "";
-  for (let i = 0; i < 3; i++) h += `<span class="est"><i style="width:${(Math.max(0, Math.min(1, n - i)) * 100).toFixed(0)}%">★</i>★</span>`;
-  return `<span class="estr-nota">${h}<b>${n.toFixed(1)}</b></span>`;
+
+const estrellasNota = nota => {
+    const n = Math.max(0, Math.min(3, nota || 0));
+    let h = "";
+    for (let i = 0; i < 3; i++) h += `<span class="est"><i style="width:${(Math.max(0, Math.min(1, n - i)) * 100).toFixed(0)}%">★</i>★</span>`;
+    return `<span class="estr-nota">${h}<b>${n.toFixed(1)}</b></span>`;
 };
-const NOMBRE_PASO = { amasar: "KNEAD", estirar: "ROLL", rellenar: "FILL", plegar: "FOLD", verter: "POUR", elegir: "PICK", emplatar: "PLATE", cortar: "CHOP", revolver: "STIR", saltear: "WOK", lamian: "PULL", lavar: "WASH", espolvorear: "SPRINKLE", dibujar: "DRAW", aplastar: "SMASH", agitar: "SHAKE", enrollar: "ROLL UP", rallar: "GRATE", pelar: "PEEL", manga: "PIPE", apilar: "STACK", bolitas: "BALLS", untar: "SPREAD", romper: "CRACK" };
-const nombrePaso = (p) => (GESTOS[p.t] ? GESTOS[p.t].nombre : p.t === "cocinar" ? (COCCIONES[p.como] || COCCIONES.vapor).verbo : p.t === "dibujar" && p.forma === "media_luna" ? "CRIMP" : p.t === "dibujar" && p.forma === "lazo" ? "TIE" : p.t === "apilar" && p.que === "perlas" ? "PEARLS" : p.t === "aplastar" && p.que === "molde" ? "PRESS" : NOMBRE_PASO[p.t] || p.t.toUpperCase());
+
+const NOMBRE_PASO = {
+    amasar: "KNEAD",
+    estirar: "ROLL",
+    rellenar: "FILL",
+    plegar: "FOLD",
+    verter: "POUR",
+    elegir: "PICK",
+    emplatar: "PLATE",
+    cortar: "CHOP",
+    revolver: "STIR",
+    saltear: "WOK",
+    lamian: "PULL",
+    lavar: "WASH",
+    espolvorear: "SPRINKLE",
+    dibujar: "DRAW",
+    aplastar: "SMASH",
+    agitar: "SHAKE",
+    enrollar: "ROLL UP",
+    rallar: "GRATE",
+    pelar: "PEEL",
+    manga: "PIPE",
+    apilar: "STACK",
+    bolitas: "BALLS",
+    untar: "SPREAD",
+    romper: "CRACK"
+};
+
+const nombrePaso = p => GESTOS[p.t] ? GESTOS[p.t].nombre : p.t === "cocinar" ? (COCCIONES[p.como] || COCCIONES.vapor).verbo : p.t === "dibujar" && p.forma === "media_luna" ? "CRIMP" : p.t === "dibujar" && p.forma === "lazo" ? "TIE" : p.t === "apilar" && p.que === "perlas" ? "PEARLS" : p.t === "aplastar" && p.que === "molde" ? "PRESS" : NOMBRE_PASO[p.t] || p.t.toUpperCase();
 
 function textoPaso(p) {
-  if (p.texto) return p.texto; // v70: un texto propio para el paso (la natilla, las perlas…)
-  if (GESTOS[p.t]) return GESTOS[p.t].texto(p); // v73
-  if (p.t === "amasar") return "Knead the dough";
-  if (p.t === "estirar") return "Roll it out";
-  if (p.t === "rellenar") return `Fill: ${(RELLENOS[p.relleno] || RELLENOS.carne).nombre}`;
-  if (p.t === "plegar") return p.forma === "media" ? `Fold in a half moon (${p.n} pleats)` : p.forma === "canasta" ? `Squeeze it into a little open basket (${p.n} pleats)` : `Pleat it closed (${p.n} pleats)`;
-  if (p.t === "verter" && p.colar) return "Strain it into the cup";
-  if (p.t === "verter" && p.en === "tazon") return "Pour the broth over the noodles";
-  if (p.t === "verter") return p.tapar ? "A splash of water, then cover" : p.previo ? `Top it up with ${(LIQUIDOS[p.liquido] || LIQUIDOS.agua).nombre}` : `Pour the ${(LIQUIDOS[p.liquido] || LIQUIDOS.agua).nombre}`;
-  if (p.t === "cocinar" && p.segunda) return "Fry again until crispy";
-  if (p.t === "cocinar") return { tapar: "Cover until the water is gone", rebozar: "Dip them in the batter", vapor: "Steam until fluffy", hervir: "Boil until they float", plancha: "Grill both sides", freir: "Fry until golden", horno: "Bake in the oven", caramelo: "Dip in hot sugar", calentar: "Heat the water", enfriar: "Chill until set" }[p.como] || "Cook it";
-  if (p.t === "elegir") return p.fruta ? "Add the fruit" : p.topping ? "Add the toppings" : p.frutas ? "Skewer the fruit" : p.flores ? "Sprinkle the flowers" : "Pick";
-  if (p.t === "emplatar") return "Plate it";
-  const ing = (q) => (INGREDIENTES[q] || {}).nombre || q;
-  if (p.t === "cortar") return p.que === "queso" ? "Cube the cheese (it goes in the cup!)" : p.que === "masa" ? "Cut the dough into noodles" : `Chop the ${ing(p.que)}`;
-  if (p.t === "revolver") return "Stir it, nice and steady";
-  if (p.t === "saltear") return "Toss it in the wok";
-  if (p.t === "lamian") return "Pull the noodles by hand";
-  if (p.t === "lavar") return `Wash the ${ing(p.que)}`;
-  if (p.t === "espolvorear" && p.que === "cafe") return "Add the ground coffee";
-  if (p.t === "espolvorear") return p.hojas ? "Scatter the leaves on top" : "Sprinkle it evenly";
-  if (p.t === "dibujar") return p.forma === "corazon" ? "Draw a foam heart" : p.forma === "flor" ? "Stamp the flower" : p.forma === "media_luna" ? "Crimp the edge with a fork" : p.forma === "lazo" ? "Tie it up with string" : "Spread the arequipe";
-  if (p.t === "aplastar") return p.que === "barro" ? "Pat the clay around it" : p.que === "molde" ? "Press it in the mooncake mold" : `Smash the ${ing(p.que)}`;
-  if (p.t === "agitar") return "Shake it up";
-  if (p.t === "enrollar") return p.hoja ? "Wrap it in the leaves" : p.n > 1 ? `Roll up ${p.n}` : "Roll it up";
-  if (p.t === "rallar") return `Grate the ${ing(p.que)}`;
-  if (p.t === "pelar") return `Peel the ${ing(p.que)}`;
-  if (p.t === "manga") return p.punto ? "A red dot on each bun" : `Pipe ${p.n || 4} little dots`;
-  if (p.t === "apilar" && p.que === "perlas") return "Drop in the tapioca pearls";
-  if (p.t === "apilar") return p.que === "oblea" ? "Close it with the top wafer" : `Stack ${p.n || 3} steamers`;
-  if (p.t === "bolitas") return `Roll ${p.n || 3} little balls`;
-  if (p.t === "untar") return { hoja: "Cover it in clay", oblea: "Spread the arequipe", crepe: "Crack an egg and spread it" }[p.sobre] || "Spread the butter all over";
-  if (p.t === "romper") return "Crack the clay open!";
-  return p.t;
+    if (p.texto) return p.texto;
+    if (GESTOS[p.t]) return GESTOS[p.t].texto(p);
+    if (p.t === "amasar") return "Knead the dough";
+    if (p.t === "estirar") return "Roll it out";
+    if (p.t === "rellenar") return `Fill: ${(RELLENOS[p.relleno] || RELLENOS.carne).nombre}`;
+    if (p.t === "plegar") return p.forma === "media" ? `Fold in a half moon (${p.n} pleats)` : p.forma === "canasta" ? `Squeeze it into a little open basket (${p.n} pleats)` : `Pleat it closed (${p.n} pleats)`;
+    if (p.t === "verter" && p.colar) return "Strain it into the cup";
+    if (p.t === "verter" && p.en === "tazon") return "Pour the broth over the noodles";
+    if (p.t === "verter") return p.tapar ? "A splash of water, then cover" : p.previo ? `Top it up with ${(LIQUIDOS[p.liquido] || LIQUIDOS.agua).nombre}` : `Pour the ${(LIQUIDOS[p.liquido] || LIQUIDOS.agua).nombre}`;
+    if (p.t === "cocinar" && p.segunda) return "Fry again until crispy";
+    if (p.t === "cocinar") return {
+        tapar: "Cover until the water is gone",
+        rebozar: "Dip them in the batter",
+        vapor: "Steam until fluffy",
+        hervir: "Boil until they float",
+        plancha: "Grill both sides",
+        freir: "Fry until golden",
+        horno: "Bake in the oven",
+        caramelo: "Dip in hot sugar",
+        calentar: "Heat the water",
+        enfriar: "Chill until set"
+    }[p.como] || "Cook it";
+    if (p.t === "elegir") return p.fruta ? "Add the fruit" : p.topping ? "Add the toppings" : p.frutas ? "Skewer the fruit" : p.flores ? "Sprinkle the flowers" : "Pick";
+    if (p.t === "emplatar") return "Plate it";
+    const ing = q => (INGREDIENTES[q] || {}).nombre || q;
+    if (p.t === "cortar") return p.que === "queso" ? "Cube the cheese (it goes in the cup!)" : p.que === "masa" ? "Cut the dough into noodles" : `Chop the ${ing(p.que)}`;
+    if (p.t === "revolver") return "Stir it, nice and steady";
+    if (p.t === "saltear") return "Toss it in the wok";
+    if (p.t === "lamian") return "Pull the noodles by hand";
+    if (p.t === "lavar") return `Wash the ${ing(p.que)}`;
+    if (p.t === "espolvorear" && p.que === "cafe") return "Add the ground coffee";
+    if (p.t === "espolvorear") return p.hojas ? "Scatter the leaves on top" : "Sprinkle it evenly";
+    if (p.t === "dibujar") return p.forma === "corazon" ? "Draw a foam heart" : p.forma === "flor" ? "Stamp the flower" : p.forma === "media_luna" ? "Crimp the edge with a fork" : p.forma === "lazo" ? "Tie it up with string" : "Spread the arequipe";
+    if (p.t === "aplastar") return p.que === "barro" ? "Pat the clay around it" : p.que === "molde" ? "Press it in the mooncake mold" : `Smash the ${ing(p.que)}`;
+    if (p.t === "agitar") return "Shake it up";
+    if (p.t === "enrollar") return p.hoja ? "Wrap it in the leaves" : p.n > 1 ? `Roll up ${p.n}` : "Roll it up";
+    if (p.t === "rallar") return `Grate the ${ing(p.que)}`;
+    if (p.t === "pelar") return `Peel the ${ing(p.que)}`;
+    if (p.t === "manga") return p.punto ? "A red dot on each bun" : `Pipe ${p.n || 4} little dots`;
+    if (p.t === "apilar" && p.que === "perlas") return "Drop in the tapioca pearls";
+    if (p.t === "apilar") return p.que === "oblea" ? "Close it with the top wafer" : `Stack ${p.n || 3} steamers`;
+    if (p.t === "bolitas") return `Roll ${p.n || 3} little balls`;
+    if (p.t === "untar") return {
+        hoja: "Cover it in clay",
+        oblea: "Spread the arequipe",
+        crepe: "Crack an egg and spread it"
+    }[p.sobre] || "Spread the butter all over";
+    if (p.t === "romper") return "Crack the clay open!";
+    return p.t;
 }
 
-/**
- * opts:
- *   arte(ruta), sprite(ojo, boca), cambiarCara(el, ojo, boca), sonar(n), vibrar(ms)
- *   reg: Restaurante, tienda: Tienda, sellados: Set, nombreLugar(id),
- *   amigos: [{ id, nombre, conocido }], nombre: el de la mascota
- *   guardar(), alSalir(), alCerrarTurno({ paga, felices, record, sobras, ganado })
- */
 export function abrirRestaurante(contenedor, opts) {
-  const { arte, sprite, cambiarCara, sonar = () => {}, vibrar = () => {}, reg, tienda, sellados = new Set(), amigos = [], nombre = "Baozi", guardar = () => {}, alSalir = () => {}, alCerrarTurno = () => {} } = opts;
-  const nombreLugar = opts.nombreLugar || ((id) => id);
-  // v73 (rom: "un modo en el modo director donde pueda probar todas las recetas"): la cocina de prueba.
-  // Con opts.prueba no hay local ni dias: se elige cualquier receta, se cocina y se vuelve a la lista.
-  // reg y tienda son de mentira (los pasa main.js), asi que nada de esto toca lo guardado.
-  const PRUEBA = !!opts.prueba;
-  let difPrueba = 0;
-  let vivo = true;
-  let dia = null; // el dia en curso: { pedidos, i, ganado, felices, resenas, especial }
-  let paso = null; // el paso en curso (cocina.js)
-  let pausa = null;
-  const imgPlato = (id, cl = "") => `<img class="rest-comida ${cl}" src="${arte(`restaurante/plato_${id}.png`)}" alt="${esc((recetaPorId(id) || {}).nombre || id)}" draggable="false" />`;
-  const moneda = () => `<img class="rest-moneda" src="${arte("tienda/moneda.png")}" alt="" draggable="false" />`;
-  const hud = (titulo) => `
-    <div class="rest-hud">
-      <span class="juego-chip rest-hud-titulo">${esc(titulo)}</span>
-      <span class="rest-esp"></span>
-      <span class="juego-chip">${moneda()}<b id="rest-monedas">${tienda.monedas}</b></span>
-      <span class="juego-chip rest-fama" title="Fame">${estrellas(reg.estrellasFama(), 5)}</span>
-    </div>`;
-  const quitarPausa = () => {
-    if (pausa) pausa.destruir();
-    pausa = null;
-  };
-
-  /**
-   * El frente del local: la planta baja de nuestra casa (restaurante/fachada.png,
-   * 240x112). El cliente se asoma por la ventana del mostrador; el letrero y los
-   * adornos van encima, en % de la imagen (ver tools/v56_arte.py: VENTANA, LETRERO).
-   */
-  /**
-   * El frente del local. ventana: lo que va detras del mostrador (Baozi). calle: lo que va en la
-   * vereda, delante del mostrador (v65, rom: "que se vea como que realmente esta en la tienda y
-   * los clientes tambien": el cliente afuera, Baozi atendiendo detras del mostrador).
-   */
-  function frente(cliente = "", calle = "") {
-    const puesto = (id) => reg.decor.has(id) && !reg.guardados.has(id);
-    const img = (cl, src) => `<img class="rest-deco ${cl}" src="${arte(src)}" alt="" draggable="false" />`;
-    const d = (id) => (puesto(id) ? img(`rest-deco-${id}`, DECOR.find((x) => x.id === id).arte) : "");
-    // v84: las coplas son tres piezas (una tira a cada lado del mostrador y el 福 en la puerta)
-    // v84d: urracas y guacamaya se turnan en el techo; el desfase al azar hace que cada visita empiece distinto
-    const aves = () => {
-      if (!puesto("aves")) return "";
-      const fase = `animation-delay:-${Math.floor(Math.random() * 40)}s`;
-      return `<img class="rest-deco rest-deco-urracas" style="${fase}" src="${arte("restaurante/deco_urracas.png")}" alt="" draggable="false" /><img class="rest-deco rest-deco-guacamaya" style="${fase}" src="${arte("restaurante/deco_guacamaya.png")}" alt="" draggable="false" />`;
+    const {arte: arte, sprite: sprite, cambiarCara: cambiarCara, sonar: sonar = () => {}, vibrar: vibrar = () => {}, reg: reg, tienda: tienda, sellados: sellados = new Set, amigos: amigos = [], nombre: nombre = "Baozi", guardar: guardar = () => {}, alSalir: alSalir = () => {}, alCerrarTurno: alCerrarTurno = () => {}} = opts;
+    const nombreLugar = opts.nombreLugar || (id => id);
+    const PRUEBA = !!opts.prueba;
+    let difPrueba = 0;
+    let vivo = true;
+    let dia = null;
+    let paso = null;
+    let pausa = null;
+    const imgPlato = (id, cl = "") => `<img class="rest-comida ${cl}" src="${arte(`restaurante/plato_${id}.png`)}" alt="${esc((recetaPorId(id) || {}).nombre || id)}" draggable="false" />`;
+    const moneda = () => `<img class="rest-moneda" src="${arte("tienda/moneda.png")}" alt="" draggable="false" />`;
+    const hud = titulo => `\n    <div class="rest-hud">\n      <span class="juego-chip rest-hud-titulo">${esc(titulo)}</span>\n      <span class="rest-esp"></span>\n      <span class="juego-chip">${moneda()}<b id="rest-monedas">${tienda.monedas}</b></span>\n      <span class="juego-chip rest-fama" title="Fame">${estrellas(reg.estrellasFama(), 5)}</span>\n    </div>`;
+    const quitarPausa = () => {
+        if (pausa) pausa.destruir();
+        pausa = null;
     };
-    const coplas = () => (puesto("coplas") ? img("rest-deco-copla-izq", "restaurante/deco_copla.png") + img("rest-deco-copla-der", "restaurante/deco_copla.png") + img("rest-deco-fu", "restaurante/deco_fu.png") : "");
-    return `
-      <div class="rest-frente">
-        <div class="rest-escena">
-          <img class="rest-fachada-img" src="${arte("restaurante/fachada.png")}" alt="" draggable="false" />
-          <div class="rest-ventana">${cliente}</div>
-          ${calle}
-          ${d("banderin")}${d("farolitos")}${d("luces")}${d("bonsai")}${d("orquidea")}${d("saco")}
-          ${coplas()}${d("vaporeras")}${d("chiva")}${d("pizarra")}${d("sombrero")}${d("paraguas")}${d("osmanto")}${d("mesita")}${aves()}${d("campanilla")}
-          <div class="rest-letrero"><span lang="zh-CN">包子</span> ${esc(nombre).toUpperCase()}'S</div>
-        </div>
-      </div>`;
-  }
-
-  // ---------------- el local ----------------
-  function local(mensaje = "") {
-    quitarPausa();
-    if (paso) paso.destruir();
-    paso = null;
-    dia = null;
-    const menu = reg.menu(sellados);
-    const esp = reg.especial(sellados);
-    const u = reg.ultimo;
-    const prog = progresoFama(reg.fama);
-    const cuenta = reg.cuentaHoy();
-    contenedor.innerHTML = `
-      <div class="pantalla-rest local">
-        ${frente(`<div class="rest-baozi-ventana">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>`)}
-        ${HTML_VOLVER}
-        ${hud(`${nombre.toUpperCase()}'S DUMPLING SHOP · DAY ${reg.turnos + 1}`)}
-        <div class="rest-col izq">
-          ${esp ? `<div class="papel rest-card"><div class="rest-sub">TODAY'S SPECIAL</div><div class="rest-especial">${imgPlato(esp)}<span>${esc(recetaPorId(esp).nombre)}<b>pays ×2</b></span></div></div>` : ""}
-          <div class="papel rest-card"><div class="rest-sub">${u ? "LAST TIME" : "WELCOME"}</div>${
-            u
-              ? `<div>${u.felices} happy customer${u.felices === 1 ? "" : "s"} · +${u.ganado}</div>${u.resenas.length ? `<small>“${esc(u.resenas[0].texto)}” — ${esc(u.resenas[0].quien)}</small>` : ""}`
-              : `<small>Friends come with a ticket. Cook each dish step by step, at your own pace. Better dishes, happier customers.</small>`
-          }</div>
-        </div>
-        <div class="rest-col der">
-          <div class="papel rest-card" id="rest-fama-card"><div class="rest-sub">FAME <span class="rest-sub-estr">${estrellas(reg.estrellasFama(), 5)}</span></div>${
-            prog
-              ? `<div class="rest-barra-fama"><i style="width:${Math.round(prog.f * 100)}%"></i></div><small>${prog.puntos} / ${prog.hasta} to ${"★".repeat(prog.estrella + 1)}</small>`
-              : `<small>The most famous stall on Hefang!</small>`
-          }${reg.relajado ? `<span class="rest-practica">RELAXED · no fame today</span>` : cuenta ? `<small class="rest-cuenta">Today counts! ♥</small>` : `<span class="rest-practica">PRACTICE DAY · fame again tomorrow</span>`}</div>
-          ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
-          <button class="boton rest-abrir" id="btn-rest-abrir" type="button">Open the shop ♥</button>
-          <div class="rest-fila-botones">
-            <button class="boton boton-fantasma" id="btn-rest-libro" type="button">Recipes <small class="rest-cuantas">${menu.length}/${RECETAS.length}</small></button>
-            <button class="boton boton-fantasma" id="btn-rest-mejoras" type="button">Upgrades</button>
-            <button class="boton boton-fantasma" id="btn-rest-decor" type="button">Decorate</button>
-            <button class="rest-relajado ${reg.relajado ? "si" : ""}" id="btn-rest-relajado" type="button" aria-pressed="${reg.relajado}"><span class="rest-sw"><i></i></span>Relaxed</button>
-          </div>
-        </div>
-      </div>`;
-    blindarToques(contenedor.querySelector(".pantalla-rest"));
-    cablearVolver(contenedor, () => vivo && alSalir());
-    contenedor.querySelector("#btn-rest-abrir").addEventListener("click", () => {
-      sonar("tocar");
-      abrirDia();
-    });
-    contenedor.querySelector("#btn-rest-libro").addEventListener("click", () => {
-      sonar("tocar");
-      libro();
-    });
-    contenedor.querySelector("#btn-rest-decor").addEventListener("click", () => {
-      sonar("tocar");
-      decorar();
-    });
-    contenedor.querySelector("#btn-rest-mejoras").addEventListener("click", () => {
-      sonar("tocar");
-      mejoras();
-    });
-    contenedor.querySelector("#btn-rest-relajado").addEventListener("click", () => {
-      sonar("tocar");
-      reg.relajado = !reg.relajado;
-      guardar();
-      local(reg.relajado ? "Relaxed mode: easy cooking, no fame" : "");
-    });
-  }
-
-  // ---------------- v59: las mejoras de la cocina ----------------
-  const ICONOS_MEJORA = {
-    cuchillo: '<path d="M3 13 L15 3 L17 5 L6 15 Z" fill="#dfe6ee" stroke="#161416"/><rect x="3" y="13" width="5" height="4" fill="#6e4832" stroke="#161416" transform="rotate(-40 5 15)"/>',
-    ollas: '<rect x="3" y="7" width="14" height="9" rx="2" fill="#969aaa" stroke="#161416"/><rect x="1" y="8" width="3" height="2" fill="#5a5a64"/><rect x="16" y="8" width="3" height="2" fill="#5a5a64"/><rect x="4" y="3" width="2" height="3" fill="#fff"/><rect x="9" y="2" width="2" height="4" fill="#fff"/><rect x="14" y="3" width="2" height="3" fill="#fff"/>',
-    wok: '<path d="M2 9 Q10 18 18 9 Z" fill="#3c3c46" stroke="#161416"/><path d="M5 17 Q7 12 9 17 Z M9 17 Q11 11 13 17 Z" fill="#f07832"/>',
-    asientos: '<rect x="5" y="3" width="10" height="7" fill="#a0683c" stroke="#161416"/><rect x="4" y="10" width="12" height="3" fill="#c8884e" stroke="#161416"/><rect x="5" y="13" width="2" height="5" fill="#6e4832"/><rect x="13" y="13" width="2" height="5" fill="#6e4832"/>',
-    propinas: '<rect x="5" y="5" width="10" height="12" rx="2" fill="#e6f0f4" stroke="#161416"/><rect x="5" y="3" width="10" height="3" fill="#a0683c" stroke="#161416"/><circle cx="9" cy="13" r="2" fill="#f0be50" stroke="#161416"/><circle cx="12" cy="11" r="2" fill="#f0be50" stroke="#161416"/>',
-    letrero: '<rect x="3" y="5" width="14" height="9" fill="#281c1e" stroke="#a02828"/><rect x="5" y="8" width="10" height="2" fill="#fad682"/><rect x="2" y="2" width="2" height="2" fill="#fff6c8"/><rect x="16" y="2" width="2" height="2" fill="#fff6c8"/>',
-  };
-  function mejoras(mensaje = "") {
-    const item = (m) => {
-      const n = reg.nivel(m.id);
-      const max = n >= m.costos.length;
-      const pips = "●".repeat(n) + "○".repeat(m.costos.length - n);
-      let accion;
-      if (max) accion = `<span class="rest-tuya">✓ MAX</span>`;
-      else if (reg.estrellasFama() < m.estrella[n]) accion = `<span class="rest-necesita">NEEDS<br><span class="rest-sub-estr">${"★".repeat(m.estrella[n])}</span></span>`;
-      else accion = `<button class="boton boton-fantasma" type="button" data-mejora="${m.id}" ${tienda.monedas < m.costos[n] ? "disabled" : ""}>${moneda()}${m.costos[n]}</button>`;
-      return `<div class="rest-mejora-item"><span class="rest-mejora-ico"><svg viewBox="0 0 20 20" width="30" height="30">${ICONOS_MEJORA[m.id]}</svg></span><div><b>${esc(m.nombre)}</b><small>${esc(m.texto)}</small><span class="rest-pips">${pips}</span></div>${accion}</div>`;
+    function fachadaDelMomento() {
+        const m = document.documentElement.dataset.momento;
+        return m === "noche" ? "fachada_noche" : m === "atardecer" ? "fachada_atardecer" : "fachada";
+    }
+    function frente(cliente = "", calle = "") {
+        const puesto = id => reg.decor.has(id) && !reg.guardados.has(id);
+        const img = (cl, src) => `<img class="rest-deco ${cl}" src="${arte(src)}" alt="" draggable="false" />`;
+        const d = id => puesto(id) ? img(`rest-deco-${id}`, DECOR.find((x => x.id === id)).arte) : "";
+        const aves = () => {
+            if (!puesto("aves")) return "";
+            const fase = `animation-delay:-${Math.floor(Math.random() * 40)}s`;
+            return `<img class="rest-deco rest-deco-urracas" style="${fase}" src="${arte("restaurante/deco_urracas.png")}" alt="" draggable="false" /><img class="rest-deco rest-deco-guacamaya" style="${fase}" src="${arte("restaurante/deco_guacamaya.png")}" alt="" draggable="false" />`;
+        };
+        const coplas = () => puesto("coplas") ? img("rest-deco-copla-izq", "restaurante/deco_copla.png") + img("rest-deco-copla-der", "restaurante/deco_copla.png") + img("rest-deco-fu", "restaurante/deco_fu.png") : "";
+        return `\n      <div class="rest-frente">\n        <div class="rest-escena">\n          <img class="rest-fachada-img" src="${arte(`restaurante/${fachadaDelMomento()}.png`)}" alt="" draggable="false" />\n          <div class="rest-ventana">${cliente}</div>\n          ${calle}\n          ${d("banderin")}${d("farolitos")}${d("luces")}${d("bonsai")}${d("orquidea")}${d("saco")}\n          ${coplas()}${d("vaporeras")}${d("chiva")}${d("pizarra")}${d("sombrero")}${d("paraguas")}${d("osmanto")}${d("mesita")}${aves()}${d("campanilla")}\n          <div class="rest-letrero"><span lang="zh-CN">包子</span> ${esc(nombre).toUpperCase()}'S</div>\n        </div>\n      </div>`;
+    }
+    function local(mensaje = "") {
+        quitarPausa();
+        if (paso) paso.destruir();
+        paso = null;
+        dia = null;
+        const menu = reg.menu(sellados);
+        const esp = reg.especial(sellados);
+        const u = reg.ultimo;
+        const prog = progresoFama(reg.fama);
+        const cuenta = reg.cuentaHoy();
+        contenedor.innerHTML = `\n      <div class="pantalla-rest local">\n        ${frente(`<div class="rest-baozi-ventana">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>`)}\n        ${HTML_VOLVER}\n        ${hud(`${nombre.toUpperCase()}'S DUMPLING SHOP · DAY ${reg.turnos + 1}`)}\n        <div class="rest-col izq">\n          ${esp ? `<div class="papel rest-card"><div class="rest-sub">TODAY'S SPECIAL</div><div class="rest-especial">${imgPlato(esp)}<span>${esc(recetaPorId(esp).nombre)}<b>pays ×2</b></span></div></div>` : ""}\n          <div class="papel rest-card"><div class="rest-sub">${u ? "LAST TIME" : "WELCOME"}</div>${u ? `<div>${u.felices} happy customer${u.felices === 1 ? "" : "s"} · +${u.ganado}</div>${u.resenas.length ? `<small>“${esc(u.resenas[0].texto)}” — ${esc(u.resenas[0].quien)}</small>` : ""}` : `<small>Friends come with a ticket. Cook each dish step by step, at your own pace. Better dishes, happier customers.</small>`}</div>\n        </div>\n        <div class="rest-col der">\n          <div class="papel rest-card" id="rest-fama-card"><div class="rest-sub">FAME <span class="rest-sub-estr">${estrellas(reg.estrellasFama(), 5)}</span></div>${prog ? `<div class="rest-barra-fama"><i style="width:${Math.round(prog.f * 100)}%"></i></div><small>${prog.puntos} / ${prog.hasta} to ${"★".repeat(prog.estrella + 1)}</small>` : `<small>The most famous stall on Hefang!</small>`}${reg.relajado ? `<span class="rest-practica">RELAXED · no fame today</span>` : cuenta ? `<small class="rest-cuenta">Today counts! ♥</small>` : `<span class="rest-practica">PRACTICE DAY · fame again tomorrow</span>`}</div>\n          ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}\n          <button class="boton rest-abrir" id="btn-rest-abrir" type="button">Open the shop ♥</button>\n          <div class="rest-fila-botones">\n            <button class="boton boton-fantasma" id="btn-rest-libro" type="button">Recipes <small class="rest-cuantas">${menu.length}/${RECETAS.length}</small></button>\n            <button class="boton boton-fantasma" id="btn-rest-mejoras" type="button">Upgrades</button>\n            <button class="boton boton-fantasma" id="btn-rest-decor" type="button">Decorate</button>\n            <button class="rest-relajado ${reg.relajado ? "si" : ""}" id="btn-rest-relajado" type="button" aria-pressed="${reg.relajado}"><span class="rest-sw"><i></i></span>Relaxed</button>\n          </div>\n        </div>\n      </div>`;
+        blindarToques(contenedor.querySelector(".pantalla-rest"));
+        cablearVolver(contenedor, (() => vivo && alSalir()));
+        contenedor.querySelector("#btn-rest-abrir").addEventListener("click", (() => {
+            sonar("tocar");
+            abrirDia();
+        }));
+        contenedor.querySelector("#btn-rest-libro").addEventListener("click", (() => {
+            sonar("tocar");
+            libro();
+        }));
+        contenedor.querySelector("#btn-rest-decor").addEventListener("click", (() => {
+            sonar("tocar");
+            decorar();
+        }));
+        contenedor.querySelector("#btn-rest-mejoras").addEventListener("click", (() => {
+            sonar("tocar");
+            mejoras();
+        }));
+        contenedor.querySelector("#btn-rest-relajado").addEventListener("click", (() => {
+            sonar("tocar");
+            reg.relajado = !reg.relajado;
+            guardar();
+            local(reg.relajado ? "Relaxed mode: easy cooking, no fame" : "");
+        }));
+    }
+    const ICONOS_MEJORA = {
+        cuchillo: '<path d="M3 13 L15 3 L17 5 L6 15 Z" fill="#dfe6ee" stroke="#161416"/><rect x="3" y="13" width="5" height="4" fill="#6e4832" stroke="#161416" transform="rotate(-40 5 15)"/>',
+        ollas: '<rect x="3" y="7" width="14" height="9" rx="2" fill="#969aaa" stroke="#161416"/><rect x="1" y="8" width="3" height="2" fill="#5a5a64"/><rect x="16" y="8" width="3" height="2" fill="#5a5a64"/><rect x="4" y="3" width="2" height="3" fill="#fff"/><rect x="9" y="2" width="2" height="4" fill="#fff"/><rect x="14" y="3" width="2" height="3" fill="#fff"/>',
+        wok: '<path d="M2 9 Q10 18 18 9 Z" fill="#3c3c46" stroke="#161416"/><path d="M5 17 Q7 12 9 17 Z M9 17 Q11 11 13 17 Z" fill="#f07832"/>',
+        asientos: '<rect x="5" y="3" width="10" height="7" fill="#a0683c" stroke="#161416"/><rect x="4" y="10" width="12" height="3" fill="#c8884e" stroke="#161416"/><rect x="5" y="13" width="2" height="5" fill="#6e4832"/><rect x="13" y="13" width="2" height="5" fill="#6e4832"/>',
+        propinas: '<rect x="5" y="5" width="10" height="12" rx="2" fill="#e6f0f4" stroke="#161416"/><rect x="5" y="3" width="10" height="3" fill="#a0683c" stroke="#161416"/><circle cx="9" cy="13" r="2" fill="#f0be50" stroke="#161416"/><circle cx="12" cy="11" r="2" fill="#f0be50" stroke="#161416"/>',
+        letrero: '<rect x="3" y="5" width="14" height="9" fill="#281c1e" stroke="#a02828"/><rect x="5" y="8" width="10" height="2" fill="#fad682"/><rect x="2" y="2" width="2" height="2" fill="#fff6c8"/><rect x="16" y="2" width="2" height="2" fill="#fff6c8"/>'
     };
-    contenedor.innerHTML = `
-      <div class="pantalla-rest libro">
-        ${HTML_VOLVER}
-        ${hud("KITCHEN UPGRADES")}
-        ${mensaje ? `<div class="rest-aviso rest-aviso-mejoras">${esc(mensaje)}</div>` : ""}
-        <div class="rest-mejoras">${MEJORAS_COCINA.map(item).join("")}</div>
-      </div>`;
-    blindarToques(contenedor.querySelector(".pantalla-rest"));
-    cablearVolver(contenedor, () => local());
-    for (const b of contenedor.querySelectorAll("[data-mejora]"))
-      b.addEventListener("click", () => {
-        const r = reg.comprarMejora(b.dataset.mejora, tienda);
-        if (r === "ok") {
-          sonar("hallazgo");
-          vibrar(25);
-          guardar();
-          mejoras(`${mejoraPorId(b.dataset.mejora).nombre}: level ${reg.nivel(b.dataset.mejora)}! ♥`);
-        } else sonar("no");
-      });
-  }
-
-  // ---------------- el libro de recetas ----------------
-  function libro(sel = null, mensaje = "") {
-    const menu = reg.menu(sellados);
-    sel = sel || menu[0] || RECETAS[0].id;
-    const r = recetaPorId(sel);
-    const tengo = menu.includes(sel);
-    const l = reg.libro[sel] || { mejor: 0, vendidos: 0 };
-    const amigo = r.amigo && amigos.find((a) => a.id === r.amigo);
-    const bloqueo = !tengo
-      ? r.desbloqueo.fama
-        ? reg.sePuedeComprar(sel)
-          ? "Ready to learn!"
-          : `Needs a ${"★".repeat(r.desbloqueo.fama)} shop to learn it`
-        : `Stamp ${esc(nombreLugar(r.desbloqueo.lugar))} to learn it`
-      : "";
-    contenedor.innerHTML = `
-      <div class="pantalla-rest libro">
-        ${HTML_VOLVER}
-        ${hud(`RECIPE BOOK · ${menu.length} OF ${RECETAS.length}`)}
-        <div class="rest-libro">
-          <div class="rest-hoja">
-            ${GRUPOS.map(
-              ([g, t]) => `<div class="rest-sub">${t}</div><div class="rest-grilla">${RECETAS.filter((x) => x.grupo === g)
-                .map((x) => {
-                  const ok = menu.includes(x.id);
-                  const m = (reg.libro[x.id] || {}).mejor || 0;
-                  return `<button type="button" class="rest-rec ${ok ? "" : "no"} ${x.id === sel ? "sel" : ""}" data-receta="${x.id}">${imgPlato(x.id)}<span>${esc(x.nombre)}</span><small>${ok ? (m ? estrellasNota(m) : "") : x.desbloqueo && x.desbloqueo.fama ? (reg.sePuedeComprar(x.id) ? "learn!" : "★".repeat(x.desbloqueo.fama)) : "?"}</small></button>`;
-                })
-                .join("")}</div>`,
-            ).join("")}
-          </div>
-          <div class="rest-hoja detalle">
-            <div class="rest-receta-cabeza">${imgPlato(sel, tengo ? "" : "no")}<div><b>${esc(r.nombre)}</b><span class="rest-estr">${tengo && l.mejor ? estrellasNota(l.mejor) : ""}</span><small>${tengo ? (l.vendidos ? `Best: ${Number(l.mejor).toFixed(1)} · served ${l.vendidos}` : "Not cooked yet") : bloqueo}</small></div></div>
-            <ol class="rest-pasos-lista">${r.pasos.map((p) => `<li>${esc(textoPaso(p))}</li>`).join("")}</ol>
-            <div class="rest-nota">${amigo ? `<i>${esc(amigo.nombre)}: “${esc(r.nota)}”</i>` : esc(r.nota)}</div>
-            ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
-            ${!tengo && r.compra && reg.sePuedeComprar(sel) ? `<button class="boton rest-comprar-receta" type="button" data-comprar-receta="${r.id}" ${tienda.monedas < r.compra ? "disabled" : ""}>${moneda()} ${r.compra} · Learn it</button>` : ""}
-          </div>
-        </div>
-      </div>`;
-    blindarToques(contenedor.querySelector(".pantalla-rest"));
-    cablearVolver(contenedor, () => local());
-    for (const b of contenedor.querySelectorAll("[data-receta]"))
-      b.addEventListener("click", () => {
-        sonar("tocar");
-        libro(b.dataset.receta);
-      });
-    const c = contenedor.querySelector("[data-comprar-receta]");
-    if (c)
-      c.addEventListener("click", () => {
-        if (reg.comprarReceta(c.dataset.comprarReceta, tienda)) {
-          sonar("hallazgo");
-          guardar();
-          libro(sel, "New recipe! ♥");
-        } else sonar("no");
-      });
-  }
-
-  // ---------------- decorar ----------------
-  function decorar(mensaje = "") {
-    contenedor.innerHTML = `
-      <div class="pantalla-rest local decor">
-        ${frente()}
-        ${HTML_VOLVER}
-        ${hud("DECORATE THE SHOP")}
-        <div class="rest-col der">
-          <div class="papel rest-card rest-decor-lista">
-            ${DECOR.map(
-              (d) => `<div class="rest-mejora"><img src="${arte(d.arte)}" alt="" draggable="false" /><b>${esc(d.nombre)}</b>${
-                reg.decor.has(d.id)
-                  ? `<button class="rest-relajado ${reg.guardados.has(d.id) ? "" : "si"}" type="button" data-poner="${d.id}" aria-pressed="${!reg.guardados.has(d.id)}"><span class="rest-sw"><i></i></span>${reg.guardados.has(d.id) ? "Off" : "On"}</button>`
-                  : `<button class="boton boton-fantasma" type="button" data-decor="${d.id}" ${tienda.monedas < d.precio ? "disabled" : ""}>${moneda()}${d.precio}</button>`
-              }</div>`,
-            ).join("")}
-          </div>
-          ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}
-        </div>
-      </div>`;
-    blindarToques(contenedor.querySelector(".pantalla-rest"));
-    cablearVolver(contenedor, () => local());
-    for (const b of contenedor.querySelectorAll("[data-decor]"))
-      b.addEventListener("click", () => {
-        if (reg.comprarDecor(b.dataset.decor, tienda)) {
-          sonar("hallazgo");
-          vibrar(25);
-          guardar();
-          decorar(`${DECOR.find((x) => x.id === b.dataset.decor).nombre}: up!`);
-        } else sonar("no");
-      });
-    // v60 (rom: "quitar decoracion del restaurante"): lo comprado se puede sacar y volver a poner
-    for (const b of contenedor.querySelectorAll("[data-poner]"))
-      b.addEventListener("click", () => {
-        const id = b.dataset.poner;
-        if (reg.guardados.has(id)) reg.guardados.delete(id);
-        else reg.guardados.add(id);
-        sonar("tocar");
+    function mejoras(mensaje = "") {
+        const item = m => {
+            const n = reg.nivel(m.id);
+            const max = n >= m.costos.length;
+            const pips = "●".repeat(n) + "○".repeat(m.costos.length - n);
+            let accion;
+            if (max) accion = `<span class="rest-tuya">✓ MAX</span>`; else if (reg.estrellasFama() < m.estrella[n]) accion = `<span class="rest-necesita">NEEDS<br><span class="rest-sub-estr">${"★".repeat(m.estrella[n])}</span></span>`; else accion = `<button class="boton boton-fantasma" type="button" data-mejora="${m.id}" ${tienda.monedas < m.costos[n] ? "disabled" : ""}>${moneda()}${m.costos[n]}</button>`;
+            return `<div class="rest-mejora-item"><span class="rest-mejora-ico"><svg viewBox="0 0 20 20" width="30" height="30">${ICONOS_MEJORA[m.id]}</svg></span><div><b>${esc(m.nombre)}</b><small>${esc(m.texto)}</small><span class="rest-pips">${pips}</span></div>${accion}</div>`;
+        };
+        contenedor.innerHTML = `\n      <div class="pantalla-rest libro">\n        ${HTML_VOLVER}\n        ${hud("KITCHEN UPGRADES")}\n        ${mensaje ? `<div class="rest-aviso rest-aviso-mejoras">${esc(mensaje)}</div>` : ""}\n        <div class="rest-mejoras">${MEJORAS_COCINA.map(item).join("")}</div>\n      </div>`;
+        blindarToques(contenedor.querySelector(".pantalla-rest"));
+        cablearVolver(contenedor, (() => local()));
+        for (const b of contenedor.querySelectorAll("[data-mejora]")) b.addEventListener("click", (() => {
+            const r = reg.comprarMejora(b.dataset.mejora, tienda);
+            if (r === "ok") {
+                sonar("hallazgo");
+                vibrar(25);
+                guardar();
+                mejoras(`${mejoraPorId(b.dataset.mejora).nombre}: level ${reg.nivel(b.dataset.mejora)}! ♥`);
+            } else sonar("no");
+        }));
+    }
+    function libro(sel = null, mensaje = "") {
+        const menu = reg.menu(sellados);
+        sel = sel || menu[0] || RECETAS[0].id;
+        const r = recetaPorId(sel);
+        const tengo = menu.includes(sel);
+        const l = reg.libro[sel] || {
+            mejor: 0,
+            vendidos: 0
+        };
+        const amigo = r.amigo && amigos.find((a => a.id === r.amigo));
+        const bloqueo = !tengo ? r.desbloqueo.fama ? reg.sePuedeComprar(sel) ? "Ready to learn!" : `Needs a ${"★".repeat(r.desbloqueo.fama)} shop to learn it` : `Stamp ${esc(nombreLugar(r.desbloqueo.lugar))} to learn it` : "";
+        contenedor.innerHTML = `\n      <div class="pantalla-rest libro">\n        ${HTML_VOLVER}\n        ${hud(`RECIPE BOOK · ${menu.length} OF ${RECETAS.length}`)}\n        <div class="rest-libro">\n          <div class="rest-hoja">\n            ${GRUPOS.map((([g, t]) => `<div class="rest-sub">${t}</div><div class="rest-grilla">${RECETAS.filter((x => x.grupo === g)).map((x => {
+            const ok = menu.includes(x.id);
+            const m = (reg.libro[x.id] || {}).mejor || 0;
+            return `<button type="button" class="rest-rec ${ok ? "" : "no"} ${x.id === sel ? "sel" : ""}" data-receta="${x.id}">${imgPlato(x.id)}<span>${esc(x.nombre)}</span><small>${ok ? m ? estrellasNota(m) : "" : x.desbloqueo && x.desbloqueo.fama ? reg.sePuedeComprar(x.id) ? "learn!" : "★".repeat(x.desbloqueo.fama) : "?"}</small></button>`;
+        })).join("")}</div>`)).join("")}\n          </div>\n          <div class="rest-hoja detalle">\n            <div class="rest-receta-cabeza">${imgPlato(sel, tengo ? "" : "no")}<div><b>${esc(r.nombre)}</b><span class="rest-estr">${tengo && l.mejor ? estrellasNota(l.mejor) : ""}</span><small>${tengo ? l.vendidos ? `Best: ${Number(l.mejor).toFixed(1)} · served ${l.vendidos}` : "Not cooked yet" : bloqueo}</small></div></div>\n            <ol class="rest-pasos-lista">${r.pasos.map((p => `<li>${esc(textoPaso(p))}</li>`)).join("")}</ol>\n            <div class="rest-nota">${amigo ? `<i>${esc(amigo.nombre)}: “${esc(r.nota)}”</i>` : esc(r.nota)}</div>\n            ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}\n            ${!tengo && r.compra && reg.sePuedeComprar(sel) ? `<button class="boton rest-comprar-receta" type="button" data-comprar-receta="${r.id}" ${tienda.monedas < r.compra ? "disabled" : ""}>${moneda()} ${r.compra} · Learn it</button>` : ""}\n          </div>\n        </div>\n      </div>`;
+        blindarToques(contenedor.querySelector(".pantalla-rest"));
+        cablearVolver(contenedor, (() => local()));
+        for (const b of contenedor.querySelectorAll("[data-receta]")) b.addEventListener("click", (() => {
+            sonar("tocar");
+            libro(b.dataset.receta);
+        }));
+        const c = contenedor.querySelector("[data-comprar-receta]");
+        if (c) c.addEventListener("click", (() => {
+            if (reg.comprarReceta(c.dataset.comprarReceta, tienda)) {
+                sonar("hallazgo");
+                guardar();
+                libro(sel, "New recipe! ♥");
+            } else sonar("no");
+        }));
+    }
+    function decorar(mensaje = "") {
+        contenedor.innerHTML = `\n      <div class="pantalla-rest local decor">\n        ${frente()}\n        ${HTML_VOLVER}\n        ${hud("DECORATE THE SHOP")}\n        <div class="rest-col der">\n          <div class="papel rest-card rest-decor-lista">\n            ${DECOR.map((d => `<div class="rest-mejora"><img src="${arte(d.arte)}" alt="" draggable="false" /><b>${esc(d.nombre)}</b>${reg.decor.has(d.id) ? `<button class="rest-relajado ${reg.guardados.has(d.id) ? "" : "si"}" type="button" data-poner="${d.id}" aria-pressed="${!reg.guardados.has(d.id)}"><span class="rest-sw"><i></i></span>${reg.guardados.has(d.id) ? "Off" : "On"}</button>` : `<button class="boton boton-fantasma" type="button" data-decor="${d.id}" ${tienda.monedas < d.precio ? "disabled" : ""}>${moneda()}${d.precio}</button>`}</div>`)).join("")}\n          </div>\n          ${mensaje ? `<div class="rest-aviso">${esc(mensaje)}</div>` : ""}\n        </div>\n      </div>`;
+        blindarToques(contenedor.querySelector(".pantalla-rest"));
+        cablearVolver(contenedor, (() => local()));
+        for (const b of contenedor.querySelectorAll("[data-decor]")) b.addEventListener("click", (() => {
+            if (reg.comprarDecor(b.dataset.decor, tienda)) {
+                sonar("hallazgo");
+                vibrar(25);
+                guardar();
+                decorar(`${DECOR.find((x => x.id === b.dataset.decor)).nombre}: up!`);
+            } else sonar("no");
+        }));
+        for (const b of contenedor.querySelectorAll("[data-poner]")) b.addEventListener("click", (() => {
+            const id = b.dataset.poner;
+            if (reg.guardados.has(id)) reg.guardados.delete(id); else reg.guardados.add(id);
+            sonar("tocar");
+            guardar();
+            decorar(`${DECOR.find((x => x.id === id)).nombre}: ${reg.guardados.has(id) ? "put away" : "back up!"}`);
+        }));
+    }
+    function abrirDia() {
+        reg._alDia(Date.now());
+        const menu = reg.menu(sellados);
+        const esp = reg.especial(sellados);
+        const cuenta = reg.cuentaHoy();
+        const dif = reg.relajado ? -.5 : (reg.estrellasFama() - 1) / 4;
+        const pedidos = armarDia(menu, {
+            fama: reg.estrellasFama(),
+            especial: esp,
+            amigos: amigos,
+            asientos: reg.nivel("asientos"),
+            recientes: reg.recientes,
+            nuevas: reg.recetasNuevas(),
+            especialGarantizado: !reg.hoy.espServido
+        });
+        reg.anotarPedidos(pedidos.map((q => q.receta)));
+        reg.hoy.esp = (reg.hoy.esp || 0) + pedidos.filter((q => q.receta === esp)).length;
         guardar();
-        decorar(`${DECOR.find((x) => x.id === id).nombre}: ${reg.guardados.has(id) ? "put away" : "back up!"}`);
-      });
-  }
-
-  // ---------------- el dia ----------------
-  function abrirDia() {
-    reg._alDia(Date.now()); // (dia real nuevo: el especial vuelve a estar garantizado)
-    const menu = reg.menu(sellados);
-    const esp = reg.especial(sellados);
-    const cuenta = reg.cuentaHoy();
-    // v59: la dificultad sube con la fama (0 en ★1 .. 1 en ★5); en modo relajado, mas facil que nunca
-    const dif = reg.relajado ? -0.5 : (reg.estrellasFama() - 1) / 4;
-    const pedidos = armarDia(menu, { fama: reg.estrellasFama(), especial: esp, amigos, asientos: reg.nivel("asientos"), recientes: reg.recientes, nuevas: reg.recetasNuevas(), especialGarantizado: !reg.hoy.espServido });
-    reg.anotarPedidos(pedidos.map((q) => q.receta));
-    reg.hoy.esp = (reg.hoy.esp || 0) + pedidos.filter((q) => q.receta === esp).length;
-    guardar();
-    dia = { pedidos, i: 0, ganado: 0, felices: 0, resenas: [], especial: esp, combo: 0, cuenta, dif, famaAntes: reg.fama };
-    cliente();
-  }
-
-  /** Llega el cliente: su ticket, y a cocinar. */
-  function cliente() {
-    const p = dia.pedidos[dia.i];
-    const r = recetaPorId(p.receta);
-    p.notas = [];
-    p.k = 0;
-    contenedor.innerHTML = `
-      <div class="pantalla-rest cocina">
-        ${HTML_VOLVER}
-        ${hud(PRUEBA ? `KITCHEN TEST · ${r.nombre.toUpperCase()}` : `DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
-        <div class="rest-pasos" id="rest-pasos">${r.pasos.map((x, k) => `<span class="rest-paso" data-k="${k}">${nombrePaso(x)}</span>`).join("")}</div>
-        <div class="rest-ticket">
-          <div class="rest-ticket-quien"><img src="${arte(p.quien.amigo ? `npcs/npc_${p.quien.id}.png` : `restaurante/cliente_${p.quien.id}.png`)}" alt="" draggable="false" /><span>${esc(p.quien.nombre)}<small>“${esc(p.frase)}”</small></span></div>
-          <div class="rest-ticket-plato">${imgPlato(r.id)}<b>${esc(r.nombre)}</b>${p.receta === dia.especial ? `<span class="rest-tag">SPECIAL ×2</span>` : ""}</div>
-          <div class="rest-ticket-extras" id="rest-ticket-extras">${[...(p.toppings || []), ...(p.frutas || []), ...p.extras].map((x) => `<span><img src="${arte(`restaurante/extra_${x}.png`)}" alt="" draggable="false" />${esc(EXTRAS[x].nombre)}</span>`).join("") || `<span class="sin">plain, please</span>`}</div>
-          ${p.recordar ? `<div class="rest-recordar" id="rest-recordar">Remember this order! ♥</div>` : ""}
-        </div>
-        ${dia.combo ? `<div class="rest-combo">PERFECT ×${dia.combo}</div>` : ""}
-        <div class="rest-tabla" id="rest-tabla"></div>
-        <div class="rest-lado">
-          <div class="papel rest-card"><div class="rest-sub">THIS DISH</div><span class="rest-estr" id="rest-estr-plato">☆☆☆</span><small id="rest-notas-pasos"></small></div>
-          <button class="boton rest-accion oculto" id="rest-accion" type="button"></button>
-          <div class="rest-baozi" id="rest-baozi">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>
-        </div>
-        <div class="rest-ayuda" id="rest-ayuda"></div>
-      </div>`;
-    const area = contenedor.querySelector(".pantalla-rest");
-    blindarToques(area);
-    quitarPausa();
-    pausa = crearPausa(area, { activa: () => false }); // la pantalla prendida mientras cocina
-    cablearVolver(contenedor, () => terminarDia());
-    sonar("tocar");
-    siguientePaso();
-  }
-
-  function cara(ojo, boca, ms = 900) {
-    const el = contenedor.querySelector("#rest-baozi .sprite-cara");
-    if (!el) return;
-    cambiarCara(el, ojo, boca);
-    clearTimeout(cara.t);
-    cara.t = setTimeout(() => el.isConnected && cambiarCara(el, "ojo_base_energia_alta.png", "boca_base_feliz.png"), ms);
-  }
-
-  function siguientePaso() {
-    const p = dia.pedidos[dia.i];
-    const r = recetaPorId(p.receta);
-    const $ = (id) => contenedor.querySelector(`#${id}`);
-    for (const s of contenedor.querySelectorAll(".rest-paso")) {
-      const k = Number(s.dataset.k);
-      s.className = `rest-paso ${k < p.k ? "hecho" : k === p.k ? "ahora" : ""}`;
-      if (k < p.k) s.textContent = `✓ ${nombrePaso(r.pasos[k])}`;
+        dia = {
+            pedidos: pedidos,
+            i: 0,
+            ganado: 0,
+            felices: 0,
+            resenas: [],
+            especial: esp,
+            combo: 0,
+            cuenta: cuenta,
+            dif: dif,
+            famaAntes: reg.fama
+        };
+        cliente();
     }
-    if (p.k >= r.pasos.length) {
-      presentar(p, r);
-      return;
-    }
-    let def = r.pasos[p.k];
-    if (def.t === "emplatar") def = { t: "elegir", opciones: r.extras.map((x) => ({ id: x, ...EXTRAS[x], icono: arte(`restaurante/extra_${x}.png`) })), pedido: p.extras };
-    else if (def.t === "elegir") {
-      const lista = def.topping ? r.toppings : def.frutas ? r.frutas : def.flores ? ["osmanto"] : [];
-      const pedido = def.topping ? p.toppings : def.frutas ? p.frutas : def.flores ? p.flores : [];
-      def = { t: "elegir", opciones: lista.map((x) => ({ id: x, ...EXTRAS[x], icono: arte(`restaurante/extra_${x}.png`) })), pedido, pincho: !!def.frutas, ayuda: def.frutas ? "Skewer the fruit on the ticket, then tap Ready" : def.flores ? "Sprinkle the osmanthus flowers, then tap Ready" : def.fruta ? "Add the fruit on the ticket, then tap Ready" : "Add the toppings on the ticket, then tap Ready" };
-    } else if (def.t === "verter" && def.trozos === "pedido") {
-      // v68: el salpicon: en el vaso va la papaya y las frutas que se eligieron
-      const frutas = (p.puestos || []).filter((x) => (r.toppings || []).includes(x)).map((x) => EXTRAS[x].color);
-      def = { ...def, trozos: ["rgb(250,150,90)", ...frutas] };
-    }
-    const accion = $("rest-accion");
-    paso = crearPaso(
-      $("rest-tabla"),
-      def,
-      {
-        sonar,
-        vibrar,
-        plato: arte(`restaurante/plato_${r.id}.png`),
-        receta: r.id,
-        alElegir: (ids) => {
-          p.puestos = [...(p.puestos || []), ...ids];
-        },
-        dif: dia.dif,
-        mejoras: { cuchillo: reg.nivel("cuchillo"), ollas: reg.nivel("ollas"), wok: reg.nivel("wok") },
-        ayuda: (t) => {
-          const a = $("rest-ayuda");
-          if (a) a.textContent = t;
-        },
-        boton: (texto, fn) => {
-          if (!accion) return;
-          if (!texto) {
-            accion.classList.add("oculto");
-            accion.onclick = null;
-            return;
-          }
-          accion.textContent = texto;
-          accion.classList.remove("oculto");
-          // v61 pasada: el boton del paso nuevo sale en el mismo lugar que el "Ready" del anterior;
-          // un doble toque no tiene que sacar la comida del horno antes de tiempo
-          const desde = performance.now();
-          accion.onclick = (e) => {
-            e.stopPropagation();
-            if (performance.now() - desde < 300) return;
-            fn();
-          };
-        },
-      },
-      (e) => {
-        if (!vivo || !dia) return;
-        p.notas.push(e);
-        p.k += 1;
-        if (p.recordar && p.k === 1) {
-          const ex = $("rest-ticket-extras");
-          if (ex) ex.innerHTML = [...(p.toppings || []), ...(p.frutas || []), ...p.extras].map(() => `<span class="oculta">?</span>`).join("");
-          const rc = $("rest-recordar");
-          if (rc) rc.textContent = "Do you remember? ♥";
-        }
-        const prom = estrellasDelPlato(p.notas);
-        const pe = $("rest-estr-plato");
-        if (pe) pe.innerHTML = estrellasNota(prom);
-        const pn = $("rest-notas-pasos");
-        if (pn) pn.textContent = p.notas.map((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${x.toFixed(1)}`).join(" · ");
-        if (e >= 2.9) cara("ojo_especial_euforico.png", "boca_especial_euforico.png");
-        else if (e < 2) cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png");
+    function cliente() {
+        const p = dia.pedidos[dia.i];
+        const r = recetaPorId(p.receta);
+        p.notas = [];
+        p.k = 0;
+        contenedor.innerHTML = `\n      <div class="pantalla-rest cocina">\n        ${HTML_VOLVER}\n        ${hud(PRUEBA ? `KITCHEN TEST · ${r.nombre.toUpperCase()}` : `DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}\n        <div class="rest-pasos" id="rest-pasos">${r.pasos.map(((x, k) => `<span class="rest-paso" data-k="${k}">${nombrePaso(x)}</span>`)).join("")}</div>\n        <div class="rest-ticket">\n          <div class="rest-ticket-quien"><img src="${arte(p.quien.amigo ? `npcs/npc_${p.quien.id}.png` : `restaurante/cliente_${p.quien.id}.png`)}" alt="" draggable="false" /><span>${esc(p.quien.nombre)}<small>“${esc(p.frase)}”</small></span></div>\n          <div class="rest-ticket-plato">${imgPlato(r.id)}<b>${esc(r.nombre)}</b>${p.receta === dia.especial ? `<span class="rest-tag">SPECIAL ×2</span>` : ""}</div>\n          <div class="rest-ticket-extras" id="rest-ticket-extras">${[ ...p.toppings || [], ...p.frutas || [], ...p.extras ].map((x => `<span><img src="${arte(`restaurante/extra_${x}.png`)}" alt="" draggable="false" />${esc(EXTRAS[x].nombre)}</span>`)).join("") || `<span class="sin">plain, please</span>`}</div>\n          ${p.recordar ? `<div class="rest-recordar" id="rest-recordar">Remember this order! ♥</div>` : ""}\n        </div>\n        ${dia.combo ? `<div class="rest-combo">PERFECT ×${dia.combo}</div>` : ""}\n        <div class="rest-tabla" id="rest-tabla"></div>\n        <div class="rest-lado">\n          <div class="papel rest-card"><div class="rest-sub">THIS DISH</div><span class="rest-estr" id="rest-estr-plato">☆☆☆</span><small id="rest-notas-pasos"></small></div>\n          <button class="boton rest-accion oculto" id="rest-accion" type="button"></button>\n          <div class="rest-baozi" id="rest-baozi">${sprite("ojo_base_energia_alta.png", "boca_base_feliz.png")}</div>\n        </div>\n        <div class="rest-ayuda" id="rest-ayuda"></div>\n      </div>`;
+        const area = contenedor.querySelector(".pantalla-rest");
+        blindarToques(area);
+        quitarPausa();
+        pausa = crearPausa(area, {
+            activa: () => false
+        });
+        cablearVolver(contenedor, (() => terminarDia()));
+        sonar("tocar");
         siguientePaso();
-      },
-    );
-  }
-
-  /** Lleva el plato al cliente: estrellas, monedas, resena. */
-  /**
-   * v64 (rom: "un momento de servir"): el plato terminado, grande, con lo que se le puso y sus
-   * estrellas, un ratito antes de entregarlo (tocar para seguir).
-   */
-  function presentar(p, r) {
-    const tabla = contenedor.querySelector("#rest-tabla");
-    if (!tabla) return servir();
-    if (paso) paso.destruir();
-    paso = null;
-    const accion = contenedor.querySelector("#rest-accion");
-    if (accion) accion.classList.add("oculto");
-    const e = estrellasDelPlato(p.notas);
-    const nv = nivelDe(e);
-    const puestos = [...new Set([...(r.lleva || []), ...(p.puestos || [])])].filter((x) => EXTRAS[x] && !(p.frutas || []).includes(x) && !(p.flores || []).includes(x)); // las frutas ya estan en el pincho; "lleva": lo que la receta siempre tiene (el queso del chocolate)
-    const ay = contenedor.querySelector("#rest-ayuda");
-    if (ay) ay.textContent = "Order up! (tap to serve)";
-    const n = puestos.length;
-    tabla.innerHTML = `
-      <div class="rest-presenta e${nv}">
-        <div class="rest-presenta-luz"></div>
-        <div class="rest-presenta-plato">${imgPlato(r.id, "rest-presenta-img")}${capaAdiciones(puestos.map((x) => ({ id: x, ...EXTRAS[x], icono: arte(`restaurante/extra_${x}.png`) })), r.id)}</div>
-        <div class="rest-presenta-nombre">${esc(r.nombre)}</div>
-        <div class="rest-estr grande">${estrellasNota(e)}</div>
-      </div>`;
-    sonar(nv === 3 ? "hallazgo" : "hito");
-    cara(nv === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", nv === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png", 1400);
-    let listo = false;
-    const seguir = () => {
-      if (listo || !dia) return;
-      listo = true;
-      servir();
-    };
-    setTimeout(seguir, 1500);
-    setTimeout(() => tabla.addEventListener("pointerdown", seguir, { once: true }), 300);
-  }
-
-  function servir() {
-    const p = dia.pedidos[dia.i];
-    const r = recetaPorId(p.receta);
-    const e = estrellasDelPlato(p.notas);
-    const nv = nivelDe(e);
-    const esp = p.receta === dia.especial;
-    dia.combo = nv === 3 ? dia.combo + 1 : 0;
-    const combo = dia.combo > 0 && dia.combo % 3 === 0;
-    const memoria = p.recordar && nv === 3;
-    const pago = pagoDe(r, e, esp, 3 + 2 * reg.nivel("propinas")) + (combo ? 5 : 0) + (memoria ? 2 : 0);
-    const opciones = RESENAS[nv];
-    const texto = nv === 3 && p.quien.amigo && GRACIAS_AMIGOS[p.quien.id] && Math.random() < 0.5 ? GRACIAS_AMIGOS[p.quien.id] : opciones[Math.floor(Math.random() * opciones.length)];
-    dia.ganado += pago;
-    if (nv >= 2) dia.felices += 1;
-    dia.resenas.push({ quien: p.quien.nombre, texto, estrellas: e });
-    if (nv === 3) dia.resenas.sort((a, b) => b.estrellas - a.estrellas);
-    reg.anotarPlato(r.id, e, dia.cuenta);
-    if (esp) reg.hoy.espServido = true; // v72: desde ahora el especial sale como cualquier otro (hasta manana)
-    guardar();
-    paso = null;
-    const src = arte(p.quien.amigo ? `npcs/npc_${p.quien.id}_saludo.png` : `restaurante/cliente_${p.quien.id}_saludo.png`);
-    contenedor.innerHTML = `
-      <div class="pantalla-rest local servir">
-        ${frente(`<div class="rest-baozi-ventana entrega">${sprite(nv === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", nv === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png")}</div>`, `${imgPlato(r.id, "rest-plato-servido")}<div class="rest-sombra-cliente"></div><img class="rest-cliente-servido" src="${src}" alt="" draggable="false" />`)}
-        ${HTML_VOLVER}
-        ${hud(PRUEBA ? `KITCHEN TEST · ${r.nombre.toUpperCase()}` : `DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}
-        <div class="papel rest-resena">
-          <div class="rest-estr grande">${estrellasNota(e)}</div>
-          <div class="rest-resena-texto">“${esc(texto)}”<small>— ${esc(p.quien.nombre)}</small></div>
-          <div class="rest-fin-monedas">${moneda()}+${pago}</div>
-          ${esp || nv === 3 ? `<small class="rest-extra-pago">${[esp ? "special ×2" : "", nv === 3 ? `+${3 + 2 * reg.nivel("propinas")} tip` : "", memoria ? "good memory +2" : ""].filter(Boolean).join(" · ")}</small>` : ""}
-          ${combo ? `<div class="rest-combo-fin"><span class="rest-baila">${sprite("ojo_especial_euforico.png", "boca_especial_euforico.png")}</span><b>PERFECT ×${dia.combo}!</b><small>Baozi is dancing · +5</small></div>` : ""}
-          ${PRUEBA ? `<small class="rest-probar-notas">${esc(p.notas.map((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${x.toFixed(1)}`).join(" · "))}</small>` : ""}
-          <button class="boton" id="btn-rest-siguiente" type="button">${PRUEBA ? "Try another recipe" : dia.i + 1 < dia.pedidos.length ? "Next customer" : "Close the shop"}</button>
-        </div>
-      </div>`;
-    blindarToques(contenedor.querySelector(".pantalla-rest"));
-    cablearVolver(contenedor, () => terminarDia(true));
-    sonar(nv === 3 ? "hallazgo" : nv === 2 ? "hito" : "mimo");
-    vibrar(nv === 3 ? [20, 40, 20] : 20);
-    contenedor.querySelector("#btn-rest-siguiente").addEventListener("click", () => {
-      sonar("tocar");
-      dia.i += 1;
-      if (dia.i < dia.pedidos.length) cliente();
-      else terminarDia(true);
-    });
-  }
-
-  /** Cierra el dia (al terminar los clientes o con la flechita): cobra lo hecho. */
-  function terminarDia(completo = false) {
-    if (PRUEBA) return probador();
-    if (!dia) return local();
-    if (paso) paso.destruir();
-    paso = null;
-    quitarPausa();
-    const { ganado, felices, resenas, cuenta, famaAntes } = dia;
-    const servidos = dia.resenas.length;
-    dia = null;
-    if (!servidos) return local();
-    const { paga, record } = reg.cerrarTurno({ ganado, felices, resenas, cuenta });
-    const famaGanada = reg.fama - famaAntes;
-    alCerrarTurno({ paga, felices, record, sobras: [], ganado });
-    guardar();
-    contenedor.innerHTML = `
-      <div class="pantalla-rest local">
-        ${frente()}
-        ${hud("SHOP CLOSED")}
-        <div class="rest-fin">
-          <div class="papel rest-fin-carta">
-            <div class="rest-sub">${record ? "BEST DAY EVER!" : completo ? "WHAT A DAY!" : "CLOSED EARLY"}</div>
-            <div class="rest-fin-titulo">${felices} happy customer${felices === 1 ? "" : "s"}</div>
-            ${resenas[0] ? `<div class="rest-fin-texto">“${esc(resenas[0].texto)}” — ${esc(resenas[0].quien)}</div>` : ""}
-            <div class="rest-fin-texto">Fame ${estrellas(reg.estrellasFama(), 5)} · ${cuenta ? `${famaGanada >= 0 ? "+" : ""}${famaGanada} fame` : reg.relajado ? "relaxed day, no fame" : "practice day, no fame"}</div>
-            ${progresoFama(reg.fama) ? `<div class="rest-barra-fama"><i style="width:${Math.round(progresoFama(reg.fama).f * 100)}%"></i></div>` : ""}
-            ${paga !== ganado ? `<div class="rest-fin-texto"><small>The shop made ${ganado}, you keep ${paga} (one full day per day)</small></div>` : ""}
-            <div class="rest-fin-monedas">${moneda()}+${paga}</div>
-            <button class="boton" id="btn-rest-volver" type="button">Back to the shop</button>
-          </div>
-        </div>
-      </div>`;
-    sonar(felices ? "hallazgo" : "mimo");
-    contenedor.querySelector("#btn-rest-volver").addEventListener("click", () => {
-      sonar("tocar");
-      if (reg.carta) cartaCritico();
-      else local();
-    });
-  }
-
-  // ---------------- v59: la carta del critico al subir de estrella ----------------
-  const CARTAS = {
-    2: "A little bird told me about the bao on Hefang Street. I came, I ate, I came back. Two stars, and climbing.",
-    3: "I came for one bao and stayed for three. Baozi's little shop is now a three-star stop on Hefang Street.",
-    4: "The line reaches the corner now. Four stars: the steam, the smiles, the care in every fold.",
-    5: "Five stars. The best little kitchen in Hangzhou, and the warmest. I'll be back tomorrow. And the day after.",
-  };
-  function cartaCritico() {
-    const e = reg.carta;
-    reg.carta = 0;
-    guardar();
-    const recetas = RECETAS.filter((r) => r.desbloqueo && r.desbloqueo.fama === e).map((r) => r.nombre);
-    const mej = MEJORAS_COCINA.filter((m) => m.estrella.includes(e)).map((m) => m.nombre);
-    const nuevo = ["+1 customer a day", recetas.length ? `new recipes to learn: ${recetas.join(", ")}` : "", mej.length ? `new upgrades: ${mej.join(", ")}` : ""].filter(Boolean).join(" · ");
-    contenedor.insertAdjacentHTML(
-      "beforeend",
-      `<div class="rest-carta"><div class="papel rest-carta-hoja">
-        <div class="rest-sub">A LETTER FROM THE HEFANG FOOD CRITIC</div>
-        <div class="rest-carta-sello">${"★".repeat(e)}</div>
-        <p>“${esc(CARTAS[e] || CARTAS[5])}”</p>
-        <small>New: ${esc(nuevo)}</small>
-        <button class="boton" id="btn-rest-carta" type="button">Thank you! ♥</button>
-      </div></div>`,
-    );
-    sonar("hallazgo");
-    vibrar([30, 60, 30, 60, 30]);
-    contenedor.querySelector("#btn-rest-carta").addEventListener("click", () => {
-      sonar("tocar");
-      local();
-    });
-  }
-
-  if (PRUEBA) probador();
-  else local();
-
-  // ---------------- v73: la cocina de prueba (desde el modo director) ----------------
-  function probador() {
-    quitarPausa();
-    if (paso) paso.destruir();
-    paso = null;
-    dia = null;
-    const DIFS = [["Relaxed", -0.5], ["Fame ★1", 0], ["★3", 0.5], ["★5", 1]];
-    contenedor.innerHTML = `
-      <div class="pantalla-rest probador">
-        ${HTML_VOLVER}
-        <div class="rest-probar-cabeza">
-          <div class="juego-chip">KITCHEN TEST · nothing is saved</div>
-          <div class="rest-probar-dif">${DIFS.map(([n, d]) => `<button class="rest-probar-difb ${d === difPrueba ? "si" : ""}" data-dif="${d}" type="button">${n}</button>`).join("")}</div>
-        </div>
-        <div class="rest-probar-lista">${RECETAS.map((r) => {
-          const l = reg.libro[r.id];
-          return `<button class="rest-probar-receta" data-r="${r.id}" type="button">${imgPlato(r.id)}<span>${esc(r.nombre)}</span>${l && l.vendidos ? `<small>${Number(l.mejor).toFixed(1)}</small>` : ""}</button>`;
-        }).join("")}</div>
-      </div>`;
-    blindarToques(contenedor.querySelector(".pantalla-rest"));
-    cablearVolver(contenedor, () => vivo && alSalir());
-    for (const b of contenedor.querySelectorAll("[data-dif]"))
-      b.addEventListener("click", () => {
-        sonar("tocar");
-        difPrueba = Number(b.dataset.dif);
-        const y = contenedor.querySelector(".rest-probar-lista").scrollTop;
-        probador();
-        contenedor.querySelector(".rest-probar-lista").scrollTop = y;
-      });
-    for (const b of contenedor.querySelectorAll("[data-r]"))
-      b.addEventListener("click", () => {
-        sonar("tocar");
-        probarReceta(b.dataset.r);
-      });
-  }
-
-  function probarReceta(id) {
-    const pedidos = armarDia([id], { fama: 5, amigos, especialGarantizado: false }).slice(0, 1);
-    for (const q of pedidos) {
-      q.receta = id;
-      q.recordar = false;
     }
-    dia = { pedidos, i: 0, ganado: 0, felices: 0, resenas: [], especial: null, combo: 0, cuenta: false, dif: difPrueba, famaAntes: reg.fama };
-    cliente();
-  }
-
-  return {
-    destruir() {
-      vivo = false;
-      if (paso) paso.destruir();
-      quitarPausa();
-    },
-    // para las pruebas
-    _dia: () => dia,
-    _resolverPaso: (e = 3) => paso && paso.resolver(e),
-    _reabrirCliente: () => {
-      if (paso) paso.destruir();
-      paso = null;
-      if (dia) cliente();
-    },
-  };
+    function cara(ojo, boca, ms = 900) {
+        const el = contenedor.querySelector("#rest-baozi .sprite-cara");
+        if (!el) return;
+        cambiarCara(el, ojo, boca);
+        clearTimeout(cara.t);
+        cara.t = setTimeout((() => el.isConnected && cambiarCara(el, "ojo_base_energia_alta.png", "boca_base_feliz.png")), ms);
+    }
+    function siguientePaso() {
+        const p = dia.pedidos[dia.i];
+        const r = recetaPorId(p.receta);
+        const $ = id => contenedor.querySelector(`#${id}`);
+        for (const s of contenedor.querySelectorAll(".rest-paso")) {
+            const k = Number(s.dataset.k);
+            s.className = `rest-paso ${k < p.k ? "hecho" : k === p.k ? "ahora" : ""}`;
+            if (k < p.k) s.textContent = `✓ ${nombrePaso(r.pasos[k])}`;
+        }
+        if (p.k >= r.pasos.length) {
+            presentar(p, r);
+            return;
+        }
+        let def = r.pasos[p.k];
+        if (def.t === "emplatar") def = {
+            t: "elegir",
+            opciones: r.extras.map((x => ({
+                id: x,
+                ...EXTRAS[x],
+                icono: arte(`restaurante/extra_${x}.png`)
+            }))),
+            pedido: p.extras
+        }; else if (def.t === "elegir") {
+            const lista = def.topping ? r.toppings : def.frutas ? r.frutas : def.flores ? [ "osmanto" ] : [];
+            const pedido = def.topping ? p.toppings : def.frutas ? p.frutas : def.flores ? p.flores : [];
+            def = {
+                t: "elegir",
+                opciones: lista.map((x => ({
+                    id: x,
+                    ...EXTRAS[x],
+                    icono: arte(`restaurante/extra_${x}.png`)
+                }))),
+                pedido: pedido,
+                pincho: !!def.frutas,
+                ayuda: def.frutas ? "Skewer the fruit on the ticket, then tap Ready" : def.flores ? "Sprinkle the osmanthus flowers, then tap Ready" : def.fruta ? "Add the fruit on the ticket, then tap Ready" : "Add the toppings on the ticket, then tap Ready"
+            };
+        } else if (def.t === "verter" && def.trozos === "pedido") {
+            const frutas = (p.puestos || []).filter((x => (r.toppings || []).includes(x))).map((x => EXTRAS[x].color));
+            def = {
+                ...def,
+                trozos: [ "rgb(250,150,90)", ...frutas ]
+            };
+        }
+        const accion = $("rest-accion");
+        paso = crearPaso($("rest-tabla"), def, {
+            sonar: sonar,
+            vibrar: vibrar,
+            plato: arte(`restaurante/plato_${r.id}.png`),
+            receta: r.id,
+            alElegir: ids => {
+                p.puestos = [ ...p.puestos || [], ...ids ];
+            },
+            dif: dia.dif,
+            mejoras: {
+                cuchillo: reg.nivel("cuchillo"),
+                ollas: reg.nivel("ollas"),
+                wok: reg.nivel("wok")
+            },
+            ayuda: t => {
+                const a = $("rest-ayuda");
+                if (a) a.textContent = t;
+            },
+            boton: (texto, fn) => {
+                if (!accion) return;
+                if (!texto) {
+                    accion.classList.add("oculto");
+                    accion.onclick = null;
+                    return;
+                }
+                accion.textContent = texto;
+                accion.classList.remove("oculto");
+                const desde = performance.now();
+                accion.onclick = e => {
+                    e.stopPropagation();
+                    if (performance.now() - desde < 300) return;
+                    fn();
+                };
+            }
+        }, (e => {
+            if (!vivo || !dia) return;
+            p.notas.push(e);
+            p.k += 1;
+            if (p.recordar && p.k === 1) {
+                const ex = $("rest-ticket-extras");
+                if (ex) ex.innerHTML = [ ...p.toppings || [], ...p.frutas || [], ...p.extras ].map((() => `<span class="oculta">?</span>`)).join("");
+                const rc = $("rest-recordar");
+                if (rc) rc.textContent = "Do you remember? ♥";
+            }
+            const prom = estrellasDelPlato(p.notas);
+            const pe = $("rest-estr-plato");
+            if (pe) pe.innerHTML = estrellasNota(prom);
+            const pn = $("rest-notas-pasos");
+            if (pn) pn.textContent = p.notas.map(((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${x.toFixed(1)}`)).join(" · ");
+            if (e >= 2.9) cara("ojo_especial_euforico.png", "boca_especial_euforico.png"); else if (e < 2) cara("ojo_especial_decepcionado.png", "boca_especial_decepcionado.png");
+            siguientePaso();
+        }));
+    }
+    function presentar(p, r) {
+        const tabla = contenedor.querySelector("#rest-tabla");
+        if (!tabla) return servir();
+        if (paso) paso.destruir();
+        paso = null;
+        const accion = contenedor.querySelector("#rest-accion");
+        if (accion) accion.classList.add("oculto");
+        const e = estrellasDelPlato(p.notas);
+        const nv = nivelDe(e);
+        const puestos = [ ...new Set([ ...r.lleva || [], ...p.puestos || [] ]) ].filter((x => EXTRAS[x] && !(p.frutas || []).includes(x) && !(p.flores || []).includes(x)));
+        const ay = contenedor.querySelector("#rest-ayuda");
+        if (ay) ay.textContent = "Order up! (tap to serve)";
+        const n = puestos.length;
+        tabla.innerHTML = `\n      <div class="rest-presenta e${nv}">\n        <div class="rest-presenta-luz"></div>\n        <div class="rest-presenta-plato">${imgPlato(r.id, "rest-presenta-img")}${capaAdiciones(puestos.map((x => ({
+            id: x,
+            ...EXTRAS[x],
+            icono: arte(`restaurante/extra_${x}.png`)
+        }))), r.id)}</div>\n        <div class="rest-presenta-nombre">${esc(r.nombre)}</div>\n        <div class="rest-estr grande">${estrellasNota(e)}</div>\n      </div>`;
+        sonar(nv === 3 ? "hallazgo" : "hito");
+        cara(nv === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", nv === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png", 1400);
+        let listo = false;
+        const seguir = () => {
+            if (listo || !dia) return;
+            listo = true;
+            servir();
+        };
+        setTimeout(seguir, 1500);
+        setTimeout((() => tabla.addEventListener("pointerdown", seguir, {
+            once: true
+        })), 300);
+    }
+    function servir() {
+        const p = dia.pedidos[dia.i];
+        const r = recetaPorId(p.receta);
+        const e = estrellasDelPlato(p.notas);
+        const nv = nivelDe(e);
+        const esp = p.receta === dia.especial;
+        dia.combo = nv === 3 ? dia.combo + 1 : 0;
+        const combo = dia.combo > 0 && dia.combo % 3 === 0;
+        const memoria = p.recordar && nv === 3;
+        const pago = pagoDe(r, e, esp, 3 + 2 * reg.nivel("propinas")) + (combo ? 5 : 0) + (memoria ? 2 : 0);
+        const opciones = RESENAS[nv];
+        const texto = nv === 3 && p.quien.amigo && GRACIAS_AMIGOS[p.quien.id] && Math.random() < .5 ? GRACIAS_AMIGOS[p.quien.id] : opciones[Math.floor(Math.random() * opciones.length)];
+        dia.ganado += pago;
+        if (nv >= 2) dia.felices += 1;
+        dia.resenas.push({
+            quien: p.quien.nombre,
+            texto: texto,
+            estrellas: e
+        });
+        if (nv === 3) dia.resenas.sort(((a, b) => b.estrellas - a.estrellas));
+        reg.anotarPlato(r.id, e, dia.cuenta);
+        if (esp) reg.hoy.espServido = true;
+        guardar();
+        paso = null;
+        const src = arte(p.quien.amigo ? `npcs/npc_${p.quien.id}_saludo.png` : `restaurante/cliente_${p.quien.id}_saludo.png`);
+        contenedor.innerHTML = `\n      <div class="pantalla-rest local servir">\n        ${frente(`<div class="rest-baozi-ventana entrega">${sprite(nv === 3 ? "ojo_especial_euforico.png" : "ojo_base_energia_alta.png", nv === 3 ? "boca_especial_euforico.png" : "boca_base_feliz.png")}</div>`, `${imgPlato(r.id, "rest-plato-servido")}<div class="rest-sombra-cliente"></div><img class="rest-cliente-servido" src="${src}" alt="" draggable="false" />`)}\n        ${HTML_VOLVER}\n        ${hud(PRUEBA ? `KITCHEN TEST · ${r.nombre.toUpperCase()}` : `DAY ${reg.turnos + 1} · CUSTOMER ${dia.i + 1} OF ${dia.pedidos.length}`)}\n        <div class="papel rest-resena">\n          <div class="rest-estr grande">${estrellasNota(e)}</div>\n          <div class="rest-resena-texto">“${esc(texto)}”<small>— ${esc(p.quien.nombre)}</small></div>\n          <div class="rest-fin-monedas">${moneda()}+${pago}</div>\n          ${esp || nv === 3 ? `<small class="rest-extra-pago">${[ esp ? "special ×2" : "", nv === 3 ? `+${3 + 2 * reg.nivel("propinas")} tip` : "", memoria ? "good memory +2" : "" ].filter(Boolean).join(" · ")}</small>` : ""}\n          ${combo ? `<div class="rest-combo-fin"><span class="rest-baila">${sprite("ojo_especial_euforico.png", "boca_especial_euforico.png")}</span><b>PERFECT ×${dia.combo}!</b><small>Baozi is dancing · +5</small></div>` : ""}\n          ${PRUEBA ? `<small class="rest-probar-notas">${esc(p.notas.map(((x, k) => `${nombrePaso(r.pasos[k])[0]}${nombrePaso(r.pasos[k]).slice(1).toLowerCase()} ${x.toFixed(1)}`)).join(" · "))}</small>` : ""}\n          <button class="boton" id="btn-rest-siguiente" type="button">${PRUEBA ? "Try another recipe" : dia.i + 1 < dia.pedidos.length ? "Next customer" : "Close the shop"}</button>\n        </div>\n      </div>`;
+        blindarToques(contenedor.querySelector(".pantalla-rest"));
+        cablearVolver(contenedor, (() => terminarDia(true)));
+        sonar(nv === 3 ? "hallazgo" : nv === 2 ? "hito" : "mimo");
+        vibrar(nv === 3 ? [ 20, 40, 20 ] : 20);
+        contenedor.querySelector("#btn-rest-siguiente").addEventListener("click", (() => {
+            sonar("tocar");
+            dia.i += 1;
+            if (dia.i < dia.pedidos.length) cliente(); else terminarDia(true);
+        }));
+    }
+    function terminarDia(completo = false) {
+        if (PRUEBA) return probador();
+        if (!dia) return local();
+        if (paso) paso.destruir();
+        paso = null;
+        quitarPausa();
+        const {ganado: ganado, felices: felices, resenas: resenas, cuenta: cuenta, famaAntes: famaAntes} = dia;
+        const servidos = dia.resenas.length;
+        dia = null;
+        if (!servidos) return local();
+        const {paga: paga, record: record} = reg.cerrarTurno({
+            ganado: ganado,
+            felices: felices,
+            resenas: resenas,
+            cuenta: cuenta
+        });
+        const famaGanada = reg.fama - famaAntes;
+        alCerrarTurno({
+            paga: paga,
+            felices: felices,
+            record: record,
+            sobras: [],
+            ganado: ganado
+        });
+        guardar();
+        contenedor.innerHTML = `\n      <div class="pantalla-rest local">\n        ${frente()}\n        ${hud("SHOP CLOSED")}\n        <div class="rest-fin">\n          <div class="papel rest-fin-carta">\n            <div class="rest-sub">${record ? "BEST DAY EVER!" : completo ? "WHAT A DAY!" : "CLOSED EARLY"}</div>\n            <div class="rest-fin-titulo">${felices} happy customer${felices === 1 ? "" : "s"}</div>\n            ${resenas[0] ? `<div class="rest-fin-texto">“${esc(resenas[0].texto)}” — ${esc(resenas[0].quien)}</div>` : ""}\n            <div class="rest-fin-texto">Fame ${estrellas(reg.estrellasFama(), 5)} · ${cuenta ? `${famaGanada >= 0 ? "+" : ""}${famaGanada} fame` : reg.relajado ? "relaxed day, no fame" : "practice day, no fame"}</div>\n            ${progresoFama(reg.fama) ? `<div class="rest-barra-fama"><i style="width:${Math.round(progresoFama(reg.fama).f * 100)}%"></i></div>` : ""}\n            ${paga !== ganado ? `<div class="rest-fin-texto"><small>The shop made ${ganado}, you keep ${paga} (one full day per day)</small></div>` : ""}\n            <div class="rest-fin-monedas">${moneda()}+${paga}</div>\n            <button class="boton" id="btn-rest-volver" type="button">Back to the shop</button>\n          </div>\n        </div>\n      </div>`;
+        sonar(felices ? "hallazgo" : "mimo");
+        contenedor.querySelector("#btn-rest-volver").addEventListener("click", (() => {
+            sonar("tocar");
+            if (reg.carta) cartaCritico(); else local();
+        }));
+    }
+    const CARTAS = {
+        2: "A little bird told me about the bao on Hefang Street. I came, I ate, I came back. Two stars, and climbing.",
+        3: "I came for one bao and stayed for three. Baozi's little shop is now a three-star stop on Hefang Street.",
+        4: "The line reaches the corner now. Four stars: the steam, the smiles, the care in every fold.",
+        5: "Five stars. The best little kitchen in Hangzhou, and the warmest. I'll be back tomorrow. And the day after."
+    };
+    function cartaCritico() {
+        const e = reg.carta;
+        reg.carta = 0;
+        guardar();
+        const recetas = RECETAS.filter((r => r.desbloqueo && r.desbloqueo.fama === e)).map((r => r.nombre));
+        const mej = MEJORAS_COCINA.filter((m => m.estrella.includes(e))).map((m => m.nombre));
+        const nuevo = [ "+1 customer a day", recetas.length ? `new recipes to learn: ${recetas.join(", ")}` : "", mej.length ? `new upgrades: ${mej.join(", ")}` : "" ].filter(Boolean).join(" · ");
+        contenedor.insertAdjacentHTML("beforeend", `<div class="rest-carta"><div class="papel rest-carta-hoja">\n        <div class="rest-sub">A LETTER FROM THE HEFANG FOOD CRITIC</div>\n        <div class="rest-carta-sello">${"★".repeat(e)}</div>\n        <p>“${esc(CARTAS[e] || CARTAS[5])}”</p>\n        <small>New: ${esc(nuevo)}</small>\n        <button class="boton" id="btn-rest-carta" type="button">Thank you! ♥</button>\n      </div></div>`);
+        sonar("hallazgo");
+        vibrar([ 30, 60, 30, 60, 30 ]);
+        contenedor.querySelector("#btn-rest-carta").addEventListener("click", (() => {
+            sonar("tocar");
+            local();
+        }));
+    }
+    if (PRUEBA) probador(); else local();
+    function probador() {
+        quitarPausa();
+        if (paso) paso.destruir();
+        paso = null;
+        dia = null;
+        const DIFS = [ [ "Relaxed", -.5 ], [ "Fame ★1", 0 ], [ "★3", .5 ], [ "★5", 1 ] ];
+        contenedor.innerHTML = `\n      <div class="pantalla-rest probador">\n        ${HTML_VOLVER}\n        <div class="rest-probar-cabeza">\n          <div class="juego-chip">KITCHEN TEST · nothing is saved</div>\n          <div class="rest-probar-dif">${DIFS.map((([n, d]) => `<button class="rest-probar-difb ${d === difPrueba ? "si" : ""}" data-dif="${d}" type="button">${n}</button>`)).join("")}</div>\n        </div>\n        <div class="rest-probar-lista">${RECETAS.map((r => {
+            const l = reg.libro[r.id];
+            return `<button class="rest-probar-receta" data-r="${r.id}" type="button">${imgPlato(r.id)}<span>${esc(r.nombre)}</span>${l && l.vendidos ? `<small>${Number(l.mejor).toFixed(1)}</small>` : ""}</button>`;
+        })).join("")}</div>\n      </div>`;
+        blindarToques(contenedor.querySelector(".pantalla-rest"));
+        cablearVolver(contenedor, (() => vivo && alSalir()));
+        for (const b of contenedor.querySelectorAll("[data-dif]")) b.addEventListener("click", (() => {
+            sonar("tocar");
+            difPrueba = Number(b.dataset.dif);
+            const y = contenedor.querySelector(".rest-probar-lista").scrollTop;
+            probador();
+            contenedor.querySelector(".rest-probar-lista").scrollTop = y;
+        }));
+        for (const b of contenedor.querySelectorAll("[data-r]")) b.addEventListener("click", (() => {
+            sonar("tocar");
+            probarReceta(b.dataset.r);
+        }));
+    }
+    function probarReceta(id) {
+        const pedidos = armarDia([ id ], {
+            fama: 5,
+            amigos: amigos,
+            especialGarantizado: false
+        }).slice(0, 1);
+        for (const q of pedidos) {
+            q.receta = id;
+            q.recordar = false;
+        }
+        dia = {
+            pedidos: pedidos,
+            i: 0,
+            ganado: 0,
+            felices: 0,
+            resenas: [],
+            especial: null,
+            combo: 0,
+            cuenta: false,
+            dif: difPrueba,
+            famaAntes: reg.fama
+        };
+        cliente();
+    }
+    return {
+        destruir() {
+            vivo = false;
+            if (paso) paso.destruir();
+            quitarPausa();
+        },
+        _dia: () => dia,
+        _resolverPaso: (e = 3) => paso && paso.resolver(e),
+        _reabrirCliente: () => {
+            if (paso) paso.destruir();
+            paso = null;
+            if (dia) cliente();
+        }
+    };
 }
