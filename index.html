@@ -10,14 +10,13 @@
     <link rel="preload" href="assets/fonts/pixelify-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/glifos.css" />
-    <!-- Instalable: evita que iOS borre el progreso tras ~7 dias sin uso,
-         abre sin barra de URL (la ilusion del aparato) y anda sin señal. -->
+    
     <link rel="manifest" href="manifest.webmanifest" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Baozi" />
-    <!-- que iOS no convierta fechas/numeros del juego en links de telefono -->
+    
     <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
     <link rel="apple-touch-icon" href="icons/mochi-192.png" />
   </head>
@@ -27,7 +26,7 @@
       <div class="texto-rotar">Turn your phone sideways — Baozi lives in landscape.</div>
     </div>
     <div class="marco-manito">
-      <!-- Fondo pixel art de rom (pendiente). Vacio a proposito. -->
+      
       <div class="fondo-personalizado" aria-hidden="true"></div>
       <div id="app">
         <div class="bisel">
@@ -36,17 +35,10 @@
         <nav id="tabbar" class="oculto" aria-hidden="true"></nav>
         <div class="velo-transicion" id="velo-transicion" aria-hidden="true"></div>
       </div>
-      <!-- La mano de rom sosteniendo el aparato (pendiente). Vacio a proposito. -->
+      
       <div class="capa-manito" aria-hidden="true"></div>
     </div>
-    <!-- Red de seguridad para despues de un deploy: si se mezclo un modulo
-         viejo con uno nuevo, el juego no arranca. Aca se detecta y se
-         recarga (maximo 2 veces). Si la pagina la sirve el service worker,
-         su cache es la que esta mal (recargar daria lo mismo): SOLO si hay
-         señal de verdad (se prueba la red antes), se borran las caches y se
-         da de baja el sw, una sola vez por sesion; la recarga baja todo de
-         nuevo y el sw se vuelve a instalar limpio. Sin señal no toca nada:
-         la cache es lo unico que hay. -->
+    
     <script>
       (function () {
         var CLAVE = "mochi_rescate", CLAVE_LIMPIO = "mochi_rescate_limpio";
