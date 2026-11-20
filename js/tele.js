@@ -1,3 +1,5 @@
+import { CANALES as NUEVOS } from "./tele_canales.js";
+
 export const ANCHO = 38;
 
 export const ALTO = 24;
@@ -20,19 +22,65 @@ const DIGITOS = {
     "-": [ "000", "000", "111", "000", "000" ]
 };
 
-export function canales({especial: especial = false} = {}) {
-    return especial ? [ "corazon", "cocina", "pecera", "clima" ] : [ "cocina", "pecera", "clima" ];
+const SAL = Math.floor(Math.random() * 1e5);
+
+const DURACION = {
+    noticias: 12e3
+};
+
+export function canales({especial: especial = false, noche: noche = false} = {}) {
+    const nuevos = Object.entries(NUEVOS).filter((([, c]) => !c.cuando || c.cuando === "noche" && noche)).map((([id]) => id));
+    return {
+        fijos: especial ? [ "corazon" ] : [],
+        mezcla: [ "cocina", "pecera", "clima", ...nuevos ]
+    };
+}
+
+function azar(semilla) {
+    let s = (semilla * 9301 + 49297) % 233280;
+    return () => {
+        s = (s * 9301 + 49297) % 233280;
+        return s / 233280;
+    };
+}
+
+function vuelta(i, opts) {
+    const {fijos: fijos, mezcla: mezcla} = canales(opts);
+    const r = azar(i * 7919 + SAL);
+    const lista = mezcla.slice();
+    for (let k = lista.length - 1; k > 0; k--) {
+        const j = Math.floor(r() * (k + 1));
+        [lista[k], lista[j]] = [ lista[j], lista[k] ];
+    }
+    return [ ...fijos, ...lista ].map((id => ({
+        id: id,
+        ms: (DURACION[id] || MS_CANAL) + MS_ESTATICA
+    })));
 }
 
 export function enAire(ahora, opts = {}) {
-    const lista = canales(opts);
-    const ciclo = MS_CANAL + MS_ESTATICA;
-    const n = Math.floor(ahora / ciclo);
-    const dentro = ahora - n * ciclo;
+    const muestra = vuelta(0, opts);
+    const largo = muestra.reduce(((a, c) => a + c.ms), 0);
+    const i = Math.floor(ahora / largo);
+    let resto = ahora - i * largo;
+    const lista = vuelta(i, opts);
+    for (let k = 0; k < lista.length; k++) {
+        const c = lista[k];
+        if (resto < c.ms) {
+            return {
+                canal: c.id,
+                t: Math.floor(resto / 260),
+                estatica: resto >= c.ms - MS_ESTATICA,
+                vez: i * lista.length + k
+            };
+        }
+        resto -= c.ms;
+    }
     return {
-        canal: lista[n % lista.length],
-        t: Math.floor(ahora / 260),
-        estatica: dentro >= MS_CANAL
+        canal: "cocina",
+        t: 0,
+        estatica: false,
+        vez: 0
     };
 }
 
@@ -48,7 +96,7 @@ export function dibujar(m, x0, y0, ahora, opts = {}) {
         m.fillStyle = c;
         m.fillRect(x0 + a, y0 + b, c2 - a + 1, d - b + 1);
     };
-    const {canal: canal, t: t, estatica: estatica} = enAire(ahora, opts);
+    const {canal: canal, t: t, estatica: estatica, vez: vez} = enAire(ahora, opts);
     if (estatica) {
         const tonos = [ "rgb(40,40,44)", "rgb(90,90,96)", "rgb(150,150,156)", "rgb(210,210,214)" ];
         let s = t * 9301 + 49297;
@@ -60,7 +108,10 @@ export function dibujar(m, x0, y0, ahora, opts = {}) {
         }
         return;
     }
-    if (canal === "cocina") cocina(px, rect, t); else if (canal === "pecera") pecera(px, rect, t); else if (canal === "corazon") corazon(px, rect, t); else clima(px, rect, t, opts);
+    if (NUEVOS[canal]) NUEVOS[canal].dibujar(px, rect, t, {
+        ...opts,
+        vez: vez
+    }); else if (canal === "cocina") cocina(px, rect, t); else if (canal === "pecera") pecera(px, rect, t); else if (canal === "corazon") corazon(px, rect, t); else clima(px, rect, t, opts);
 }
 
 function cocina(px, rect, t) {
