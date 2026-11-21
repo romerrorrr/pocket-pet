@@ -1,13 +1,15 @@
 const PALETAS = {
     polvora: [ "#ffd76a", "#ff9fbf", "#ffffff", "#ffb35c", "#bfe3ff" ],
     farolitos: [ "#ffb347", "#ffc86b", "#ff9a3c" ],
-    estrellas: [ "#ffffff", "#dfe9ff", "#fff3c4" ]
+    estrellas: [ "#ffffff", "#dfe9ff", "#fff3c4" ],
+    luciernagas: [ "#e4ff8a", "#f4ffb0", "#c8f26a" ]
 };
 
 const LETRA = {
     polvora: [ "#ffd76a", "#ffd76a", "#ffe9a8", "#ffd76a", "#ffffff" ],
     farolitos: [ "#ffb347", "#ffc86b", "#ffb347" ],
-    estrellas: [ "#ffffff", "#ffffff", "#dfe9ff" ]
+    estrellas: [ "#ffffff", "#ffffff", "#dfe9ff" ],
+    luciernagas: [ "#e8ff94", "#f4ffb8", "#e8ff94" ]
 };
 
 const CJK = /[\u3000-\u9fff\uff00-\uffef]/;
@@ -65,7 +67,8 @@ const azar = (a, b) => a + Math.random() * (b - a);
 
 const suave = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
 
-export function lanzarPregunta(contenedor, texto, {estilo: estilo = "polvora", alFormar: alFormar = () => {}} = {}) {
+export function lanzarPregunta(contenedor, texto, {estilo: estilo = "polvora", alFormar: alFormar = () => {}, lados: lados = false} = {}) {
+    const xInicio = () => lados ? Math.random() < .5 ? azar(.02, .26) : azar(.74, .98) : azar(.05, .95);
     const lienzo = document.createElement("canvas");
     lienzo.className = "lienzo-pregunta";
     lienzo.setAttribute("aria-label", texto);
@@ -79,7 +82,8 @@ export function lanzarPregunta(contenedor, texto, {estilo: estilo = "polvora", a
     let vivo = true;
     let adelanto = 0;
     const chispas = [];
-    const FORMA = estilo === "polvora" ? 6200 + 3300 : estilo === "farolitos" ? 600 + 3600 + 1600 + 6300 : 1800 + 6200 + 900;
+    const FORMA = estilo === "polvora" ? 6200 + 3300 : estilo === "farolitos" ? 600 + 3600 + 1600 + 6300 : estilo === "luciernagas" ? 400 + 4200 + 1400 + 7400 : 1800 + 6200 + 900;
+    const sueltas = [];
     let W = 1;
     let H = 1;
     let LAGO = 1;
@@ -169,11 +173,43 @@ export function lanzarPregunta(contenedor, texto, {estilo: estilo = "polvora", a
             }
         } else if (estilo === "farolitos") {
             for (const l of letras) {
-                l.sx = azar(W * .05, W * .95);
+                l.sx = W * xInicio();
                 l.sy = LAGO + azar(2, H - LAGO - 2);
                 l.t0 = 600 + Math.random() * 3600 + l.x / W * 1600;
                 l.dur = azar(4200, 6200);
                 l.vaiven = azar(1.5, 4);
+            }
+            sueltas.length = 0;
+            for (let k = 0; k < Math.round(W * .09); k++) {
+                sueltas.push({
+                    x: W * xInicio(),
+                    y: azar(H * .3, H * 1.1),
+                    vy: azar(1.6, 3.4),
+                    t0: azar(0, 7e3),
+                    fase: Math.random() * 6.28,
+                    vaiven: azar(.8, 2.2),
+                    grande: Math.random() < .35
+                });
+            }
+        } else if (estilo === "luciernagas") {
+            for (const l of letras) {
+                l.sx = azar(W * .02, W * .98);
+                l.sy = azar(H * .55, H * .97);
+                l.t0 = 400 + Math.random() * 4200 + l.x / W * 1400;
+                l.dur = azar(5200, 7400);
+                l.amp = azar(4, 12);
+            }
+            sueltas.length = 0;
+            for (let k = 0; k < Math.round(W * .22); k++) {
+                sueltas.push({
+                    x: azar(0, W),
+                    y: azar(H * .2, H),
+                    t0: azar(0, 5e3),
+                    fase: Math.random() * 6.28,
+                    vx: azar(-2.5, 2.5),
+                    vy: azar(-2, .6),
+                    amp: azar(3, 9)
+                });
             }
         } else {
             const orden = [ ...letras ].sort(((a, b) => (Math.round(a.y / 14) - Math.round(b.y / 14)) * 1e4 + (a.x - b.x)));
@@ -257,6 +293,35 @@ export function lanzarPregunta(contenedor, texto, {estilo: estilo = "polvora", a
             g.fillStyle = p.col;
             g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
         }
+        if (estilo === "farolitos") {
+            for (const s of sueltas) {
+                if (t < s.t0) continue;
+                s.y -= s.vy * dt / 1e3;
+                if (s.y < -6) {
+                    s.y = H + azar(2, 10);
+                    s.x = W * xInicio();
+                }
+                const x = Math.round(s.x + Math.sin(t / 1300 + s.fase) * s.vaiven);
+                const y = Math.round(s.y);
+                const llama = .8 + .2 * Math.sin(t / 140 + s.fase * 5);
+                const a = Math.min(1, (t - s.t0) / 900) * Math.min(1, Math.max(0, y / (H * .25)));
+                const w = s.grande ? 3 : 2;
+                const h = s.grande ? 4 : 3;
+                g.globalAlpha = a * .22 * llama;
+                g.fillStyle = "#ffae5c";
+                g.fillRect(x - 2, y - 2, w + 4, h + 4);
+                g.globalAlpha = a * .4 * llama;
+                g.fillRect(x - 1, y - 1, w + 2, h + 2);
+                g.globalAlpha = a;
+                g.fillStyle = "#e0782c";
+                g.fillRect(x, y, w, 1);
+                g.fillStyle = llama > .9 ? "#ffd27a" : "#ffb347";
+                g.fillRect(x, y + 1, w, h - 1);
+                g.fillStyle = "#fff0b0";
+                g.fillRect(x + Math.floor(w / 2), y + h - 1, 1, 1);
+                g.globalAlpha = 1;
+            }
+        }
         let listas = 0;
         for (const l of letras) {
             const k = (t - l.t0) / l.dur;
@@ -278,19 +343,29 @@ export function lanzarPregunta(contenedor, texto, {estilo: estilo = "polvora", a
                 const kk = suave(Math.min(1, k));
                 x = l.sx + (l.x - l.sx) * kk + Math.sin(t / 700 + l.fase) * l.vaiven * (1 - kk);
                 y = l.sy + (l.y - l.sy) * kk;
+            } else if (estilo === "luciernagas") {
+                const kk = suave(Math.min(1, k));
+                const libre = 1 - kk;
+                x = l.sx + (l.x - l.sx) * kk + (Math.sin(t / 900 + l.fase) + .6 * Math.cos(t / 1300 + l.fase * 2)) * l.amp * libre;
+                y = l.sy + (l.y - l.sy) * kk + Math.sin(t / 1100 + l.fase * 3) * l.amp * .5 * libre;
+                a = k < 1 ? Math.min(1, k * 6) * (.25 + .75 * Math.max(0, Math.sin(t / 300 + l.fase))) : .78 + .22 * Math.sin(t / 700 + l.fase);
             } else {
                 x = l.x;
                 y = l.y;
                 a = Math.min(1, k);
             }
             if (k >= 1) listas++;
-            const brillo = k >= 1 ? Math.sin(t / 320 + l.fase) > .93 ? .55 : 1 : 1;
+            const brillo = k >= 1 && estilo !== "luciernagas" ? Math.sin(t / 320 + l.fase) > .93 ? .55 : 1 : 1;
             g.globalAlpha = a * brillo;
             if (k >= 1) {
                 g.fillStyle = "rgba(8,6,20,0.55)";
                 g.fillRect(Math.round(x) + 1, Math.round(y) + 1, 1, 1);
             }
-            if (estilo === "farolitos" && k < 1) {
+            if (estilo === "luciernagas" && k < 1) {
+                g.fillStyle = "rgba(200,255,120,0.28)";
+                g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
+                g.fillStyle = l.color;
+            } else if (estilo === "farolitos" && k < 1) {
                 g.fillStyle = "rgba(255,170,80,0.3)";
                 g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
                 g.fillStyle = l.color;
@@ -304,6 +379,27 @@ export function lanzarPregunta(contenedor, texto, {estilo: estilo = "polvora", a
             }
             g.fillRect(Math.round(x), Math.round(y), 1, 1);
             g.globalAlpha = 1;
+        }
+        if (estilo === "luciernagas") {
+            for (const s of sueltas) {
+                if (t < s.t0) continue;
+                s.x += s.vx * dt / 1e3;
+                s.y += s.vy * dt / 1e3;
+                if (s.x < -4) s.x = W + 3;
+                if (s.x > W + 4) s.x = -3;
+                if (s.y < H * .05) s.vy = Math.abs(s.vy);
+                if (s.y > H) s.vy = -Math.abs(s.vy);
+                const x = Math.round(s.x + Math.sin(t / 800 + s.fase) * s.amp);
+                const y = Math.round(s.y + Math.cos(t / 1e3 + s.fase) * s.amp * .5);
+                const luz = Math.sin(t / 340 + s.fase);
+                if (luz < -.1) continue;
+                g.globalAlpha = Math.min(1, (t - s.t0) / 800) * (.3 + .7 * luz);
+                g.fillStyle = "rgba(200,255,120,0.3)";
+                g.fillRect(x - 1, y - 1, 3, 3);
+                g.fillStyle = "#e8ff94";
+                g.fillRect(x, y, 1, 1);
+                g.globalAlpha = 1;
+            }
         }
         if (estilo === "estrellas" && t > FORMA - 200 && t < FORMA + 1500) {
             const k = (t - FORMA + 200) / 1700;

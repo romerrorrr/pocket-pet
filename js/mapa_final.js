@@ -8,14 +8,14 @@ const CORAZON = [ "0110110", "1211111", "1111111", "0111110", "0011100", "000100
 
 const suave = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-export function crearMapaFinal(contenedor, {casa: casa, destino: destino}) {
+export function crearMapaFinal(contenedor, {casa: casa, destino: destino, imagen: imagen = "pieza/mapa.png", ruta: ruta = null}) {
     const canvas = document.createElement("canvas");
     canvas.className = "lienzo-escena";
     contenedor.appendChild(canvas);
     const g = canvas.getContext("2d");
     const mapa = new Image;
     mapa.decoding = "async";
-    mapa.src = arte("pieza/mapa.png");
+    mapa.src = arte(imagen);
     const A = {
         x: casa.x * MW,
         y: casa.y * MH
@@ -28,10 +28,32 @@ export function crearMapaFinal(contenedor, {casa: casa, destino: destino}) {
         x: (A.x + B.x) / 2 + 6,
         y: Math.min(A.y, B.y) - 18
     };
-    const punto = t => ({
+    let punto = t => ({
         x: (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * C.x + t * t * B.x,
         y: (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * C.y + t * t * B.y
     });
+    if (ruta && ruta.length > 1) {
+        const P = ruta.map((p => ({
+            x: p.x * MW,
+            y: p.y * MH
+        })));
+        const largos = P.slice(1).map(((p, i) => Math.hypot(p.x - P[i].x, p.y - P[i].y)));
+        const total = largos.reduce(((a, b) => a + b), 0) || 1;
+        punto = t => {
+            let d = Math.max(0, Math.min(1, t)) * total;
+            for (let i = 0; i < largos.length; i++) {
+                if (d <= largos[i] || i === largos.length - 1) {
+                    const k = largos[i] ? Math.min(1, d / largos[i]) : 0;
+                    return {
+                        x: P[i].x + (P[i + 1].x - P[i].x) * k,
+                        y: P[i].y + (P[i + 1].y - P[i].y) * k
+                    };
+                }
+                d -= largos[i];
+            }
+            return P[P.length - 1];
+        };
+    }
     let vw = 1;
     let vh = 1;
     let dpr = 1;
@@ -102,7 +124,7 @@ export function crearMapaFinal(contenedor, {casa: casa, destino: destino}) {
         for (let y = 0; y < 3; y++) for (let x = -2; x <= 2; x++) px(hx + x, hy + y, x === 0 && y > 0 ? "rgb(90,60,48)" : "rgb(246,236,214)");
         let hasta = camino.listo;
         if (camino.ms) hasta = Math.max(0, Math.min(1, (ahora - camino.t0) / camino.ms));
-        const N = 46;
+        const N = ruta ? 90 : 46;
         for (let i = 0; i <= N * hasta; i++) {
             if (i % 2) continue;
             const p = punto(i / N);

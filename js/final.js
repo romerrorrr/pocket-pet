@@ -354,7 +354,7 @@ export function abrirPedido({ensayo: ensayo = false} = {}) {
     const lineas = FINAL.pedido.map(t).filter(Boolean);
     let i = 0;
     let escritor = null;
-    ctx.pantalla.innerHTML = `\n    <div class="escena-dialogo escena-lago" id="escena-pedido">\n      ${ensayo ? `<div class="sello-ensayo">REHEARSAL</div>` : ""}\n      <div class="dialogo-cara rebote">${cara("euforico")}</div>\n      <div class="caja-dialogo">\n        <div class="caja-dialogo-nombre">${Personaje.nombre().toUpperCase()}</div>\n        <div class="caja-dialogo-texto" id="pedido-texto"></div>\n        <div class="caja-dialogo-siguiente" id="pedido-siguiente"><i class="glifo g-der"></i></div>\n        <div class="caja-dialogo-acciones oculto" id="pedido-acciones">\n          <button class="boton" id="pedido-abrir"><i class="glifo g-camara"></i> Take the photo</button>\n        </div>\n      </div>\n    </div>`;
+    ctx.pantalla.innerHTML = `\n    <div class="escena-dialogo escena-lago${enCuarto() ? ` escena-cuarto es-${momentoDelCuarto()}` : ""}" id="escena-pedido">\n      ${ensayo ? `<div class="sello-ensayo">REHEARSAL</div>` : ""}\n      <div class="dialogo-cara rebote">${cara("euforico")}</div>\n      <div class="caja-dialogo">\n        <div class="caja-dialogo-nombre">${Personaje.nombre().toUpperCase()}</div>\n        <div class="caja-dialogo-texto" id="pedido-texto"></div>\n        <div class="caja-dialogo-siguiente" id="pedido-siguiente"><i class="glifo g-der"></i></div>\n        <div class="caja-dialogo-acciones oculto" id="pedido-acciones">\n          <button class="boton" id="pedido-abrir"><i class="glifo g-camara"></i> Take the photo</button>\n        </div>\n      </div>\n    </div>`;
     const texto = ctx.pantalla.querySelector("#pedido-texto");
     const sig = ctx.pantalla.querySelector("#pedido-siguiente");
     const acciones = ctx.pantalla.querySelector("#pedido-acciones");
@@ -578,8 +578,9 @@ function avanzar() {
     sesion.escritor = null;
     if (sesion.escena) sesion.escena.hablar("el", false);
     if (sesion.efectoPregunta) {
-        sesion.efectoPregunta.destruir();
+        const ef = sesion.efectoPregunta;
         sesion.efectoPregunta = null;
+        if (enCuarto() && sesion.pasos[sesion.i + 1] && sesion.pasos[sesion.i + 1].tipo === "mirar") setTimeout((() => ef.destruir()), 2800); else ef.destruir();
     }
     sesion.i += 1;
     if (!sesion.ensayo) {
@@ -641,7 +642,19 @@ function otraMascota() {
     return Personaje.actual() === "mantou" ? "baozi" : "mantou";
 }
 
+export const enCuarto = () => FINAL.escenario === "cuarto";
+
+export function momentoDelCuarto(hora = (new Date).getHours()) {
+    const m = FINAL.momentoCuarto;
+    if (m === "atardecer" || m === "noche") return m;
+    return hora >= 18 || hora < 5 ? "noche" : "atardecer";
+}
+
 export function lineaDelLago(hora = (new Date).getHours()) {
+    if (enCuarto()) {
+        if (hora >= 16 && hora < 18) return "The sun is going down behind the mountains…";
+        return hora >= 18 || hora < 5 ? "The mountains look so pretty tonight…" : "The mountains look so pretty right now…";
+    }
     return hora >= 16 && hora < 19 ? "The sun is going down over the lake…" : "The lake looks so pretty right now…";
 }
 
@@ -758,17 +771,30 @@ function pasoVentana() {
 function pasoMapa() {
     const cine = escenario(`<div class="mundo-lago" id="mundo-mapa"></div>\n     <div class="bandas-cine" aria-hidden="true"></div>\n     <div class="rotulo-mapa oculto" id="rotulo-mapa">West Lake</div>\n     <div class="velo-salida" id="velo-mapa"></div>`, "es-mapa");
     const lugar = FINAL.lugar || {};
-    const destino = Number.isFinite(lugar.lat) && Number.isFinite(lugar.lon) ? posicionEnMapa(lugar.lat, lugar.lon) : {
-        x: .44,
-        y: .47
-    };
-    sesion.mapa = crearMapaFinal(cine.querySelector("#mundo-mapa"), {
-        casa: {
-            x: .8,
-            y: .3
-        },
-        destino: destino
-    });
+    if (enCuarto()) {
+        const RUTA = [ [ .3756, .6929 ], [ .3781, .64 ], [ .3844, .5733 ], [ .3937, .5067 ], [ .4, .44 ], [ .3969, .3867 ], [ .3844, .3333 ], [ .3719, .2933 ], [ .3625, .2533 ], [ .375, .2267 ], [ .35, .2067 ], [ .3688, .1867 ], [ .3438, .1667 ], [ .3531, .1467 ] ].map((([x, y]) => ({
+            x: x,
+            y: y
+        })));
+        sesion.mapa = crearMapaFinal(cine.querySelector("#mundo-mapa"), {
+            casa: RUTA[0],
+            destino: RUTA[RUTA.length - 1],
+            imagen: "final/cuarto/mapa_dongming.png",
+            ruta: RUTA
+        });
+    } else {
+        const destino = Number.isFinite(lugar.lat) && Number.isFinite(lugar.lon) ? posicionEnMapa(lugar.lat, lugar.lon) : {
+            x: .44,
+            y: .47
+        };
+        sesion.mapa = crearMapaFinal(cine.querySelector("#mundo-mapa"), {
+            casa: {
+                x: .8,
+                y: .3
+            },
+            destino: destino
+        });
+    }
     const RECORRIDO = 3600;
     const ZOOM = 3800;
     sesion.mapa.recorrer(RECORRIDO);
@@ -785,8 +811,13 @@ function pasoMapa() {
 function escenaDelLago(tipo, {boteAfuera: boteAfuera = false, plano: plano = "general"} = {}) {
     const cine = ctx.pantalla.querySelector("#final-cine.es-lago");
     if (cine && sesion.escena && sesion.escena.vivo()) {
-        cine.className = `final cine es-lago es-${tipo}`;
-        cine.querySelectorAll(".capa-paso").forEach((n => n.remove()));
+        cine.className = `final cine es-lago es-${tipo}${enCuarto() ? " es-cuarto" : ""}`;
+        cine.querySelectorAll(".capa-paso").forEach((n => {
+            if (enCuarto() && !n.classList.contains("saliendo")) {
+                n.classList.add("saliendo");
+                setTimeout((() => n.remove()), 2800);
+            } else if (!enCuarto()) n.remove();
+        }));
         sesion.bloqueadoHasta = performance.now() + 500;
         if (tipo !== "llegada" && tipo !== "ella") sesion.escena.forzar("ella");
         if (tipo !== "llegada" && tipo !== "ella" && tipo !== "el") sesion.escena.forzar("el");
@@ -795,16 +826,19 @@ function escenaDelLago(tipo, {boteAfuera: boteAfuera = false, plano: plano = "ge
             escena: sesion.escena
         };
     }
-    const nuevo = escenario(`<div class="mundo-lago" id="mundo-lago"></div>\n     <div class="bandas-cine" aria-hidden="true"></div>`, `es-lago es-${tipo}`);
+    const nuevo = escenario(`<div class="mundo-lago" id="mundo-lago"></div>\n     <div class="bandas-cine" aria-hidden="true"></div>`, `es-lago es-${tipo}${enCuarto() ? " es-cuarto" : ""}`);
     const formas = {
         ella: ![ "llegada", "ella" ].includes(tipo),
         el: ![ "llegada", "ella", "el" ].includes(tipo)
     };
+    if (!sesion.momentoCuarto) sesion.momentoCuarto = momentoDelCuarto();
     sesion.escena = crearEscena(nuevo.querySelector("#mundo-lago"), {
         ojosElla: FINAL.ojosDeElla,
         boteAfuera: boteAfuera,
         plano: plano,
-        formas: formas
+        formas: formas,
+        escenario: enCuarto() ? "cuarto" : "lago",
+        momento: sesion.momentoCuarto
     });
     return {
         cine: nuevo,
@@ -821,6 +855,17 @@ function capa(cine, html) {
 }
 
 function pasoLlegada() {
+    if (enCuarto()) {
+        const {cine: cine, escena: escena} = escenaDelLago("llegada", {
+            plano: "ventanal"
+        });
+        escena.mover("ventanal", 0);
+        if (sesion.selfie) capa(cine, `<img class="selfie-que-se-funde" src="${sesion.selfie}" alt="" />`);
+        programar((() => escena.mover("general", 5e3)), 2200);
+        programar((() => escena.mover("pareja", 2600)), 2200 + 5e3 + 600);
+        programar(avanzar, 2200 + 5e3 + 600 + 2900);
+        return;
+    }
     const {cine: cine, escena: escena} = escenaDelLago("llegada", {
         boteAfuera: true
     });
@@ -924,12 +969,13 @@ function pasoDialogo() {
 function pasoPregunta() {
     const {cine: cine, escena: escena} = escenaDelLago("pregunta");
     escena.hablar("el", false);
-    escena.mover("general", 3600);
+    escena.mover(enCuarto() ? "pregunta" : "general", 3600);
     const c = capa(cine, `<div class="velo-cielo"></div>`);
     let efecto = null;
     const empezarEfecto = () => {
         efecto = lanzarPregunta(c, t(FINAL.pregunta), {
             estilo: FINAL.preguntaEstilo,
+            lados: enCuarto(),
             alFormar: () => programar(avanzar, 9e3)
         });
         sesion.efectoPregunta = efecto;
@@ -1072,7 +1118,7 @@ function pasoFin() {
     const fecha = fechaLegible(claveDelDia(new Date(estado.siEn || Date.now())));
     const finales = todasLasFotos().filter((f => f.tipo === "final"));
     const foto = sesion.fotoFinal || ((!sesion.ensayo || sesion.repeticion) && finales.length ? finales[finales.length - 1].dataUrl : null) || sesion.selfie;
-    const papel = lienzoPapel(`\n    ${foto ? `<figure class="polaroid-final dorada fija"><img src="${foto}" alt="" draggable="false" /><figcaption>${esc(fecha)}</figcaption></figure>` : `<img class="final-bote-fin" src="${arte("final/bote_mascotas.png")}" alt="" draggable="false" /><div class="final-rotulo">${esc(fecha)}</div>`}\n    <div class="final-texto">Let's remember this day forever.</div>\n    <div class="fila-botones">\n      <button class="boton boton-fantasma boton-galeria oculto" id="fin-video" type="button">Save our video</button>\n      <button class="boton" id="fin-casa"><i class="glifo g-corazon"></i> Home</button>\n    </div>`, "es-fin");
+    const papel = lienzoPapel(`\n    ${foto ? `<figure class="polaroid-final dorada fija"><img src="${foto}" alt="" draggable="false" /><figcaption>${esc(fecha)}</figcaption></figure>` : `<img class="final-bote-fin${enCuarto() ? " en-cuarto" : ""}" src="${arte(enCuarto() ? "final/cuarto/fin_mascotas.png" : "final/bote_mascotas.png")}" alt="" draggable="false" /><div class="final-rotulo">${esc(fecha)}</div>`}\n    <div class="final-texto">Let's remember this day forever.</div>\n    <div class="fila-botones">\n      <button class="boton boton-fantasma boton-galeria oculto" id="fin-video" type="button">Save our video</button>\n      <button class="boton" id="fin-casa"><i class="glifo g-corazon"></i> Home</button>\n    </div>`, "es-fin");
     alTocar(papel.querySelector("#fin-casa"), terminar);
     if (!sesion.repeticion) {
         const s = sesion;
