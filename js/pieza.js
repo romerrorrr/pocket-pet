@@ -6,6 +6,8 @@ import * as Personaje from "./personaje.js";
 
 import * as Tele from "./tele.js";
 
+import { dibujarVentana, ventanaLista, crearParalaje, MOMENTOS_VENTANA } from "./ventana.js";
+
 const [MW, MH] = PIEZA.mundo;
 
 const [SX0, SY0, SX1, SY1] = PIEZA.segura;
@@ -145,10 +147,23 @@ const PANTALLA_TELE = (() => {
     return [ tx0 + 8, ty0 + 11, tx1 - 15, ty0 + 34 ];
 })();
 
-function dentroHaz(x, y) {
+let inclinacionHaz = .55;
+
+function inclinacionDeLaHora(fecha = new Date) {
+    const h = Math.max(6, Math.min(19, fecha.getHours() + fecha.getMinutes() / 60));
+    return Math.round((.8 - (h - 6) / 13 * .45) * 20) / 20;
+}
+
+function dentroHaz(x, y, hueco = null) {
     if (y <= VY1 + 6) return false;
-    const corre = (y - VY1) * .55;
-    return x >= VX0 + 4 + corre && x <= VX1 - 4 + corre && y < 158;
+    const corre = (y - VY1) * inclinacionHaz;
+    if (!(x >= VX0 + 4 + corre && x <= VX1 - 4 + corre && y < 158)) return false;
+    if (hueco && cuarto === "depto") {
+        const xs = Math.round(x - corre);
+        const fila = VY0 + 40;
+        if (xs < VX0 || xs > VX1 || !hueco[fila * MW + xs]) return false;
+    }
+    return true;
 }
 
 const huecos = new Map;
@@ -269,7 +284,7 @@ function mascara(clave, amb, lamparas, tele, fuego = 0) {
                 g += (col[1] - g) * q;
                 bl += (col[2] - bl) * q;
             }
-            if (dentroHaz(x, y)) {
+            if (dentroHaz(x, y, h)) {
                 const lejos = (y - VY1) / (158 - VY1);
                 const q = Math.max(0, Math.floor(amb.haz * (1 - lejos * .6) * 3 + b) / 3);
                 const v = amb.ventana;
@@ -306,6 +321,7 @@ function mascara(clave, amb, lamparas, tele, fuego = 0) {
     }
     ctx.putImageData(im, 0, 0);
     mascaras.set(h ? clave : claveSin, c);
+    while (mascaras.size > 10) mascaras.delete(mascaras.keys().next().value);
     if (h) for (const k of mascaras.keys()) if (k.startsWith(`${clave}|`)) mascaras.delete(k);
     return c;
 }
@@ -411,7 +427,7 @@ const DECORACIONES = {
     te: [ 83, 107 ],
     luces: [ 258, 12 ],
     farolitos: [ 86, 10 ],
-    poster: [ 212, 21 ],
+    poster: [ 218, 62 ],
     pecera: [ 194, 42 ],
     bonsai: [ 270, 68 ],
     peluche: [ 146, 110 ],
@@ -424,6 +440,15 @@ const DECORACIONES = {
 const DECOS_TIENDA = new Set([ "luces", "farolitos", "poster", "pecera", "bonsai", "peluche", "banderin", "orquidea", "chiva", "saco" ]);
 
 const MARCO = [ 158, 64 ];
+
+const REPISA = [ 212, 14 ];
+
+const RANURAS = {
+    westlake: [ REPISA[0] + 8, REPISA[1] + 16 ],
+    longjing: [ REPISA[0] + 22, REPISA[1] + 16 ],
+    lingyin: [ REPISA[0] + 8, REPISA[1] + 32 ],
+    leifeng: [ REPISA[0] + 22, REPISA[1] + 32 ]
+};
 
 function srcDeco(id, e) {
     if (id === "cuadro") return `amigos/deco_cuadro_${Personaje.actual()}.png`;
@@ -585,6 +610,33 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         dormido: [ 128, 132, 188 ],
         siesta: [ 176, 172, 184 ]
     };
+    const BORDE_LUZ = {
+        dia: {
+            col: [ 255, 248, 228 ],
+            a: .35,
+            lado: -1
+        },
+        amanecer: {
+            col: [ 255, 204, 180 ],
+            a: .5,
+            lado: -1
+        },
+        atardecer: {
+            col: [ 255, 196, 120 ],
+            a: .7,
+            lado: -1
+        },
+        noche: {
+            col: [ 255, 206, 140 ],
+            a: .45,
+            lado: 1
+        },
+        siesta: {
+            col: [ 255, 236, 210 ],
+            a: .2,
+            lado: -1
+        }
+    };
     let vw = 1;
     let vh = 1;
     let dpr = 1;
@@ -600,6 +652,21 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
     const parpadeo = {
         t: 0
     };
+    const paralaje = crearParalaje();
+    let ventanaAntes = null;
+    let ultimoMomentoV = null;
+    let luzAntes = null;
+    let ultimaLuz = null;
+    const mezclaC = document.createElement("canvas");
+    mezclaC.width = MW;
+    mezclaC.height = MH;
+    const mezclaX = mezclaC.getContext("2d");
+    const MS_FUNDIDO = 5e3;
+    let colorTele = null;
+    let proximoColorTele = 0;
+    const brillosTele = new Map;
+    const petalos = [];
+    let proximoPetalo = performance.now() + 4e3;
     let M = {
         l: 0,
         t: 0,
@@ -1175,6 +1242,10 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
             cx = caja[2] + 7;
             y = Math.max(yMin, Math.round((caja[1] + caja[3]) / 2) - 4 + Math.floor(ahora / 400) % 2);
             lado = "izquierda";
+            if (id === "calendario") {
+                cx = caja[0] - 6;
+                lado = "derecha";
+            }
         }
         if (xMin <= xMax) cx = Math.max(xMin, Math.min(xMax, cx));
         m.fillStyle = TINTA;
@@ -1182,7 +1253,7 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         m.fillStyle = "rgb(252,248,238)";
         m.fillRect(cx - 3, y, 7, 7);
         m.fillStyle = TINTA;
-        if (lado === "abajo") m.fillRect(cx - 1, y + 8, 2, 1); else m.fillRect(cx - 5, y + 3, 1, 2);
+        if (lado === "abajo") m.fillRect(cx - 1, y + 8, 2, 1); else if (lado === "derecha") m.fillRect(cx + 5, y + 3, 1, 2); else m.fillRect(cx - 5, y + 3, 1, 2);
         m.fillStyle = "rgb(214,70,80)";
         m.fillRect(cx, y + 1, 1, 3);
         m.fillRect(cx, y + 5, 1, 1);
@@ -1636,6 +1707,121 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         }
         m.restore();
     }
+    function cortinasVivas(ahora) {
+        const c = img(rutaCuarto("cortinas.png"));
+        if (!listo(c)) return;
+        let desde = 0;
+        let corrida = 0;
+        const corrimiento = y => y < 60 ? 0 : Math.round(Math.sin(ahora / 2300 + y / 17) * Math.min(1, (y - 60) / 45));
+        for (let y = 0; y <= MH; y++) {
+            const d = y < MH ? corrimiento(y) : null;
+            if (y === MH || d !== corrida) {
+                if (y > desde) m.drawImage(c, 0, desde, MW, y - desde, corrida, desde, MW, y - desde);
+                desde = y;
+                corrida = d;
+            }
+        }
+    }
+    const PUNTAS_RAMA = [ [ 101, 57 ], [ 113, 59 ], [ 108, 64 ], [ 97, 67 ], [ 100, 59 ] ];
+    function petalosDelFlorero(ahora) {
+        if (ahora > proximoPetalo && petalos.length < 2) {
+            const [x, y] = PUNTAS_RAMA[Math.floor(Math.random() * PUNTAS_RAMA.length)];
+            petalos.push({
+                x: x,
+                y: y,
+                t0: ahora,
+                f: Math.random() * 6.28
+            });
+            proximoPetalo = ahora + 6e3 + Math.random() * 9e3;
+        }
+        for (let i = petalos.length - 1; i >= 0; i--) {
+            const p = petalos[i];
+            const t = (ahora - p.t0) / 1e3;
+            const cae = Math.min(1, t / 4.2);
+            const y = p.y + (86 - p.y) * cae;
+            const x = p.x + Math.sin(t * 2.2 + p.f) * 2 * (1 - cae * .6) + cae * 3;
+            if (t > 7) {
+                petalos.splice(i, 1);
+                continue;
+            }
+            const alfa = t > 5.5 ? 1 - (t - 5.5) / 1.5 : 1;
+            m.fillStyle = `rgba(236,150,170,${alfa.toFixed(2)})`;
+            m.fillRect(Math.round(x), Math.round(y), cae < 1 && Math.floor(t * 4) % 2 ? 1 : 2, 1);
+        }
+    }
+    const motas = Array.from({
+        length: 16
+    }, ((_, i) => ({
+        u: Math.random(),
+        v: Math.random(),
+        f: i * 1.3,
+        vel: .02 + Math.random() * .03,
+        rayo: i % 2
+    })));
+    function rayosDeSol(ahora, rgb, clave) {
+        const fuerza = clave === "atardecer" ? .16 : clave === "amanecer" ? .12 : .1;
+        const ytop = VY1 - 2;
+        const ypiso = 150;
+        const lean = inclinacionHaz;
+        const rayos = [ [ VX0 + 6, VX0 + 30 ], [ VX0 + 37, VX1 - 5 ] ];
+        const seg = ahora / 1e3;
+        rayos.forEach((([a, b], i) => {
+            const resp = .8 + .2 * Math.sin(seg * .45 + i * 2);
+            const dx = (ypiso - ytop) * lean;
+            const grad = m.createLinearGradient(0, ytop, 0, ypiso);
+            grad.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(fuerza * resp).toFixed(3)})`);
+            grad.addColorStop(.65, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(fuerza * .5 * resp).toFixed(3)})`);
+            grad.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
+            m.fillStyle = grad;
+            m.beginPath();
+            m.moveTo(a, ytop);
+            m.lineTo(b, ytop);
+            m.lineTo(b + dx, ypiso);
+            m.lineTo(a + dx, ypiso);
+            m.closePath();
+            m.fill();
+        }));
+        for (const p of motas) {
+            const [a, b] = rayos[p.rayo];
+            const v = (p.v + seg * p.vel) % 1;
+            const y = ytop + 4 + v * (ypiso - ytop - 20);
+            const x = a + (b - a) * (.15 + .7 * p.u) + (y - ytop) * lean + Math.sin(seg * .7 + p.f) * 2;
+            const luz = Math.sin(seg * 1.3 + p.f);
+            if (luz < 0) continue;
+            m.fillStyle = `rgba(255,240,206,${(.35 + .5 * luz).toFixed(2)})`;
+            m.fillRect(Math.round(x), Math.round(y), 1, 1);
+        }
+    }
+    function brilloDeLaTele(rgb, fuerza) {
+        const clave = rgb.join(",");
+        let c = brillosTele.get(clave);
+        if (!c) {
+            const L = lucesDelCuarto().tele;
+            if (!L) return;
+            const [lx, ly] = L;
+            c = document.createElement("canvas");
+            c.width = MW;
+            c.height = MH;
+            const x = c.getContext("2d");
+            const R = 48;
+            for (let y = Math.floor(ly - R * .6); y <= ly + R; y++) {
+                for (let xx = Math.floor(lx - R); xx <= lx + R; xx++) {
+                    const dd = Math.hypot(xx - lx, (y - ly - 10) * 1.3) / R;
+                    if (dd >= 1) continue;
+                    const j = (BAYER[(y % 4 + 4) % 4][(xx % 4 + 4) % 4] / 16 - .47) * .3;
+                    const banda = Math.max(0, Math.min(3, Math.floor((1 - dd) * 3 + j + .1)));
+                    if (!banda) continue;
+                    x.fillStyle = `rgba(${clave},${(.05 * banda).toFixed(3)})`;
+                    x.fillRect(xx, y, 1, 1);
+                }
+            }
+            if (brillosTele.size > 24) brillosTele.clear();
+            brillosTele.set(clave, c);
+        }
+        m.globalAlpha = fuerza;
+        m.drawImage(c, 0, 0);
+        m.globalAlpha = 1;
+    }
     const polvo = Array.from({
         length: 7
     }, ((_, i) => ({
@@ -1661,7 +1847,37 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         const lamparas = e.farol && !e.dormido ? amb.lamparas || .25 : 0;
         const teleViva = !e.dormido;
         m.clearRect(0, 0, MW, MH);
-        sprite(rutaCuarto(`cielo_${e.momento}.png`), vx0, vy0);
+        inclinacionHaz = inclinacionDeLaHora();
+        const momentoV = MOMENTOS_VENTANA.has(e.momento) ? e.momento : "dia";
+        if (cuarto === "depto" && ventanaLista(momentoV)) {
+            if (ultimoMomentoV && ultimoMomentoV !== momentoV) ventanaAntes = {
+                momento: ultimoMomentoV,
+                t0: ahora
+            };
+            ultimoMomentoV = momentoV;
+            const off = paralaje.leer(ahora);
+            const wv = vx1 - vx0 + 1;
+            const hv = vy1 - vy0 + 1;
+            if (ventanaAntes && ahora - ventanaAntes.t0 < MS_FUNDIDO && ventanaLista(ventanaAntes.momento)) {
+                dibujarVentana(m, vx0, vy0, wv, hv, ventanaAntes.momento, ahora, {
+                    gris: gris,
+                    off: off
+                });
+                dibujarVentana(m, vx0, vy0, wv, hv, momentoV, ahora, {
+                    gris: gris,
+                    off: off,
+                    alfa: (ahora - ventanaAntes.t0) / MS_FUNDIDO
+                });
+            } else {
+                ventanaAntes = null;
+                dibujarVentana(m, vx0, vy0, wv, hv, momentoV, ahora, {
+                    gris: gris,
+                    off: off
+                });
+            }
+        } else {
+            sprite(rutaCuarto(`cielo_${e.momento}.png`), vx0, vy0);
+        }
         if (e.npc) {
             const n = img(e.npcArte || `npcs/npc_${e.npc}.png`);
             if (listo(n)) {
@@ -1677,7 +1893,17 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         if (e.jardin) jardinera(e.jardin, e.momento);
         if (gris) climaVentana(cuarto === "cabana" && (clima === "lluvia" || clima === "llovizna") ? "nieve" : cuarto === "cabana" && clima === "tormenta" ? "ventisca" : clima, ahora);
         sprite(rutaCuarto("fondo.png"), 0, 0);
-        sprite(rutaCuarto("cortinas.png"), 0, 0);
+        cortinasVivas(ahora);
+        if (cuarto === "depto") petalosDelFlorero(ahora);
+        const recuerdos = (e.recuerdos || []).filter((id => RANURAS[id]));
+        if (recuerdos.length) {
+            sprite("pieza/repisa_recuerdos.png", REPISA[0], REPISA[1]);
+            for (const id of recuerdos) {
+                const r = RANURAS[id];
+                const s = img(`pieza/recuerdo_${id}.png`);
+                if (listo(s)) m.drawImage(s, r[0] - Math.floor(s.naturalWidth / 2), r[1] - s.naturalHeight + 1);
+            }
+        }
         for (const [id, caja] of Object.entries(PIEZA.objetos)) {
             let rel = id === "cartel" ? "pieza/cartel.png" : rutaCuarto(`${id}.png`);
             if (id === "farol" && !lamparas) rel = rutaCuarto("farol_apagado.png");
@@ -1747,11 +1973,23 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
             m.fillStyle = "rgb(22,24,28)";
             m.fillRect(px0, py0 + tv, px1 - px0 + 1, py1 - py0 + 1);
         }
-        for (const id of e.recuerdos) {
-            const r = PIEZA.ranuras[id];
-            const s = img(`pieza/recuerdo_${r ? id : "generico"}.png`);
-            if (!r || !listo(s)) continue;
-            m.drawImage(s, r[0] - Math.floor(s.naturalWidth / 2), r[1] - s.naturalHeight + 1);
+        if (teleViva && ahora > proximoColorTele) {
+            proximoColorTele = ahora + 500;
+            try {
+                const d = m.getImageData(px0, py0 + tv, px1 - px0 + 1, py1 - py0 + 1).data;
+                let r = 0;
+                let gg = 0;
+                let b = 0;
+                for (let i = 0; i < d.length; i += 4) {
+                    r += d[i];
+                    gg += d[i + 1];
+                    b += d[i + 2];
+                }
+                const n = d.length / 4;
+                colorTele = [ r / n, gg / n, b / n ].map((v => Math.round(v / 24) * 24));
+            } catch (err) {
+                colorTele = null;
+            }
         }
         const [kx0, ky0, kx1, ky1] = PIEZA.objetos.corcho;
         const mp = PIEZA.mapa;
@@ -1777,9 +2015,44 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         m.save();
         m.globalCompositeOperation = "multiply";
         const fuego = datosCuarto.fuego ? e.dormido ? .45 : 1 : 0;
-        m.drawImage(mascara(`${clave}${clave === "siesta" ? "-" + e.momento : ""}|${lamparas}|${teleViva}|${gris ? clima : ""}`, amb, lamparas, teleViva, fuego), 0, 0);
+        const claveLuz = `${clave}${clave === "siesta" ? "-" + e.momento : ""}|${lamparas}|${teleViva}|${gris ? clima : ""}|${inclinacionHaz}`;
+        const mas = mascara(claveLuz, amb, lamparas, teleViva, fuego);
+        const bri = clave !== "dia" || fuego ? brillo(`${clave}|${lamparas}`, clave === "dia" ? 0 : lamparas, clave === "noche" || clave === "atardecer", fuego) : null;
+        if (ultimaLuz && ultimaLuz.clave !== claveLuz) luzAntes = {
+            mascara: ultimaLuz.mascara,
+            brillo: ultimaLuz.brillo,
+            t0: ahora
+        };
+        ultimaLuz = {
+            clave: claveLuz,
+            mascara: mas,
+            brillo: bri
+        };
+        const fundiendo = luzAntes && ahora - luzAntes.t0 < MS_FUNDIDO;
+        if (!fundiendo) luzAntes = null;
+        const k = fundiendo ? (ahora - luzAntes.t0) / MS_FUNDIDO : 1;
+        if (fundiendo) {
+            mezclaX.globalAlpha = 1;
+            mezclaX.drawImage(luzAntes.mascara, 0, 0);
+            mezclaX.globalAlpha = k;
+            mezclaX.drawImage(mas, 0, 0);
+            mezclaX.globalAlpha = 1;
+            m.drawImage(mezclaC, 0, 0);
+        } else {
+            m.drawImage(mas, 0, 0);
+        }
         m.globalCompositeOperation = "screen";
-        if (clave !== "dia" || fuego) m.drawImage(brillo(`${clave}|${lamparas}`, clave === "dia" ? 0 : lamparas, clave === "noche" || clave === "atardecer", fuego), 0, 0);
+        if (fundiendo && luzAntes.brillo) {
+            m.globalAlpha = 1 - k;
+            m.drawImage(luzAntes.brillo, 0, 0);
+        }
+        if (bri) {
+            m.globalAlpha = k;
+            m.drawImage(bri, 0, 0);
+        }
+        m.globalAlpha = 1;
+        if (!gris && (clave === "dia" || clave === "amanecer" || clave === "atardecer")) rayosDeSol(ahora, amb.ventana, clave);
+        if (teleViva && colorTele && clave !== "dia" && clave !== "siesta") brilloDeLaTele(colorTele, clave === "noche" ? 1 : .6);
         m.restore();
         if (fuego) llamas(datosCuarto.fuego, ahora, e.dormido);
         if (clave !== "dia" && clave !== "dormido" && clave !== "siesta") {
@@ -1896,6 +2169,22 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
                 if (c.tipo !== "accesorio") continue;
                 const a = img(c.src);
                 if (listo(a)) act.drawImage(a, 0, 0);
+            }
+            const rim = BORDE_LUZ[luzDe(e)];
+            if (rim) {
+                let lado = rim.lado;
+                if (volteado) lado = -lado;
+                tin.globalCompositeOperation = "source-over";
+                tin.clearRect(0, 0, 96, 96);
+                tin.drawImage(actC, 0, 0);
+                tin.globalCompositeOperation = "destination-out";
+                tin.drawImage(actC, lado < 0 ? 1 : -1, 1);
+                tin.globalCompositeOperation = "source-in";
+                tin.fillStyle = `rgb(${rim.col.join(",")})`;
+                tin.fillRect(0, 0, 96, 96);
+                act.globalAlpha = rim.a * (gris ? .5 : 1);
+                act.drawImage(tinC, 0, 0);
+                act.globalAlpha = 1;
             }
             const luz = Personaje.esMantou() ? LUZ_CLARO[luzDe(e)] : null;
             if (luz) {
@@ -2024,6 +2313,7 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
     }
     function destruir() {
         vivo = false;
+        paralaje.destruir();
         if (ro) ro.disconnect(); else window.removeEventListener("resize", medir);
     }
     medir();
