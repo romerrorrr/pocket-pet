@@ -6,7 +6,7 @@ import * as Personaje from "./personaje.js";
 
 import * as Tele from "./tele.js";
 
-import { dibujarVentana, ventanaLista, crearParalaje, MOMENTOS_VENTANA } from "./ventana.js";
+import { dibujarVentana, ventanaLista, MOMENTOS_VENTANA } from "./ventana.js";
 
 const [MW, MH] = PIEZA.mundo;
 
@@ -652,7 +652,10 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
     const parpadeo = {
         t: 0
     };
-    const paralaje = crearParalaje();
+    const QUIETA = {
+        x: 0,
+        y: 0
+    };
     let ventanaAntes = null;
     let ultimoMomentoV = null;
     let luzAntes = null;
@@ -1849,30 +1852,33 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
         m.clearRect(0, 0, MW, MH);
         inclinacionHaz = inclinacionDeLaHora();
         const momentoV = MOMENTOS_VENTANA.has(e.momento) ? e.momento : "dia";
-        if (cuarto === "depto" && ventanaLista(momentoV)) {
+        if (ventanaLista(momentoV, cuarto)) {
             if (ultimoMomentoV && ultimoMomentoV !== momentoV) ventanaAntes = {
                 momento: ultimoMomentoV,
                 t0: ahora
             };
             ultimoMomentoV = momentoV;
-            const off = paralaje.leer(ahora);
+            const off = QUIETA;
             const wv = vx1 - vx0 + 1;
             const hv = vy1 - vy0 + 1;
-            if (ventanaAntes && ahora - ventanaAntes.t0 < MS_FUNDIDO && ventanaLista(ventanaAntes.momento)) {
+            if (ventanaAntes && ahora - ventanaAntes.t0 < MS_FUNDIDO && ventanaLista(ventanaAntes.momento, cuarto)) {
                 dibujarVentana(m, vx0, vy0, wv, hv, ventanaAntes.momento, ahora, {
                     gris: gris,
-                    off: off
+                    off: off,
+                    cuarto: cuarto
                 });
                 dibujarVentana(m, vx0, vy0, wv, hv, momentoV, ahora, {
                     gris: gris,
                     off: off,
-                    alfa: (ahora - ventanaAntes.t0) / MS_FUNDIDO
+                    alfa: (ahora - ventanaAntes.t0) / MS_FUNDIDO,
+                    cuarto: cuarto
                 });
             } else {
                 ventanaAntes = null;
                 dibujarVentana(m, vx0, vy0, wv, hv, momentoV, ahora, {
                     gris: gris,
-                    off: off
+                    off: off,
+                    cuarto: cuarto
                 });
             }
         } else {
@@ -2313,7 +2319,6 @@ export function crearPieza(contenedor, {estado: estado, alTocar: alTocar, alRayo
     }
     function destruir() {
         vivo = false;
-        paralaje.destruir();
         if (ro) ro.disconnect(); else window.removeEventListener("resize", medir);
     }
     medir();
