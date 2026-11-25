@@ -594,8 +594,9 @@ function mostrarPaso() {
     const paso = sesion.pasos[sesion.i];
     vigilarGrabacion();
     const trasElSi = [ "celebracion", "foto", "fin" ].includes(paso.tipo);
-    if (paso.tipo === "ventana") Musica.tocar("propuesta_cuarto", {
-        forzar: FINAL.musicaIgnoraSilencio
+    if (paso.tipo === "ventana") Musica.detener(.3); else if (paso.tipo === "mapa") Musica.tocar("propuesta", {
+        forzar: FINAL.musicaIgnoraSilencio,
+        fadeIn: 1
     }); else Musica.tocar(trasElSi ? "si" : "propuesta", {
         forzar: FINAL.musicaIgnoraSilencio
     });

@@ -343,7 +343,8 @@ function etiquetaMaceta(e) {
     };
 }
 
-export function renderJardin(container, {momento: momento = "dia", estados: estados = [], semillas: semillas = [], eligiendo: eligiendo = null, aviso: aviso = "", quiereAgua: quiereAgua = false} = {}) {
+export function renderJardin(container, {momento: momento = "dia", cuarto: cuarto = "depto", estados: estados = [], semillas: semillas = [], eligiendo: eligiendo = null, aviso: aviso = "", quiereAgua: quiereAgua = false} = {}) {
+    const fondoCuarto = cuarto && cuarto !== "depto" ? `jardin/balcon_${cuarto}_${momento}.png` : `jardin/balcon_${momento}.png`;
     const pct = (v, total) => `${(v / total * 100).toFixed(3)}%`;
     const macetas = X_MACETAS.map(((x, i) => {
         const e = estados[i] || null;
@@ -352,7 +353,7 @@ export function renderJardin(container, {momento: momento = "dia", estados: esta
         return `\n      <button class="maceta-jardin ${e && e.lista ? "lista" : ""} ${e && e.mustia ? "mustia" : ""}" data-maceta="${i}"\n        style="left:${pct(x - 13, 200)};top:${pct(Y_ESTANTE - 12 - 39, 112)}" aria-label="${esc(e ? `${et.nombre}: ${et.estado}` : "Empty pot: plant a seed")}">\n        ${planta}\n        <img class="maceta-img" src="${arte("jardin/maceta.png")}" alt="" draggable="false" />\n        <span class="etiqueta-maceta ${et.clase}">${et.nombre ? `<b>${esc(et.nombre)}</b>` : ""}${esc(et.estado)}</span>\n      </button>`;
     })).join("");
     const eligiendoHtml = eligiendo === null ? "" : `<div class="semillas-jardin papel" role="dialog" aria-label="Choose a seed">\n          <div class="semillas-titulo">What shall we plant?</div>\n          ${semillas.length ? `<div class="semillas-fila">${semillas.map((s => `<button class="semilla-jardin" data-semilla="${esc(s.planta)}">\n                      <img src="${arte(`jardin/semilla_${s.planta}.png`)}" alt="" draggable="false" />\n                      <span class="semilla-nombre">${esc(s.nombre)}</span>\n                      <span class="semilla-n">×${s.n} · ${s.dias} days</span>\n                    </button>`)).join("")}</div>` : `<div class="vacio-suave">No seeds yet. Get some at the shop (notebook → Shop) ♥</div>`}\n          <div class="fila-botones"><button class="boton boton-fantasma chico" id="btn-semilla-cancelar">Not now</button></div>\n        </div>`;
-    container.innerHTML = `\n    <div class="pantalla-jardin con-cuarto" data-momento="${esc(momento)}">\n      <div class="jardin-caja">\n        <img class="jardin-fondo" src="${arte(`jardin/balcon_${momento}.png`)}" alt="" draggable="false" />\n        ${macetas}\n        <button class="regadera-jardin ${quiereAgua ? "" : "sin-sed"}" id="btn-regar" style="left:${pct(170, 200)};top:${pct(83, 112)}" aria-label="Water the plants">\n          <img src="${arte("jardin/regadera.png")}" alt="" draggable="false" />\n          <span class="etiqueta-maceta regar">Water ♥</span>\n        </button>\n      </div>\n      <div class="aviso-jardin ${aviso ? "" : "oculto"}" id="aviso-jardin" aria-live="polite">${esc(aviso)}</div>\n      ${eligiendoHtml}\n      <button class="boton-volver volver-flotante" id="btn-volver-jardin" aria-label="Back to the room">${glifo("atras")}</button>\n    </div>`;
+    container.innerHTML = `\n    <div class="pantalla-jardin con-cuarto" data-momento="${esc(momento)}">\n      <div class="jardin-caja">\n        <img class="jardin-fondo" src="${arte(fondoCuarto)}" alt="" draggable="false" />\n        ${macetas}\n        <button class="regadera-jardin ${quiereAgua ? "" : "sin-sed"}" id="btn-regar" style="left:${pct(170, 200)};top:${pct(83, 112)}" aria-label="Water the plants">\n          <img src="${arte("jardin/regadera.png")}" alt="" draggable="false" />\n          <span class="etiqueta-maceta regar">Water ♥</span>\n        </button>\n      </div>\n      <div class="aviso-jardin ${aviso ? "" : "oculto"}" id="aviso-jardin" aria-live="polite">${esc(aviso)}</div>\n      ${eligiendoHtml}\n      <button class="boton-volver volver-flotante" id="btn-volver-jardin" aria-label="Back to the room">${glifo("atras")}</button>\n    </div>`;
 }
 
 export function renderHeladera(container, especiales = []) {
@@ -731,12 +732,12 @@ export function renderCloset(container, amigos, accTienda = []) {
             return `<div class="tarjeta-regalo bloqueada"><span class="candado-regalo">${glifo("candado")}</span><span class="nombre-regalo">???</span><small>A gift from ${esc(nombreDe)}</small></div>`;
         }
         const puesto = amigos.puesto === id;
-        return `\n      <button class="tarjeta-regalo ${puesto ? "puesto" : ""}" data-accesorio="${id}" aria-pressed="${puesto}">\n        <span class="acc-vista"><img src="${arte(r.arte)}" alt="" draggable="false" /></span>\n        <span class="nombre-regalo">${esc(r.nombre)}</span>\n        <small>${puesto ? "Wearing it · tap to take off" : "Tap to wear"}</small>\n      </button>`;
+        return `\n      <button class="tarjeta-regalo ${puesto ? "puesto" : ""}" data-accesorio="${id}" aria-pressed="${puesto}">\n        ${vistaAcc(r.arte, id)}\n        <span class="nombre-regalo">${esc(r.nombre)}</span>\n        <small>${puesto ? "Wearing it · tap to take off" : "Tap to wear"}</small>\n      </button>`;
     })).join("") + accTienda.map((id => {
         const c = CATALOGO.find((x => x.tipo === "accesorio" && (x.acc || x.id) === id));
         if (!c) return "";
         const puesto = amigos.puesto === id;
-        return `\n      <button class="tarjeta-regalo ${puesto ? "puesto" : ""}" data-accesorio="${id}" aria-pressed="${puesto}">\n        <span class="acc-vista"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>\n        <span class="nombre-regalo">${esc(c.nombre)}</span>\n        <small>${puesto ? "Wearing it · tap to take off" : "Tap to wear"}</small>\n      </button>`;
+        return `\n      <button class="tarjeta-regalo ${puesto ? "puesto" : ""}" data-accesorio="${id}" aria-pressed="${puesto}">\n        ${vistaAcc(c.arte, id)}\n        <span class="nombre-regalo">${esc(c.nombre)}</span>\n        <small>${puesto ? "Wearing it · tap to take off" : "Tap to wear"}</small>\n      </button>`;
     })).join("");
     const otros = [ ...amigos.premios ].filter((k => REGALOS[k] && REGALOS[k].tipo !== "accesorio"));
     const lista = otros.length ? otros.map((k => `<div class="fila-regalo"><img src="${arteDeRegalo(k)}" alt="" draggable="false" /><span>${esc(REGALOS[k].nombre)}</span><small class="tenue">${REGALOS[k].tipo === "sticker" ? "in your camera" : "in your room"}</small></div>`)).join("") : `<div class="vacio-suave">Help your friends with their missions and they'll send you gifts.</div>`;
@@ -766,8 +767,19 @@ const TAM_ARTE_TIENDA = {
     corazones: [ 13, 13 ]
 };
 
+const DESPLAZAR_ACC_VISTA = {
+    lentes: -32,
+    ruana: -57,
+    mochila: -63
+};
+
+function vistaAcc(rutaArte, id) {
+    const top = DESPLAZAR_ACC_VISTA[id];
+    return `<span class="acc-vista"><img src="${arte(rutaArte)}" alt="" draggable="false"${top !== undefined ? ` style="top:${top}px"` : ""} /></span>`;
+}
+
 function vistaTienda(c, peluche) {
-    if (c.tipo === "accesorio") return `<span class="acc-vista"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
+    if (c.tipo === "accesorio") return vistaAcc(c.arte, c.acc || c.id);
     if (c.tipo === "comida" || c.tipo === "semilla") return `<span class="vista-tienda vista-comida"><img src="${arte(c.arte)}" alt="" draggable="false" /></span>`;
     const src = c.id === "peluche" ? `tienda/deco_peluche_${peluche}.png` : c.arte;
     const [w, h] = TAM_ARTE_TIENDA[c.id] || [ 16, 16 ];

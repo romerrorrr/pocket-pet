@@ -1765,7 +1765,10 @@ function alSellar(idLugar) {
     const lugar = LUGARES.find((l => l.id === idLugar));
     ganarMonedas(lugar && lugar.deElla ? "propio" : "sello");
     eventoDeseo({
-        tipo: "sello"
+        tipo: "sello",
+        lugar: idLugar,
+        categoria: lugar && lugar.categoria,
+        deElla: !!(lugar && lugar.deElla)
     });
 }
 
@@ -1774,7 +1777,8 @@ function fotoParaAmigos(foto) {
     eventoDeseo({
         tipo: "foto",
         filtro: foto.filtro,
-        stickers: foto.stickers || []
+        stickers: foto.stickers || [],
+        momento: momentoActual
     });
     const base = {
         tipo: "foto",
@@ -2029,6 +2033,7 @@ function renderJardinActual() {
     const hoy = claveDelDia();
     R.renderJardin(screenEl, {
         momento: momentoActual || "dia",
+        cuarto: tienda.cuarto || "depto",
         estados: jardin.estados(hoy),
         semillas: Object.keys(PLANTAS_JARDIN).filter((p => tienda.cantidadSemillas(p) > 0)).map((p => ({
             planta: p,
@@ -5169,6 +5174,7 @@ function terminarJuegoTele(cual, r) {
     diario.anotarJuego(puntos);
     eventoDeseo({
         tipo: cual,
+        ...r,
         puntos: puntos
     });
     guardarTodo();

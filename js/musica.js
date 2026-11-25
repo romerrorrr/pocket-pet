@@ -298,8 +298,6 @@ const TEMAS = {
     }
 };
 
-TEMAS.propuesta_cuarto = TEMAS.propuesta;
-
 Object.assign(TEMAS, ESTACIONES_TEMAS);
 
 const ondasPulso = {};
@@ -492,8 +490,9 @@ export async function tocar(escena, opts = {}) {
     const c = contexto();
     if (!c) return;
     if (c.state !== "running") c.resume().catch((() => {}));
+    const vol = esPropia(escena) ? VOLUMEN_PROPIA : (TEMAS[escena] && !MUSICA_CLIPS.includes(escena) ? 1.8 : 1) * (VOLUMEN[escena] || 1);
     const maestro = c.createGain();
-    maestro.gain.value = esPropia(escena) ? VOLUMEN_PROPIA : (TEMAS[escena] && !MUSICA_CLIPS.includes(escena) ? 1.8 : 1) * (VOLUMEN[escena] || 1);
+    maestro.gain.value = opts.fadeIn ? 1e-4 : vol;
     maestro.connect(c.destination);
     const registro = {
         escena: escena,
@@ -520,6 +519,12 @@ export async function tocar(escena, opts = {}) {
         };
     } else if (TEMAS[escena]) {
         registro.cortar = tocarTema(c, TEMAS[escena], maestro, alTerminar);
+    }
+    if (opts.fadeIn && (buffer || TEMAS[escena])) {
+        const t = c.currentTime;
+        maestro.gain.cancelScheduledValues(t);
+        maestro.gain.setValueAtTime(1e-4, t);
+        maestro.gain.linearRampToValueAtTime(vol, t + opts.fadeIn);
     }
 }
 
