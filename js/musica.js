@@ -298,6 +298,8 @@ const TEMAS = {
     }
 };
 
+TEMAS.propuesta_cuarto = TEMAS.propuesta;
+
 Object.assign(TEMAS, ESTACIONES_TEMAS);
 
 const ondasPulso = {};
